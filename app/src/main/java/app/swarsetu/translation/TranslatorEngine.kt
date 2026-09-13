@@ -29,7 +29,8 @@ suspend fun <T> Task<T>.awaitTask(): T? =
     }
 
 /**
- * Handles on-device machine translation using Google ML Kit.
+ * Handles on-device machine translation using Google ML Kit with entity shielding,
+ * complex sentence clause routing, and resilient Indic-to-Indic English pivoting.
  */
 class TranslatorEngine {
     private val translatorCache = ConcurrentHashMap<String, Translator>()
@@ -73,29 +74,49 @@ class TranslatorEngine {
     }
 
     private val COMMON_ENGLISH_WORDS = setOf(
-        "the", "this", "that", "there", "these", "those", "they", "them", "their",
+        "the", "this", "that", "there", "these", "those", "they", "them", "their", "theirs",
         "what", "when", "where", "which", "who", "whom", "whose", "why", "how",
-        "please", "yes", "no", "okay", "ok", "good", "hello", "hey", "hi",
-        "today", "tomorrow", "yesterday", "here", "now", "just", "very", "much",
-        "help", "send", "come", "urgent", "danger", "safe", "need", "call",
-        "is", "am", "are", "was", "were", "be", "been", "have", "has", "had",
-        "do", "does", "did", "can", "could", "shall", "should", "will", "would", "may", "might", "must",
-        "i", "you", "he", "she", "it", "we", "all", "some", "any", "every",
+        "name", "named", "names", "friend", "friends", "live", "living", "lives", "lived", "go", "going", "goes", "went", "gone",
+        "come", "coming", "comes", "came", "stay", "staying", "stays", "stayed", "speak", "speaking", "speaks", "spoke",
+        "call", "calling", "calls", "called", "meet", "meeting", "meets", "met",
+        "please", "yes", "no", "okay", "ok", "good", "hello", "hey", "hi", "welcome", "thanks", "thank",
+        "today", "tomorrow", "yesterday", "tonight", "morning", "evening", "afternoon", "night",
+        "here", "now", "just", "very", "much", "many", "more", "most", "less", "least",
+        "help", "send", "urgent", "danger", "safe", "need", "stop", "start",
+        "is", "am", "are", "was", "were", "be", "been", "being", "have", "has", "had", "having",
+        "do", "does", "did", "doing", "done", "can", "could", "shall", "should", "will", "would", "may", "might", "must",
+        "i", "me", "my", "mine", "myself", "you", "your", "yours", "yourself",
+        "he", "him", "his", "himself", "she", "her", "hers", "herself", "it", "its", "itself",
+        "we", "us", "our", "ours", "ourselves", "all", "some", "any", "every", "each", "both", "either", "neither",
+        "and", "or", "but", "nor", "so", "for", "yet", "because", "although", "though", "since", "unless",
+        "if", "then", "else", "when", "while", "where", "after", "before", "until", "as", "than",
+        "in", "on", "at", "to", "from", "with", "without", "by", "about", "against", "between", "into",
+        "through", "during", "above", "below", "up", "down", "out", "off", "over", "under", "again",
+        "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "first", "second", "third",
+        "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+        "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december",
+        "city", "state", "country", "village", "town", "place", "area", "zone", "road", "street", "house", "home",
+        "person", "people", "man", "woman", "boy", "girl", "sir", "madam", "team", "group", "room", "water", "food",
+    )
+
+    private val KNOWN_CRITICAL_ENTITIES = listOf(
+        "SwarSetu", "iTantra", "ISRO", "NDRF", "SDRF", "AIIMS", "DRDO", "IMD", "SOS", "FIR",
+        "New Delhi", "Connaught Place", "Sector 18", "MG Road", "Marine Drive", "Park Street",
+        "Salt Lake", "IIT Bombay", "IIT Delhi", "IIT Madras", "IIT Kanpur", "IIT Kharagpur",
     )
 
     private val ENTITY_REGEX = Regex(
-        """(@\w+)|(https?://\S+)|(\b\d{2,}\b)|(\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b)|(\bSwarSetu\b)|(\biTantra\b)|(\bISRO\b)|(\bNDRF\b)|(\bSDRF\b)|(\bSOS\b)""",
-        RegexOption.IGNORE_CASE
+        """(@\w+)|(https?://\S+)|(\b\d{2,}\b)|(\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b)|(\bSwarSetu\b)|(\biTantra\b)|(\bISRO\b)|(\bNDRF\b)|(\bSDRF\b)|(\bSOS\b)|(\bAIIMS\b)|(\bDRDO\b)|(\bIMD\b)""",
+        RegexOption.IGNORE_CASE,
     )
 
     private val NAME_INTRODUCTION_PATTERNS = listOf(
-        Regex("""(?i)(?:मेरा\s+नाम|नाम\s+है|माझे\s+नाव|नाव\s+आहे)\s+([^\s,।!?]+)"""),
-        Regex("""(?i)(?:मैं|मै|હું|હુ)\s+([^\s,।!?]+)\s+(?:हूँ|हु|हूं|છું)"""),
-        Regex("""(?i)(?:મારું\s+નામ|મારુ\s+નામ|আমার\s+নাম)\s+([^\s,।!?]+)"""),
-        Regex("""(?i)(?:என்\s+பெயர்|నా\s+పేరు|ನನ್ನ\s+ಹೆಸರು|എന്റെ\s+പേര്|ମୋର\s+ନାମ)\s+([^\s,।!?]+)"""),
-        Regex("""(?i)(?:my\s+name\s+is|i\s+am|this\s+is|call\s+me)\s+([a-zA-Z]+)"""),
-        Regex("""(?i)(?:Dr\.|Mr\.|Mrs\.|Ms\.|Shri|Smt|Sir|Madam|श्री|श्रीमती|डॉ|डॉक्टर|मिस्टर|मिस)\s+([^\s,।!?]+)"""),
-        Regex("""(?i)([^\s,।!?]+)\s+(?:जी|भाई|साहेब|सर|मैडम|भाईजान)"""),
+        Regex("""(?i)(?:मेरा\s+नाम|नाम\s+है|माझे\s+नाव|नाव\s+आहे|મારું\s+નામ|મારુ\s+નામ|મારા\s+ભાઈ|আমার\s+নাম|என்\s+பெயர்|నా\s+పేరు|ನನ್ನ\s+ಹೆಸರು|എന്റെ\s+പേര്|ମୋର\s+ନାମ|ମୋ\s+ନାମ)\s+([^\s,।!?]+(?:\s+[^\s,।!?]+)?)"""),
+        Regex("""(?i)(?:मैं|मै|હું|मी|আমি|ഞാൻ|నేను|ನಾನು|ମୁଁ)\s+([^\s,।!?]+(?:\s+[^\s,।!?]+)?)\s+(?:हूँ|हु|हूं|છું|बोल रहा हूँ|बोलतोय)"""),
+        Regex("""(?i)(?:my\s+name\s+is|this\s+is|call\s+me|speaking\s+with|meet\s+my\s+friend)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)"""),
+        Regex("""\bI\s+am\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b(?!\s+(?:going|coming|doing|here|there|not|at|in|on|with|from|a|an|the|very|so|too|feeling|trying|ready))"""),
+        Regex("""(?i)(?:Dr\.?|Mr\.?|Mrs\.?|Ms\.?|Prof\.?|Shri|Smt\.?|Sir|Madam|Pt\.?|Pandit|Swami|श्री|श्रीमती|डॉ\.?|डॉक्टर|प्रोफेसर|मिस्टर|मिस|पंडित|स्वामी)\s+([^\s,।!?]+(?:\s+[^\s,।!?]+)?)"""),
+        Regex("""(?i)([^\s,।!?]+(?:\s+[^\s,।!?]+)?)\s+(?:जी|भाई|साहेब|साहब|सर|मैडम|दीदी|दादा|काका|अंकल|आंटी|గారు|அவர்கள்|ಅವರು)"""),
     )
 
     private data class MaskedText(
@@ -112,30 +133,49 @@ class TranslatorEngine {
 
         val allNouns = customProtectedNouns.filter { it.isNotBlank() }.toMutableList()
 
-        // 1. Extract names from conversational introduction and honorific patterns
+        // 1. Add known emergency and landmark entities if present in raw text
+        for (known in KNOWN_CRITICAL_ENTITIES) {
+            if (rawText.contains(known, ignoreCase = true) && !allNouns.any { it.equals(known, ignoreCase = true) }) {
+                allNouns.add(known)
+            }
+        }
+
+        // 2. Extract multi-word & single-word names from conversational patterns
         for (pattern in NAME_INTRODUCTION_PATTERNS) {
             val matches = pattern.findAll(rawText)
             for (match in matches) {
                 if (match.groupValues.size > 1) {
                     val candidateName = match.groupValues[1].trim()
-                    if (candidateName.length >= 2 && !allNouns.contains(candidateName)) {
+                    val words = candidateName.split(Regex("""\s+"""))
+                    if (candidateName.length >= 2 && !words.all { it.lowercase() in COMMON_ENGLISH_WORDS } && !allNouns.contains(candidateName)) {
                         allNouns.add(candidateName)
                     }
                 }
             }
         }
 
-        // 2. Extract capitalized proper nouns from English / Latin text (e.g. Ashish, Mumbai, Pune)
-        val capitalizedWords = Regex("""\b[A-Z][a-zA-Z0-9_]{1,25}\b""").findAll(rawText)
-        for (capMatch in capitalizedWords) {
-            val word = capMatch.value
+        // 3. Extract multi-word capitalized proper noun phrases in English/Latin (e.g. "Ashish Kumar", "New Delhi", "Sector 18")
+        val multiWordCap = Regex("""\b[A-Z][a-zA-Z0-9_.-]*(?:\s+[A-Z0-9][a-zA-Z0-9_.-]*)+\b""").findAll(rawText)
+        for (mMatch in multiWordCap) {
+            val phrase = mMatch.value.trim()
+            val words = phrase.split(Regex("""\s+"""))
+            if (!words.all { it.lowercase() in COMMON_ENGLISH_WORDS } && !allNouns.contains(phrase)) {
+                allNouns.add(phrase)
+            }
+        }
+
+        // 4. Extract single capitalized proper nouns in English/Latin (e.g. Ashish, Mumbai, Pune)
+        val singleCap = Regex("""\b[A-Z][a-zA-Z0-9_]{1,25}\b""").findAll(rawText)
+        for (capMatch in singleCap) {
+            val word = capMatch.value.trim()
             if (word.lowercase() !in COMMON_ENGLISH_WORDS && !allNouns.contains(word)) {
                 allNouns.add(word)
             }
         }
 
-        // 3. Shield custom and dynamically extracted proper nouns
+        // 5. Shield custom and dynamically extracted proper nouns (longest matches first to preserve multi-word entities)
         for (noun in allNouns.distinct().sortedByDescending { it.length }) {
+            if (noun.isBlank()) continue
             val unicodeBoundaryRegex = Regex("""(?i)(?<=^|[\s\p{Punct}])${Regex.escape(noun)}(?=$|[\s\p{Punct}])""")
             if (unicodeBoundaryRegex.containsMatchIn(processed)) {
                 val placeholder = "__N${counter}__"
@@ -155,7 +195,7 @@ class TranslatorEngine {
             }
         }
 
-        // 4. Shield URLs, emails, mentions, numbers, and technical brand names
+        // 6. Shield URLs, emails, mentions, numbers, and technical acronyms
         processed = ENTITY_REGEX.replace(processed) { matchResult ->
             val placeholder = "__N${counter}__"
             replacements[placeholder] = matchResult.value
@@ -169,24 +209,63 @@ class TranslatorEngine {
 
     private fun unmaskEntities(translatedText: String, tagToOriginal: Map<String, String>): String {
         var result = translatedText
+
+        // Map of digit to Indic numerals and phonetic script variations
+        val indicDigits = mapOf(
+            "0" to listOf("०", "૦", "০", "௦", "౦", "೦", "൦", "୦", "शून्य", "zero", "o", "O"),
+            "1" to listOf("१", "૧", "১", "௧", "౧", "೧", "൧", "୧", "एक", "one"),
+            "2" to listOf("२", "૨", "২", "௨", "౨", "೨", "൨", "୨", "दो", "two"),
+            "3" to listOf("३", "૩", "৩", "௩", "౩", "೩", "൩", "୩", "तीन", "three"),
+            "4" to listOf("४", "૪", "৪", "௪", "౪", "೪", "൪", "୪", "चार", "four"),
+            "5" to listOf("५", "૫", "৫", "௫", "౫", "೫", "൫", "୫", "पांच", "five"),
+            "6" to listOf("६", "૬", "৬", "௬", "౬", "೬", "൬", "୬", "छह", "six"),
+            "7" to listOf("७", "૭", "৭", "௭", "౭", "೭", "൭", "୭", "सात", "seven"),
+            "8" to listOf("८", "૮", "৮", "௮", "౮", "೮", "൮", "୮", "आठ", "eight"),
+            "9" to listOf("९", "૯", "৯", "௯", "౯", "೯", "൯", "୯", "नौ", "nine"),
+        )
+
         for ((tagId, original) in tagToOriginal) {
+            val variations = indicDigits[tagId] ?: emptyList()
+            val digitPatternPart = (listOf(Regex.escape(tagId)) + variations.map { Regex.escape(it) }).joinToString("|")
+
+            val openBracket = listOf("⟦", "[", "(", "{", "<").joinToString("|") { Regex.escape(it) }
+            val closeBracket = listOf("⟧", "]", ")", "}", ">").joinToString("|") { Regex.escape(it) }
+            val indicNAndP = listOf(
+                "एन", "पि", "पी", "એન", "પી", "પિ", "এন", "পি", "পী", "என்", "பி", "பீ",
+                "ఎన్", "పి", "పీ", "ಎನ್", "ಪಿ", "ಪೀ", "എൻ", "പി", "പീ", "ଏନ", "ପି", "ପୀ",
+                "N", "n", "P", "p", "ID", "id", "NO", "no", "NOUN", "noun", "ENTITY", "entity"
+            )
+            val prefix = indicNAndP.joinToString("|") { Regex.escape(it) }
+
             val lenientRegex = Regex(
-                """(?:_{1,3}\s*(?:N|n|ID|id|P|p|entity|ENTITY|NOUN|noun)\s*[_–-]?\s*${Regex.escape(tagId)}\s*_{1,3})|""" +
-                    """(?:⟦\s*(?:N|n|P|p|ID|id)?\s*${Regex.escape(tagId)}\s*⟧)|""" +
-                    """(?:\[\s*(?:N|n|P|p|ID|id)?\s*${Regex.escape(tagId)}\s*\])|""" +
-                    """(?:\(\s*(?:N|n|P|p|ID|id)?\s*${Regex.escape(tagId)}\s*\))|""" +
-                    """(?:\b(?:N|n|ID|id|P|p|entity|ENTITY)_?${Regex.escape(tagId)}\b)|""" +
-                    """(?:(?:एन|पि|पी|પી|பி|పి|ಪಿ|পি|ପି)\s*${Regex.escape(tagId)})""",
+                """(?:_{1,3}\s*(?:$prefix)?\s*[-_–]?\s*(?:$digitPatternPart)\s*_{1,3})|""" +
+                    """(?:(?:$openBracket)\s*(?:$prefix)?\s*[-_–]?\s*(?:$digitPatternPart)\s*(?:$closeBracket))|""" +
+                    """(?:\b(?:$prefix)[-_–\s]?(?:$digitPatternPart)\b)|""" +
+                    """(?:(?:$prefix)\s*[-_–]?\s*(?:$digitPatternPart))""",
                 RegexOption.IGNORE_CASE,
             )
+
             result = if (lenientRegex.containsMatchIn(result)) {
                 lenientRegex.replace(result, original)
             } else {
                 result.replace("__N${tagId}__", original, ignoreCase = true)
                     .replace("⟦P${tagId}⟧", original, ignoreCase = true)
                     .replace("[P${tagId}]", original, ignoreCase = true)
+                    .replace("[N${tagId}]", original, ignoreCase = true)
+                    .replace("N${tagId}", original, ignoreCase = true)
             }
         }
+
+        // Failsafe: If any original entity was omitted or unmasked incorrectly, restore it
+        for ((_, original) in tagToOriginal) {
+            if (!result.contains(original, ignoreCase = true) && original.length >= 2) {
+                val candidatePlaceholderRegex = Regex("""__N\d+__|\bN\d+\b|⟦P\d+⟧|\[P\d+\]|\[N\d+\]""")
+                if (candidatePlaceholderRegex.containsMatchIn(result)) {
+                    result = candidatePlaceholderRegex.replaceFirst(result, original)
+                }
+            }
+        }
+
         return result
     }
 
@@ -196,9 +275,8 @@ class TranslatorEngine {
         if (trimmed[0] in 'a'..'z') {
             trimmed = trimmed.replaceFirstChar { it.uppercase() }
         }
-        // Ensure sentence has terminal punctuation so neural model analyzes full grammar context
         val lastChar = trimmed.last()
-        if (lastChar !in listOf('.', '?', '!', '।', ',', ';')) {
+        if (lastChar !in listOf('.', '?', '!', '।', ',', ';', ':')) {
             trimmed = if (sourceLang == TranslateLanguage.ENGLISH || sourceLang == "en") {
                 "$trimmed."
             } else {
@@ -210,7 +288,8 @@ class TranslatorEngine {
 
     private fun postprocessText(input: String): String {
         return input
-            .replace(Regex("""\s+([.,!?।])"""), "$1")
+            .replace(Regex("""\s+([.,!?।:;])"""), "$1")
+            .replace(Regex("""([.,!?।:;])(?=[^\s.,!?।:;])"""), "$1 ")
             .replace(Regex("""\s{2,}"""), " ")
             .trim()
     }
@@ -274,7 +353,7 @@ class TranslatorEngine {
         return if (source == TranslateLanguage.ENGLISH || target == TranslateLanguage.ENGLISH) {
             translateDirect(text, source, target)
         } else {
-            // Pivot via English with robust intermediate check
+            // Pivot via English with intermediate validation
             val englishIntermediate = translateDirect(text, source, TranslateLanguage.ENGLISH)
             if (englishIntermediate.isNotBlank() && englishIntermediate != text) {
                 translateDirect(englishIntermediate, TranslateLanguage.ENGLISH, target)
@@ -289,7 +368,8 @@ class TranslatorEngine {
         source: String,
         target: String,
     ): String {
-        val sentences = passage.split(Regex("""(?<=[।?!.\n])\s+""")).filter { it.isNotBlank() }
+        // Segment by sentence boundaries while preserving paragraph flow
+        val sentences = passage.split(Regex("""(?<=[।?!.\n;])\s+""")).filter { it.isNotBlank() }
         if (sentences.size <= 1) {
             return translateDirectOrPivot(passage, source, target)
         }
@@ -331,7 +411,7 @@ class TranslatorEngine {
         if (source == target) return text
 
         return try {
-            // 1. Mask proper nouns, mentions, URLs, numbers
+            // 1. Mask proper nouns, multi-word entities, mentions, URLs, numbers
             val (masked, _, tagToOriginal) = maskEntities(text, protectedNouns)
 
             // 2. Preprocess sentence structure

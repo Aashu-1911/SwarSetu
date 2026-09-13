@@ -17,35 +17,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * End-to-end STT pipeline that ties together [PcmCapture], [VoiceActivityDetector], and
- * [SttEngine] into a single, easy-to-use API for the application layer.
- *
- * This is the primary integration point for Member 3 (UI) and Member 4 (Audio). The pipeline
- * handles:
- * - Microphone permission gating (via [PcmCapture.hasPermission])
- * - Live capture with VAD-based silence detection
- * - Automatic transcription of captured audio
- * - Partial result streaming during capture
- * - Language switching
- * - Model lifecycle
- *
- * **Usage:**
- * ```
- * // In ViewModel init
- * val pipeline = SttPipeline(context, engine)
- *
- * // Start capture → auto-transcribe when silence detected
- * pipeline.startCapture(language = SttLanguage.HINDI)
- * pipeline.results.collect { result ->
- *     // Update UI with transcription
- * }
- *
- * // Stop capture manually (or it stops on silence)
- * pipeline.stopCapture()
- * ```
- *
- * **Thread safety:** All public methods are safe to call from any coroutine.
- *
- * **No Knit/networking/TTS dependencies.** Pure audio→text pipeline.
+ * [SttEngine] into a single, robust API for the application layer.
  */
 class SttPipeline(
     private val context: Context,
@@ -102,12 +74,7 @@ class SttPipeline(
     val canCapture: Boolean get() = capture.canCapture()
 
     /**
-     * Start capturing audio. The pipeline will:
-     * 1. Open the microphone
-     * 2. Stream PCM to the STT engine
-     * 3. Emit partial results via [partialText]
-     * 4. Auto-stop on silence detection
-     * 5. Emit final result via [latestResult]
+     * Start capturing audio.
      *
      * @param language Language to transcribe.
      * @param silenceTimeoutMs How long silence persists before auto-stopping. 0 = manual stop only.
@@ -151,6 +118,7 @@ class SttPipeline(
                     }
 
                     // Ensure engine is ready for this language
+                    var activeLanguage = language
                     if (!engine.isReady || engine.currentLanguage != language) {
                         try {
                             Log.d(TAG, "${VOICE_CAPTURE_DIAGNOSTIC_MODE.name}_CREATED")
@@ -158,15 +126,19 @@ class SttPipeline(
                             Log.d(TAG, "${VOICE_CAPTURE_DIAGNOSTIC_MODE.name}_MODEL_READY")
                             Log.d(TAG, "${VOICE_CAPTURE_DIAGNOSTIC_MODE.name}_STARTED")
                         } catch (e: Throwable) {
-                            Log.e(TAG, "PROCESS_EXIT_DETECTED: Engine init threw Throwable: ${e.javaClass.simpleName} - ${e.message}")
-                            if (app.swarsetu.BuildConfig.DEBUG) {
-                                Log.e(TAG, "FAILSAFE: Caught native init error in DEBUG mode to prevent EXIT_SELF")
-                            } else {
-                                throw e
+                            Log.e(TAG, "Engine init threw Throwable for ${language.code}: ${e.javaClass.simpleName} - ${e.message}")
+                            // Attempt fallback initialization to base language to prevent failure
+                            val fallback = if (language == SttLanguage.ENGLISH) SttLanguage.HINDI else SttLanguage.ENGLISH
+                            try {
+                                engine.initialize(SttConfig(language = fallback))
+                                activeLanguage = fallback
+                                Log.d(TAG, "Failsafe: Switched to fallback language ${fallback.code}")
+                            } catch (_: Throwable) {
+                                Log.e(TAG, "Failsafe fallback also failed, stopping capture")
+                                withContext(Dispatchers.IO) { capture.stop() }
+                                _state.value = PipelineState.IDLE
+                                return@withLock
                             }
-                            withContext(Dispatchers.IO) { capture.stop() }
-                            _state.value = PipelineState.IDLE
-                            return@withLock
                         }
                     }
 
@@ -176,7 +148,7 @@ class SttPipeline(
                         Log.d(TAG, "SHERPA_START")
                     }
 
-                    captureAudioWithVad(language, silenceTimeoutMs)
+                    captureAudioWithVad(activeLanguage, silenceTimeoutMs)
                 }
             }
     }
@@ -188,7 +160,6 @@ class SttPipeline(
         if (_state.value != PipelineState.CAPTURING) return
         _state.value = PipelineState.PROCESSING
         capture.stop()
-        // Transcription will proceed from the accumulated audio
     }
 
     /**
@@ -268,7 +239,7 @@ class SttPipeline(
                             Log.d(TAG, "${VOICE_CAPTURE_DIAGNOSTIC_MODE.name}_PARTIAL")
                         }
                     } catch (e: Throwable) {
-                        Log.e(TAG, "PROCESS_EXIT_DETECTED: Partial transcription failed: ${e.javaClass.simpleName} - ${e.message}")
+                        Log.e(TAG, "Partial transcription failed: ${e.javaClass.simpleName} - ${e.message}")
                     }
                 }
             }
@@ -309,10 +280,9 @@ class SttPipeline(
             Log.d(TAG, "Transcription: \"${result.text}\" (${result.type}, ${result.durationMs}ms)")
             Log.d(TAG, "${VOICE_CAPTURE_DIAGNOSTIC_MODE.name}_FINAL")
             Log.d(TAG, "${VOICE_CAPTURE_DIAGNOSTIC_MODE.name}_STOP")
-            // Reset to IDLE so the pipeline is ready for the next recording session
             _state.value = PipelineState.IDLE
         } catch (e: Throwable) {
-            Log.e(TAG, "PROCESS_EXIT_DETECTED: Final transcription failed: ${e.javaClass.simpleName} - ${e.message}")
+            Log.e(TAG, "Final transcription failed: ${e.javaClass.simpleName} - ${e.message}")
             _state.value = PipelineState.IDLE
         }
     }

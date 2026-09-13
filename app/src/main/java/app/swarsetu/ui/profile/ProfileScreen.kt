@@ -541,7 +541,7 @@ private fun PreferredLanguageSection(
             modifier = Modifier.fillMaxWidth(),
         ) {
             OutlinedTextField(
-                value = selectedLanguage.displayName,
+                value = selectedLanguage.fullDisplayName,
                 onValueChange = {},
                 readOnly = true,
                 label = { Text(stringResource(R.string.profile_pref_lang_selector_label)) },
@@ -555,6 +555,9 @@ private fun PreferredLanguageSection(
             ) {
                 allLanguages.forEach { lang ->
                     val isInstalled = installedLanguages.contains(lang)
+                    val isSelected = lang == selectedLanguage
+                    val localizedTitle = lang.localizedNameIn(selectedLanguage)
+                    val subtitle = lang.subtitleIn(selectedLanguage)
                     DropdownMenuItem(
                         text = {
                             Row(
@@ -562,17 +565,35 @@ private fun PreferredLanguageSection(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Text(lang.displayName)
+                                Column(modifier = Modifier.weight(1f, fill = false)) {
+                                    Text(
+                                        text = localizedTitle,
+                                        style = MaterialTheme.typography.bodyLarge.copy(
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                        ),
+                                    )
+                                    if (subtitle.isNotBlank()) {
+                                        Text(
+                                            text = subtitle,
+                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            ),
+                                        )
+                                    }
+                                }
                                 if (isInstalled) {
                                     Surface(
-                                        shape = RoundedCornerShape(4.dp),
+                                        shape = RoundedCornerShape(6.dp),
                                         color = MaterialTheme.colorScheme.primaryContainer,
                                     ) {
                                         Text(
                                             text = "Ready",
-                                            style = MaterialTheme.typography.labelSmall,
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontWeight = FontWeight.SemiBold,
+                                            ),
                                             color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                         )
                                     }
                                 }

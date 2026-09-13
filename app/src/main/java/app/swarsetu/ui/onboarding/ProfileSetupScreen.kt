@@ -82,7 +82,7 @@ fun ProfileSetupScreen(
             modifier = Modifier.fillMaxWidth(),
         ) {
             OutlinedTextField(
-                value = selectedLanguage.displayName,
+                value = selectedLanguage.fullDisplayName,
                 onValueChange = {},
                 readOnly = true,
                 label = { Text(stringResource(R.string.profile_setup_lang_label)) },
@@ -95,8 +95,28 @@ fun ProfileSetupScreen(
                 onDismissRequest = { expanded = false },
             ) {
                 SttLanguage.entries.forEach { lang ->
+                    val isSelected = lang == selectedLanguage
+                    val localizedTitle = lang.localizedNameIn(selectedLanguage)
+                    val subtitle = lang.subtitleIn(selectedLanguage)
                     DropdownMenuItem(
-                        text = { Text(lang.displayName) },
+                        text = {
+                            Column {
+                                Text(
+                                    text = localizedTitle,
+                                    style = MaterialTheme.typography.bodyLarge.copy(
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                    ),
+                                )
+                                if (subtitle.isNotBlank()) {
+                                    Text(
+                                        text = subtitle,
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        ),
+                                    )
+                                }
+                            }
+                        },
                         onClick = {
                             selectedLanguage = lang
                             expanded = false

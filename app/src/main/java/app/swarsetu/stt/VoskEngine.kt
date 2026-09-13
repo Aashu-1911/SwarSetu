@@ -24,25 +24,10 @@ import java.io.File
  * - Apache-2.0 license (redistribution-friendly)
  *
  * **Model loading:** Vosk models are directories containing `am/final.mdl`, `graph/`, and `conf/`.
- * This engine extracts them from Android assets into `context.filesDir` on first use (Vosk requires
- * a filesystem path, not an asset stream). Extraction is idempotent — already-extracted models
- * are skipped.
+ * This engine extracts them from Android assets into `context.filesDir` on first use.
  *
- * **Audio format:** Vosk expects 16-bit signed PCM, mono, at the model's sample rate (typically
- * 8 kHz or 16 kHz). This engine resamples to 16 kHz if the model expects a different rate.
- *
- * **Streaming:** Vosk's `Recognizer` supports `acceptWaveForm(byte[])` for streaming. Partial
- * results are available via `partialResult`; final results via `result` after end-of-stream.
- *
- * **Thread safety:** Vosk's `Recognizer` is not thread-safe. This engine serializes all calls
- * behind a [kotlinx.coroutines.sync.Mutex], matching the [MlTextModerator] pattern.
- *
- * **Dependency:** Requires `com.alphacephei:vosk-android` on the classpath. If the dependency
- * is absent (e.g. F-Droid build), this engine gracefully degrades to returning empty results.
- * The [DefaultSttEngine] fallback can be used instead.
- *
- * **Knit-agnostic:** This class knows nothing about the mesh, the wire format, or the application
- * layer. It is a pure audio→text transform.
+ * **Thread safety:** Serializes all native calls behind a [kotlinx.coroutines.sync.Mutex] to
+ * prevent JNI race conditions and segmentation faults during live language/model switching.
  */
 class VoskEngine(
     private val context: Context,
@@ -70,25 +55,33 @@ class VoskEngine(
                 return@withLock
             }
 
-            // Release previous model if switching languages
+            // Release previous model safely before switching
             releaseModelInternal()
 
             _config = config
             _currentLanguage = config.language
 
             if (!modelManager.isAvailable(config.language)) {
-                Log.w(TAG, "No model available for ${config.language.code} — will retry when available")
-                initialized = false
-                return@withLock
+                Log.w(TAG, "No model available for ${config.language.code} — attempting background extraction/fallback")
             }
 
             try {
                 loadModelInternal(config.language)
                 initialized = true
-                Log.d(TAG, "Initialized for ${config.language.code}")
+                Log.d(TAG, "Initialized successfully for ${config.language.code}")
             } catch (e: Exception) {
                 Log.e(TAG, "Model load failed for ${config.language.code}: ${e.message}", e)
-                initialized = false
+                // Attempt fallback to Hindi or English base model if target model failed
+                val fallback = if (config.language == SttLanguage.ENGLISH) SttLanguage.HINDI else SttLanguage.ENGLISH
+                try {
+                    loadModelInternal(fallback)
+                    _currentLanguage = fallback
+                    initialized = true
+                    Log.d(TAG, "Recovered with fallback STT model ${fallback.code}")
+                } catch (fallbackEx: Exception) {
+                    Log.e(TAG, "Fallback model load also failed: ${fallbackEx.message}", fallbackEx)
+                    initialized = false
+                }
             }
         }
 
@@ -105,14 +98,13 @@ class VoskEngine(
         withContext(Dispatchers.Default) {
             mutex.withLock {
                 if (pcm.isEmpty()) return@withLock SttResult.empty(language)
-                if (!initialized || model == null) {
-                    if (modelManager.isAvailable(language)) {
-                        try {
-                            loadModelInternal(language)
-                            initialized = true
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Lazy load of STT model failed for ${language.code}: ${e.message}")
-                        }
+                if (!initialized || model == null || _currentLanguage != language) {
+                    try {
+                        loadModelInternal(language)
+                        _currentLanguage = language
+                        initialized = true
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Lazy load of STT model failed for ${language.code}: ${e.message}")
                     }
                 }
 
@@ -159,7 +151,7 @@ class VoskEngine(
                 }
 
             try {
-                val chunkSize = language.sampleRate / 4 // 250ms chunks for streaming
+                val chunkSize = maxOf(language.sampleRate / 4, 2048) // 250ms chunks for streaming
                 val totalChunks = (pcm.size + chunkSize - 1) / chunkSize
                 val accumulated = StringBuilder()
 
@@ -168,7 +160,6 @@ class VoskEngine(
                     val end = minOf(start + chunkSize, pcm.size)
                     val chunk = pcm.copyOfRange(start, end)
 
-                    // Convert ShortArray to bytes (little-endian 16-bit PCM)
                     val bytes = shortsToBytes(chunk)
                     val isFinal = rec.acceptWaveForm(bytes, bytes.size)
 
@@ -177,14 +168,14 @@ class VoskEngine(
 
                     if (text.isNotBlank()) {
                         if (isFinal) {
+                            if (accumulated.isNotEmpty()) accumulated.append(" ")
                             accumulated.append(text)
                         }
-                        // For partial: emit current accumulated + partial text
                         val displayText =
                             if (isFinal) {
                                 accumulated.toString().trim()
                             } else {
-                                (accumulated.toString() + text).trim()
+                                if (accumulated.isNotEmpty()) "${accumulated.toString().trim()} $text" else text
                             }
 
                         emit(
@@ -194,8 +185,7 @@ class VoskEngine(
                                 language = language,
                             ),
                         )
-                    } else if (isFinal) {
-                        // Final result was empty — emit accumulated so far
+                    } else if (isFinal && accumulated.isNotEmpty()) {
                         emit(
                             SttResult(
                                 text = accumulated.toString().trim(),
@@ -210,6 +200,7 @@ class VoskEngine(
                 val finalJson = rec.finalResult
                 val finalText = parseVoskText(finalJson)
                 if (finalText.isNotBlank()) {
+                    if (accumulated.isNotEmpty()) accumulated.append(" ")
                     accumulated.append(finalText)
                 }
                 val finalResult = accumulated.toString().trim()
@@ -242,7 +233,33 @@ class VoskEngine(
     private suspend fun loadModelInternal(language: SttLanguage) {
         val modelDir = extractModelToInternal(language)
         val actualDir = findModelRootDir(modelDir)
-        model = Model(actualDir.absolutePath)
+        
+        try {
+            model = Model(actualDir.absolutePath)
+        } catch (e: Throwable) {
+            Log.e(TAG, "Native Model instantiation failed for ${actualDir.absolutePath}: ${e.message}")
+            // Attempt auto-healing: delete corrupt dir and copy from base
+            val baseDirs = listOf("stt-hi", "stt-en")
+            var healed = false
+            for (base in baseDirs) {
+                val baseDir = File(context.filesDir, "stt/$base")
+                if (baseDir.exists() && baseDir.list()?.isNotEmpty() == true && baseDir.absolutePath != actualDir.absolutePath) {
+                    try {
+                        modelDir.deleteRecursively()
+                        baseDir.copyRecursively(modelDir, overwrite = true)
+                        val healedDir = findModelRootDir(modelDir)
+                        model = Model(healedDir.absolutePath)
+                        healed = true
+                        Log.d(TAG, "Auto-healed model ${language.code} from $base")
+                        break
+                    } catch (_: Exception) {}
+                }
+            }
+            if (!healed && model == null) {
+                throw SttException.ModelLoadError(actualDir.absolutePath)
+            }
+        }
+
         modelManager.markLoaded(
             SttModelInfo(
                 language = language,
@@ -267,12 +284,12 @@ class VoskEngine(
         return dir
     }
 
-    private fun releaseModelInternal() {
+    private suspend fun releaseModelInternal() {
         runCatching { recognizer?.close() }
         recognizer = null
         runCatching { model?.close() }
         model = null
-        _currentLanguage?.let { runCatching { /* modelManager.markReleased handled by caller */ } }
+        _currentLanguage?.let { lang -> runCatching { modelManager.markReleased(lang) } }
     }
 
     /**
@@ -320,12 +337,10 @@ class VoskEngine(
             val assetPath = "$assetDir/$name"
             val targetFile = File(targetDir, name)
 
-            // If it's a directory, recurse
             val subAssets = context.assets.list(assetPath)
             if (subAssets != null && subAssets.isNotEmpty()) {
                 extractAssetDir(assetPath, File(targetDir, name))
             } else {
-                // It's a file — copy it
                 context.assets.open(assetPath).use { input ->
                     targetFile.outputStream().use { output ->
                         input.copyTo(output)
@@ -416,14 +431,7 @@ class VoskEngine(
 
     // --- Utility ---
 
-    /**
-     * Parse Vosk's JSON output to extract the text field. Vosk returns JSON like:
-     * `{"text": "hello world"}` for final results and
-     * `{"partial": "hello"}` for partial results.
-     */
     private fun parseVoskText(json: String): String {
-        // Simple JSON parsing without kotlinx-serialization to avoid dependency
-        // Vosk output is simple enough for regex extraction
         val textMatch = Regex(""""text"\s*:\s*"([^"]*)"""").find(json)
         val partialMatch = Regex(""""partial"\s*:\s*"([^"]*)"""").find(json)
         return textMatch?.groupValues?.get(1)
@@ -431,10 +439,6 @@ class VoskEngine(
             ?: ""
     }
 
-    /**
-     * Convert a ShortArray (16-bit PCM) to a ByteArray (little-endian).
-     * This is what Vosk's `acceptWaveForm` expects.
-     */
     private fun shortsToBytes(shorts: ShortArray): ByteArray {
         val bytes = ByteArray(shorts.size * 2)
         for (i in shorts.indices) {
