@@ -6,7 +6,7 @@ Rules: Never mark COMPLETE without evidence. Never fabricate. `BLOCKED` requires
 
 | ID | Prompt | Status | Files | Tests | Benchmark | Commit | Evidence |
 |----|--------|--------|-------|-------|-----------|--------|----------|
-| P1 | Artifact acquisition + provenance vault | NOT_STARTED | scripts/sravaani/download_model.py, verify_manifest.py; docs/STT_SRAVAANI_PROVENANCE.md | verify_manifest.py exit-0 | sha256 table | — | — |
+| P1 | Artifact acquisition + provenance vault | BLOCKED — HF gate: account pravin123271 has not accepted model terms; token fineGrained with grants:[] | scripts/sravaani/download_model.py, verify_manifest.py, validate_graph.py (written) | verify_manifest.py exit-0 | sha256 table | — | — |
 | P2 | Graph/operator/runtime validation | NOT_STARTED | scripts/sravaani/validate_graph.py, benchmark_reference.py; docs/STT_SRAVAANI_GRAPH_VALIDATION.md | validate_graph.py asserts | desktop RTF/RSS @ 4 latency modes | — | — |
 | P3 | Android engine integration (SravaaniEngine) | NOT_STARTED | SravaaniEngine.kt, SttEngineFactory.kt, libs.versions.toml, build.gradle.kts | SravaaniEngineTest, Robolectric extraction | cold init / first partial (device or NOT MEASURED) | — | — |
 | P4 | True streaming pipeline (kill O(n²)) | NOT_STARTED | SttPipeline.kt | SttPipelineStreamingTest | pipeline overhead ~O(n) | — | | 
