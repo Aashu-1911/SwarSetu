@@ -23,7 +23,6 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import resource
 import sys
 import time
 from pathlib import Path
@@ -46,15 +45,41 @@ def op_inventory(module: torch.jit.ScriptModule) -> dict[str, int]:
     ops: dict[str, int] = {}
     pattern = re.compile(r"\b(aten|prim|torch\.jit|custom)::[A-Za-z_0-9]+")
     for name, sub in module.named_modules():
-        for source in (getattr(sub, "code", None), getattr(sub, "graph", None)):
+        for attr in ("code", "graph"):
+            try:
+                source = getattr(sub, attr, None)
+            except Exception:  # noqa: BLE001 - modules without forward raise on .graph
+                continue
             text = source if isinstance(source, str) else str(source or "")
             for op in pattern.findall(text):
                 ops[op] = ops.get(op, 0) + 1
     return dict(sorted(ops.items(), key=lambda kv: -kv[1]))
 
 
-def peak_rss_mb() -> float:
-    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0  # ru_maxrss in KB on Linux; MB-ish on macOS
+def peak_rss_mb() -> float | None:
+    """Peak process memory in MB. POSIX: ru_maxrss. Windows: GetProcessMemoryInfo."""
+    try:
+        import resource  # POSIX only
+
+        return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0
+    except ImportError:
+        pass
+    try:
+        import ctypes
+
+        class PMC(ctypes.Structure):
+            _fields_ = [("cb", ctypes.c_ulong), ("PageFaultCount", ctypes.c_ulong),
+                        ("PeakWorkingSetSize", ctypes.c_size_t), ("WorkingSetSize", ctypes.c_size_t),
+                        ("QuotaPeakPagedPoolUsage", ctypes.c_size_t), ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                        ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t), ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                        ("PagefileUsage", ctypes.c_size_t), ("PeakPagefileUsage", ctypes.c_size_t)]
+
+        pmc = PMC()
+        if ctypes.windll.psapi.GetProcessMemoryInfo(ctypes.windll.kernel32.GetCurrentProcess(), ctypes.byref(pmc), ctypes.sizeof(pmc)):
+            return pmc.PeakWorkingSetSize / (1024.0 * 1024.0)
+    except Exception:  # noqa: BLE001
+        pass
+    return None
 
 
 def load_tokenizer() -> object | None:
@@ -70,17 +95,20 @@ def load_tokenizer() -> object | None:
 
 def streaming_smoke(model, att_context: tuple[int, int], n_seconds: float = 3.0) -> dict:
     """One full new_stream -> stream_audio chunks -> finalize cycle. No accuracy claims."""
-    t = torch.arange(int(n_seconds * SAMPLE_RATE), dtype=torch.float32) / SAMPLE_RATE
-    pcm = 0.5 * torch.sin(2 * torch.pi * 220.0 * t).numpy()
+    import numpy as np
+
+    t = np.arange(int(n_seconds * SAMPLE_RATE), dtype=np.float32) / SAMPLE_RATE
+    pcm = 0.5 * np.sin(2 * np.pi * 220.0 * t).astype(np.float32)  # 1-D f32 exactly like the official demo
 
     per_chunk_ms: list[float] = []
     partials: list[str] = []
 
     state = model.new_stream()
-    model.set_att_context_size(list(att_context)) if hasattr(model, "set_att_context_size") else None
+    if hasattr(model, "set_att_context_size"):
+        model.set_att_context_size(list(att_context))
     t0 = time.perf_counter()
     for i in range(0, len(pcm), CHUNK):
-        chunk = torch.from_numpy(pcm[i : i + CHUNK]).float().unsqueeze(0)  # (1, T)
+        chunk = np.ascontiguousarray(pcm[i : i + CHUNK], dtype=np.float32)
         tc = time.perf_counter()
         out = model.stream_audio(state, chunk, sampling_rate=SAMPLE_RATE)
         per_chunk_ms.append((time.perf_counter() - tc) * 1000)
@@ -106,7 +134,7 @@ def streaming_smoke(model, att_context: tuple[int, int], n_seconds: float = 3.0)
         "partials": len(partials),
         "partials_monotonic_prefix": monotonic,
         "finalized": bool(final_text),
-        "peak_rss_mb": round(peak_rss_mb(), 1),
+        "peak_rss_mb": round(peak_rss_mb(), 1) if peak_rss_mb() else None,
         "final_text_sample": final_text[:200],
     }
 
@@ -129,16 +157,25 @@ def main() -> int:
     report["jit_load_s"] = round(time.perf_counter() - t0, 3)
 
     # --- streaming contract discovery -------------------------------------
-    method_names = set()
-    try:
-        method_names = set(model._c._get_method_names())  # type: ignore[attr-defined]
-    except Exception:  # noqa: BLE001 - fall back to dir()
-        method_names = {m for m in dir(model) if not m.startswith("_")}
-    expected_api = {"new_stream", "stream_audio", "finalize", "set_att_context_size"}
-    present = sorted(m for m in expected_api if m in method_names)
+    # ScriptModule method discovery: _get_method_names may be unavailable; hasattr
+    # is the reliable probe for scripted methods on the top-level module.
+    expected_api = ["new_stream", "stream_audio", "finalize", "set_att_context_size"]
+    present = [m for m in expected_api if hasattr(model, m)]
     report["expected_api_present"] = present
-    report["expected_api_missing"] = sorted(expected_api - set(present))
+    report["expected_api_missing"] = [m for m in expected_api if m not in present]
+    # record every callable the top module actually exposes (for contract documentation)
+    extra_methods = []
+    for m in dir(model):
+        if m.startswith("_"):
+            continue
+        try:
+            if callable(getattr(model, m)):
+                extra_methods.append(m)
+        except Exception:  # noqa: BLE001
+            pass
+    report["top_level_callables"] = sorted(set(extra_methods))
     print(f"Streaming API present: {present}")
+    print(f"Top-level callables: {report['top_level_callables']}")
 
     # fp16-on-CPU: try direct; if a forward fails, record that fp16 cast is required.
     report["fp16_on_cpu_note"] = "attempting direct fp16 execution; results recorded per latency mode"
@@ -147,6 +184,9 @@ def main() -> int:
     sp = load_tokenizer()
     if sp is not None:
         report["tokenizer_vocab_size"] = sp.get_piece_size()
+        # community export claims output dim 5001 (= vocab + 1 blank); VERIFY later
+        # against the graph's actual output shape — recorded here as a cross-check fact.
+        report["tokenizer_note"] = "community export claims output dim 5001; cross-check vs graph output shape"
         print(f"Tokenizer vocab size: {sp.get_piece_size()}")
 
     # --- op inventory ------------------------------------------------------
@@ -170,23 +210,34 @@ def main() -> int:
             print(f"WARN: preproc.pt failed to load: {exc}")
 
     # --- streaming smoke at each latency mode ------------------------------
-    print("Streaming smoke at latency modes ...")
+    # fp16-on-CPU support varies by torch build: probe once; if it fails, convert to
+    # fp32 exactly once and run every mode on that (avoids 3 redundant 898 MB casts).
+    print("Probing fp16 execution on CPU with a 1 s stream ...")
+    run_model = model
+    try:
+        streaming_smoke(model, ATT_CONTEXTS[0], n_seconds=1.0)
+        report["execution_dtype"] = "fp16-direct"
+    except Exception as exc:  # noqa: BLE001
+        report["fp16_probe_error"] = f"{type(exc).__name__}: {exc}"
+        print(f"fp16 direct failed ({report['fp16_probe_error'][:120]}); converting to fp32 once ...")
+        t0 = time.perf_counter()
+        run_model = torch.jit.load(str(TS_PATH), map_location="cpu").float()
+        run_model.eval()
+        report["fp32_convert_s"] = round(time.perf_counter() - t0, 3)
+        report["execution_dtype"] = "fp32-cast"
+
+    print(f"Streaming smoke at latency modes (dtype={report['execution_dtype']}) ...")
     smokes = []
     for att in ATT_CONTEXTS:
         try:
-            s = streaming_smoke(model, att)
+            s = streaming_smoke(run_model, att)
         except Exception as exc:  # noqa: BLE001 - record failure, try next mode
             s = {"att_context": list(att), "error": f"{type(exc).__name__}: {exc}"}
-            # one fallback attempt: cast weights to fp32 (CPU half support varies)
-            try:
-                model_f = torch.jit.load(str(TS_PATH), map_location="cpu").float()
-                s["retry_fp32"] = streaming_smoke(model_f, att)
-            except Exception as exc2:  # noqa: BLE001
-                s["retry_fp32_error"] = f"{type(exc2).__name__}: {exc2}"
         smokes.append(s)
         print(json.dumps(s, ensure_ascii=False)[:300])
     report["streaming_smoke"] = smokes
-    report["peak_rss_mb_final"] = round(peak_rss_mb(), 1)
+    rss = peak_rss_mb()
+    report["peak_rss_mb_final"] = round(rss, 1) if rss else None
 
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     out = LOG_DIR / "graph_validation.json"

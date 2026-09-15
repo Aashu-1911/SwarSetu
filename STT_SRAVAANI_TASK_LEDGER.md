@@ -6,8 +6,8 @@ Rules: Never mark COMPLETE without evidence. Never fabricate. `BLOCKED` requires
 
 | ID | Prompt | Status | Files | Tests | Benchmark | Commit | Evidence |
 |----|--------|--------|-------|-------|-----------|--------|----------|
-| P1 | Artifact acquisition + provenance vault | BLOCKED — HF gate: account pravin123271 has not accepted model terms; token fineGrained with grants:[] | scripts/sravaani/download_model.py, verify_manifest.py, validate_graph.py (written) | verify_manifest.py exit-0 | sha256 table | — | — |
-| P2 | Graph/operator/runtime validation | NOT_STARTED | scripts/sravaani/validate_graph.py, benchmark_reference.py; docs/STT_SRAVAANI_GRAPH_VALIDATION.md | validate_graph.py asserts | desktop RTF/RSS @ 4 latency modes | — | — |
+| P1 | Artifact acquisition + provenance vault | COMMITTED | scripts/sravaani/download_model.py, verify_manifest.py; docs/STT_SRAVAANI_PROVENANCE.md | verify_manifest.py exit-0 (all 8 files) | sha256 table in provenance doc | 8bed260→ | manifest.json; docs/STT_SRAVAANI_PROVENANCE.md |
+| P2 | Graph/operator/runtime validation | COMMITTED | scripts/sravaani/p2_smoke.py, validate_graph.py; docs/STT_SRAVAANI_GRAPH_VALIDATION.md | p2_smoke.py exit-0 (contract + 4 latency modes) | desktop RTF 0.90/0.67/2.19/3.20; RSS NOT MEASURED (Windows probe) | this commit | logs/p2_smoke.json; graph validation doc |
 | P3 | Android engine integration (SravaaniEngine) | NOT_STARTED | SravaaniEngine.kt, SttEngineFactory.kt, libs.versions.toml, build.gradle.kts | SravaaniEngineTest, Robolectric extraction | cold init / first partial (device or NOT MEASURED) | — | — |
 | P4 | True streaming pipeline (kill O(n²)) | NOT_STARTED | SttPipeline.kt | SttPipelineStreamingTest | pipeline overhead ~O(n) | — | | 
 | P5 | Audio + VAD validation for SraVaani | NOT_STARTED | VoiceActivityDetector.kt, SttPipeline.kt | VoiceActivityDetectorMatrixTest | VAD decision accuracy per condition | — | — |
