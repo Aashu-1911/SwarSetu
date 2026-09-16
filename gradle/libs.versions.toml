@@ -150,6 +150,14 @@ exifinterface = "1.4.2"
 # prebuilt .so — verify 16 KB page alignment before shipping if targeting Android 15+.
 # Models are NOT bundled in this dependency; they are extracted from app assets at runtime.
 vosk = "0.3.75"
+# ONNX Runtime Mobile for Android — executes the SraVaani 0.5 encoder + CTC ONNX graphs
+# (P3 of the stt-sravaani plan; see docs/STT_SRAVAANI_GRAPH_VALIDATION.md). MIT, Apache-2.0
+# dual-licensed, ships libonnxruntime4j_jni.so per ABI. Version 1.27.0 is pinned to EXACTLY
+# the onnxruntime version used on desktop to pass the numeric-equivalence gate for the
+# exported graphs (max feat rel 2.6e-05, encoder rel 4.7e-05) — a runtime major/minor bump
+# must re-run scripts/sravaani/export_onnx.py's gate before shipping. The graphs are
+# opset-17, fully covered by the ORT standard ops kernel set (verified at export time).
+onnxruntime = "1.27.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -233,6 +241,7 @@ reandroid-arsclib = { group = "io.github.reandroid", name = "ARSCLib", version.r
 apksig = { group = "com.android.tools.build", name = "apksig", version.ref = "apksig" }
 
 vosk-android = { group = "com.alphacephei", name = "vosk-android", version.ref = "vosk" }
+onnxruntime-android = { group = "com.microsoft.onnxruntime", name = "onnxruntime-android", version.ref = "onnxruntime" }
 
 # Put onto the root buildscript classpath so AGP 9's built-in Kotlin compiles with this KGP (2.4.0)
 # instead of AGP's bundled default (2.2.10). Kotlin 2.4 is supported on AGP 9.1+ per Google's

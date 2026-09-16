@@ -279,6 +279,9 @@ android {
     androidResources {
         // On-device model files must stay uncompressed so TFLite can mmap them from the APK.
         noCompress += listOf("tflite")
+        // SraVaani 0.5 ONNX graphs (stt/sravaani/) must also stay uncompressed so ONNX Runtime
+        // can mmap them from the APK instead of copying ~1.8 GB into RAM at session-create.
+        noCompress += listOf("onnx")
     }
 
     // AGP otherwise embeds a "Dependency metadata" blob (a compressed, signed dependency list, for Play's
@@ -532,6 +535,13 @@ dependencies {
     // models are extracted from assets, not bundled in this AAR. Used only by stt/VoskEngine;
     // SttEngineFactory falls back to DefaultSttEngine (no-op) if Vosk is absent.
     implementation(libs.vosk.android)
+
+    // SraVaani 0.5 runtime (stt/SravaaniEngine): ONNX Runtime Mobile executes the exported
+    // encoder + CTC graphs (see gradle/libs.versions.toml for the 1.27.0 pin rationale —
+    // must match the version that passed the P3 numeric-equivalence gate). Pure inference
+    // runtime, no network, Apache-2.0/MIT. The graphs themselves land in assets/sravaani via
+    // scripts/sravaani/export_onnx.py + gen_android_assets.py (P7 gates the packaging).
+    implementation(libs.onnxruntime.android)
 
     // E2E encryption (Tink — Java + native, no Kotlin metadata / no Gradle plugin, like SQLCipher)
     implementation(libs.tink.android)
