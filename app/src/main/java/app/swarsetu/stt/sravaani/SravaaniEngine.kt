@@ -551,13 +551,21 @@ class SravaaniEngine(
 
     /**
      * Copy the ONNX graphs from assets to app-private storage (once) so ORT can mmap them —
-     * assets cannot be mapped directly. Copy is version-guarded by a marker file; P7 owns the
-     * final packaging decision (install-time extraction vs on-demand).
+     * assets cannot be mapped directly. Copy is version-guarded by a marker file; every
+     * extraction is SHA-256-verified (P7) against the P3 export manifest pins before the
+     * marker is written, so a corrupt/truncated asset fails LOUDLY instead of loading
+     * garbage weights. Previously-extracted graphs are re-verified on every engine start
+     * (cheap: ORT would map them anyway; hashing catches post-install corruption).
      */
     private fun extractGraphs(): File {
         val dir = File(context.filesDir, EXTRACT_DIR)
         val marker = File(dir, "graphs.meta")
-        if (marker.exists() && marker.readText().trim() == GRAPHS_VERSION) return dir
+        if (marker.exists() && marker.readText().trim() == GRAPHS_VERSION) {
+            for (name in listOf(ENCODER_ASSET, CTC_ASSET)) {
+                SravaaniPackaging.verifyExtracted(dir, name)
+            }
+            return dir
+        }
         dir.mkdirs()
         for (name in listOf(ENCODER_ASSET, CTC_ASSET)) {
             val target = File(dir, name)
@@ -569,9 +577,12 @@ class SravaaniEngine(
                 target.delete()
                 if (!tmp.renameTo(target)) throw SttException.ModelLoadError(target.path)
             }
+            // Verify the extraction BEFORE the marker pins it — a mismatch throws
+            // ModelLoadError (engine surfaces it; factory falls back to DefaultSttEngine).
+            SravaaniPackaging.verifyExtracted(dir, name)
         }
         marker.writeText(GRAPHS_VERSION)
-        Log.i(TAG, "Graphs extracted to ${dir.absolutePath}")
+        Log.i(TAG, "Graphs extracted and verified to ${dir.absolutePath}")
         return dir
     }
 

@@ -1,4 +1,5 @@
 import org.jlleitschuh.gradle.ktlint.reporter.ReporterType
+import java.security.MessageDigest
 import java.util.Properties
 
 plugins {
@@ -419,6 +420,66 @@ val checkModerationModels =
     }
 
 tasks.named("preBuild") { dependsOn(checkModerationModels) }
+
+// P7 offline-packaging gate: when the SraVaani graphs ARE packaged (release/AAB builds;
+// debug builds may stage them via scripts/sravaani/gen_android_assets.py), verify exact size
+// + SHA-256 against the P3 export manifest so a truncated/stub/substituted graph can never
+// ship. Graphs are NOT git-tracked (provenance via scripts; see docs/STT_SRAVAANI_*.md), so
+// this task is conditional: nothing to check in a clean checkout — the engine's runtime
+// extraction check (SravaaniPackaging) covers the on-device path.
+val checkSravaaniModel =
+    tasks.register("checkSravaaniModel") {
+        description = "Fails the build if packaged SraVaani ONNX graphs are missing/corrupt (size+sha256)."
+        val graphs =
+            listOf(
+                Triple("sravaani_encoder.onnx", 1774013452L, "44f7b888ea5ebc2cdf85bcb34aedb94e9a67bcc534711c40ad75d0d65f4e5b5f"),
+                Triple("sravaani_ctc.onnx", 20504707L, "6001671902c431b533452c78cedc3bafdccbeb8ae4f6ed1c23c0612466e1bb31"),
+            ).map { (name, size, sha) ->
+                Triple(layout.projectDirectory.file("src/main/assets/sravaani/$name").asFile, size, sha)
+            }
+        val stamp = layout.buildDirectory.file("tmp/checkSravaaniModel.stamp")
+        inputs.files(graphs.map { it.first }).withPropertyName("sravaaniGraphs")
+        outputs.file(stamp)
+        doLast {
+            graphs.forEach { (file, expectedSize, expectedSha) ->
+                if (!file.isFile) {
+                    // Absent graphs skip verification: a clean checkout has none, and the
+                    // offline-contract enforcement (graphs must exist for a shipped build)
+                    // is applied by CI wiring this task into release builds with assets staged.
+                    return@forEach
+                }
+                if (file.length() != expectedSize) {
+                    throw GradleException(
+                        "SraVaani graph ${file.name} is ${file.length()} bytes, expected $expectedSize — " +
+                            "truncated or substituted. Re-run scripts/sravaani/gen_android_assets.py.",
+                    )
+                }
+                val md = MessageDigest.getInstance("SHA-256")
+                file.inputStream().use { s ->
+                    val buf = ByteArray(1 shl 20)
+                    while (true) {
+                        val n = s.read(buf)
+                        if (n < 0) break
+                        md.update(buf, 0, n)
+                    }
+                }
+                val actual = md.digest().joinToString("") { b -> "%02x".format(b) }
+                if (!actual.equals(expectedSha, ignoreCase = true)) {
+                    throw GradleException(
+                        "SraVaani graph ${file.name} sha256 $actual != expected $expectedSha — " +
+                            "do not ship substituted weights (SraVaani-only rule).",
+                    )
+                }
+            }
+            stamp
+                .get()
+                .asFile
+                .apply { parentFile.mkdirs() }
+                .writeText("ok")
+        }
+    }
+
+tasks.named("preBuild") { dependsOn(checkSravaaniModel) }
 
 room {
     // Export the Room schema JSON via the Room Gradle plugin (replaces the raw ksp `room.schemaLocation`
