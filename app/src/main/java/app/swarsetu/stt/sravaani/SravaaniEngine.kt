@@ -33,11 +33,13 @@ import java.nio.ByteOrder
  *
  * **Architecture (verified in P2, evidence in `docs/STT_SRAVAANI_GRAPH_VALIDATION.md`):**
  * the official artifact ships a cache-aware streaming FastConformer encoder + CTC head.
- * This engine executes the P3-exported ONNX graphs of exactly those two components
- * (`sravaani_encoder.onnx` 1.77 GB fp32, `sravaani_ctc.onnx` 20.5 MB — weights unchanged
- * from the official fp16 artifact, upcast identically to the official CPU path; equivalence
- * gate: feat rel 2.6e-05, encoder rel 4.7e-05, collapsed token streams identical on all
- * structured trials) via ONNX Runtime, and reimplements the thin streaming brain in Kotlin
+ * This engine executes the P3-exported ONNX graphs of exactly those two components,
+ * with the PRODUCTION encoder being the P9 weight-only INT8 optimization of the fp32 export
+ * (`sravaani_encoder.onnx` 638.7 MB int8 + `sravaani_ctc.onnx` 20.5 MB — provenance chain:
+ * official fp16 artifact → P3 fp32 export (equivalence gate: feat rel 2.6e-05, encoder rel
+ * 4.7e-05, collapsed token streams identical on structured trials) → P9 int8 (collapsed token
+ * streams identical on all probes; FLEURS real-speech WER parity +0.05 pp, 2026-09-17))
+ * via ONNX Runtime, and reimplements the thin streaming brain in Kotlin
  * ([SravaaniFeaturizer], [SravaaniStreamingState], [SravaaniCtcDecoder], [SravaaniTokenizer]) —
  * each class is an exact port of the official Python, pinned by golden-vector tests.
  *
@@ -45,7 +47,10 @@ import java.nio.ByteOrder
  * - encoder: `feats(B,128,T)` mel-major | `feat_len(1)` i64 | `cache_last_channel(1,17,70,1024)`
  *   | `cache_last_time(1,17,1024,8)` | `cache_last_channel_len(1)` i64
  *   → `enc(1,1024,T')` | `enc_len(1)` i64 | `cache_next_*` (same shapes as inputs).
- * - ctc: `enc(1,1024,T')` → `log_probs(1,5001,T')` — vocab-major, time on axis 2.
+ * - ctc: `enc(1,1024,T')` → `log_probs(1,T',5001)` — TIME-major, vocab on axis 2 (real-speech
+ *   verified 2026-09-17 vs the official TorchScript wrapper: identical transcript). NOTE: the
+ *   official NeMo CTC export is vocab-major `(1,V,T)`; OUR export flattens the TimeMask/LogSoftmax
+ *   tail to `(1,T,V)` — do not "fix" this back to the official layout.
  * - The graph's `cache_next_*` outputs stay alive only while its [OrtSession.Result] is open,
  *   so they are COPIED into per-stream persistent tensors inside the result scope.
  *
@@ -68,7 +73,8 @@ import java.nio.ByteOrder
  * no-op (the engine never conditions on language; transcripts come out in whatever language
  * was spoken).
  *
- * **Memory reality (measured, P2):** the fp32 encoder is ~1.77 GB on disk; mmap'd by ORT
+ * **Memory reality (measured, P2/P9):** the production int8 encoder is ~638.7 MB on disk
+ * (fp32 reference is 1.77 GB, kept in scratch); mmap'd by ORT
  * from app-private storage, mapped pages are file-backed and pageable, but this model class
  * will not run on 2 GB-RAM devices. Recorded as a known limitation, not hidden.
  *
@@ -477,13 +483,17 @@ class SravaaniEngine(
                     "ctc logits size ${lp.remaining()} not a multiple of $VOCAB_PLUS_BLANK"
                 }
                 val valid = minOf(encLen, frames.toLong()).toInt()
-                // Layout (V+1, T) row-major: element (v, t) at v * frames + t.
+                // Layout (T, V+1) row-major (TIME-major): element (t, v) at t * (V+1) + v.
+                // The export's LogSoftmax tail flattens to (1, T, 5001); reading it as (1, V, T)
+                // picks TIME indices as token ids (garbage single-char transcripts) — the exact
+                // bug the FLEURS arbitration caught on 2026-09-17.
                 val ids = IntArray(valid)
                 for (t in 0 until valid) {
+                    val base = t * VOCAB_PLUS_BLANK
                     var best = 0
                     var bestVal = Float.NEGATIVE_INFINITY
                     for (v in 0 until VOCAB_PLUS_BLANK) {
-                        val x = lp.get(v * frames + t)
+                        val x = lp.get(base + v)
                         if (x > bestVal) {
                             bestVal = x
                             best = v
@@ -720,11 +730,12 @@ class SravaaniEngine(
         /** App-private extraction dir under filesDir (mmap source). */
         const val EXTRACT_DIR = "stt/sravaani"
 
-        /** Re-extract graphs when this changes (runtime pin + model revision). */
-        const val GRAPHS_VERSION = "ort-1.27.0-rev-29a15303"
+        /** Re-extract graphs when this changes (runtime pin + model revision + artifact selection). */
+        const val GRAPHS_VERSION = "ort-1.27.0-rev-29a15303-int8-prod"
 
-        /** Exact asset byte counts from the P3 export manifest (for SttModelInfo). */
-        const val GRAPH_ENCODER_BYTES = 1_774_013_452L
+        /** Exact asset byte counts from the P9 production manifest (for SttModelInfo).
+         *  Production encoder = P9 weight-only INT8 (WER parity proven on FLEURS, 2.778× smaller). */
+        const val GRAPH_ENCODER_BYTES = 638_695_714L
         const val GRAPH_CTC_BYTES = 20_504_707L
 
         const val MEL_BINS = 128

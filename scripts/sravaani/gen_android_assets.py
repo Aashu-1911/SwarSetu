@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
-"""P3 — generate Android assets + golden test vectors from the OFFICIAL artifact.
+"""P3/P7/P9 — generate Android assets + golden test vectors from the OFFICIAL artifact.
 
-Outputs (all small, committed to git — the 1.7 GB graphs stay out):
+Outputs (all small, committed to git — the big graphs stay out and are STAGED here):
+
+0. (P9) Production graphs staged into app/src/main/assets/sravaani/:
+   - sravaani_encoder.onnx ← scratch/sravaani/onnx/sravaani_encoder.int8.onnx
+     (P9 weight-only INT8 = PRODUCTION artifact: FLEURS real-speech WER parity vs fp32
+     +0.05 pp measured 2026-09-17, 2.778× smaller; equivalence-gated token streams)
+   - sravaani_ctc.onnx ← scratch/sravaani/onnx/sravaani_ctc.onnx
+   Sizes + SHA-256 are printed and must match SravaaniPackaging.kt / app/build.gradle.kts pins.
 
 1. app/src/main/assets/sravaani/tables.bin
    Little-endian f32 blob: magic "SRVT" (u32) + version (u32) + n_fft (u32) +
@@ -97,7 +104,41 @@ def f32_b64(t: torch.Tensor) -> str:
     return base64.b64encode(t.detach().to(torch.float32).contiguous().numpy().tobytes()).decode()
 
 
+def stage_production_graphs() -> int:
+    """P9: copy the PRODUCTION graphs into the APK asset dir (idempotent, verified)."""
+    import hashlib
+
+    pairs = [
+        (Path("scratch/sravaani/onnx/sravaani_encoder.int8.onnx"), ASSETS / "sravaani_encoder.onnx"),
+        (Path("scratch/sravaani/onnx/sravaani_ctc.onnx"), ASSETS / "sravaani_ctc.onnx"),
+    ]
+    for src, dst in pairs:
+        if not src.is_file():
+            print(f"BLOCKED: production graph missing: {src}")
+            return 2
+        h = hashlib.sha256()
+        with open(src, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                h.update(chunk)
+        print(f"staging {src} -> {dst} ({src.stat().st_size} B, sha256 {h.hexdigest()})")
+        if dst.exists() and dst.stat().st_size == src.stat().st_size:
+            dh = hashlib.sha256()
+            with open(dst, "rb") as f:
+                for chunk in iter(lambda: f.read(1 << 20), b""):
+                    dh.update(chunk)
+            if dh.hexdigest() == h.hexdigest():
+                print(f"  already staged (identical) — skip")
+                continue
+        dst.write_bytes(src.read_bytes())
+        print(f"  staged")
+    return 0
+
+
 def main() -> int:
+    rc = stage_production_graphs()
+    if rc != 0:
+        return rc
+
     cfg = SraVaaniStreamingConfig.from_pretrained(str(HF_DIR), local_files_only=True)
     model = SraVaaniStreamingModel(cfg)
     model._artifacts_dir = str(HF_DIR)

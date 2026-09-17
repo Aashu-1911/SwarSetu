@@ -55,3 +55,8 @@ app/release/*
 /scratch/sravaani/
 *.fp16.ts
 /sravaani-model/
+
+# Staged (not committed) SraVaani ONNX graphs — >100 MB, cannot be git-tracked. They are
+# copied into assets by scripts/sravaani/gen_android_assets.py at build-setup time and
+# integrity-gated by checkSravaaniModel (size+SHA-256 pins in SravaaniPackaging.kt).
+app/src/main/assets/sravaani/*.onnx

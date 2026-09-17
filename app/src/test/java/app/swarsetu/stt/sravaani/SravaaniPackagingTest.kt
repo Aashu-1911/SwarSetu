@@ -86,12 +86,13 @@ class SravaaniPackagingTest {
     }
 
     @Test
-    fun `pins match the P3 export manifest`() {
-        // Provenance chain guard: the packaged pins must equal the export manifest values
-        // (scratch/sravaani/onnx/export_meta.json, verified at P7 authoring time via
-        // sha256sum — evidence in the task ledger).
-        assertEquals(1_774_013_452L, SravaaniPackaging.ENCODER_BYTES)
+    fun `pins match the P9 production (int8) manifest`() {
+        // Provenance chain guard: the packaged encoder pin must equal the P9 int8 artifact
+        // (scratch/sravaani/onnx/int8_meta.json, hash recomputed 2026-09-17; fp32 export pin
+        // lives in export_meta.json and scratch — the fp32 graph remains the baseline).
+        assertEquals(638_695_714L, SravaaniPackaging.ENCODER_BYTES)
         assertEquals(20_504_707L, SravaaniPackaging.CTC_BYTES)
+        assertEquals("e074e56a91e71c534b7be72bb75c023c823e0475c9a165cf3551dc461eb5c515", SravaaniPackaging.ENCODER_SHA256)
         assertEquals(64, SravaaniPackaging.ENCODER_SHA256.length)
         assertEquals(64, SravaaniPackaging.CTC_SHA256.length)
     }

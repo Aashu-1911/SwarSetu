@@ -12,15 +12,19 @@ import java.security.MessageDigest
  * fallback), never load garbage weights.
  *
  * Hashes are the provenance chain: official HF fp16 artifact (rev `29a15303`, P1 manifest) →
- * `scripts/sravaani/export_onnx.py` (P3, equivalence-gated: token streams 100% identical on
- * structured trials) → these exact bytes, matching `scratch/sravaani/onnx/export_meta.json`.
+ * `scripts/sravaani/export_onnx.py` (P3, equivalence-gated) → fp32 ONNX encoder →
+ * `scripts/sravaani/optimize_int8.py` (P9; `int8_meta.json` links the fp32 pin) → these exact
+ * bytes. The PRODUCTION encoder asset is the P9 weight-only INT8 graph: real-speech WER parity
+ * measured on FLEURS dev (10 langs × 10 utt, 2026-09-17): aggregate WER 0.2401 vs fp32 0.2396
+ * (+0.05 pp, 6/10 languages bit-identical), 2.778× smaller (638,695,714 B vs 1,774,013,452 B).
+ * The fp32 graph stays in `scratch/sravaani/onnx/` as the reference/baseline artifact.
  */
 object SravaaniPackaging {
-    /** Expected SHA-256 of `assets/sravaani/sravaani_encoder.onnx` (P3 export manifest). */
-    const val ENCODER_SHA256 = "44f7b888ea5ebc2cdf85bcb34aedb94e9a67bcc534711c40ad75d0d65f4e5b5f"
+    /** Expected SHA-256 of `assets/sravaani/sravaani_encoder.onnx` (P9 int8 production graph). */
+    const val ENCODER_SHA256 = "e074e56a91e71c534b7be72bb75c023c823e0475c9a165cf3551dc461eb5c515"
 
-    /** Expected byte count of the encoder graph (export manifest). */
-    const val ENCODER_BYTES = 1_774_013_452L
+    /** Expected byte count of the encoder graph (int8_meta.json). */
+    const val ENCODER_BYTES = 638_695_714L
 
     /** Expected SHA-256 of `assets/sravaani/sravaani_ctc.onnx` (P3 export manifest). */
     const val CTC_SHA256 = "6001671902c431b533452c78cedc3bafdccbeb8ae4f6ed1c23c0612466e1bb31"

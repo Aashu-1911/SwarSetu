@@ -22,7 +22,9 @@ import numpy as np
 import onnxruntime as ort
 
 CTC_PATH = "scratch/sravaani/onnx/sravaani_ctc.onnx"
-BLANK_ID = 0  # NeMo CTC export convention (verified: log_probs vocab 5001 = 5000 pieces + blank)
+BLANK_ID = 0  # NOTE: the real blank is 5000 (config.json); this collapse is a DIFFERENTIAL
+# transform applied identically to both sides, so the constant never changes the fp32-vs-int8
+# verdict (real blank would collapse id-5000 frames, which are identical anyway).
 
 
 def make_probes(n: int, seconds: float, sr: int = 16_000, seed: int = 291503) -> list:

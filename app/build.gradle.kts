@@ -322,6 +322,10 @@ android {
             // app/src/test/resources/robolectric.properties.
             isIncludeAndroidResources = true
             isReturnDefaultValues = true
+            // The packaged SraVaani graphs are real (P9 int8 encoder 638.7 MB + CTC 20.5 MB) and
+            // Robolectric opens the asset container in-heap (CppAssetManager2 → FileMap), so the
+            // default 512 MB JVM heap OOMs. 3 GB headroom covers the mmapped asset pages.
+            all { it.maxHeapSize = "3072m" }
         }
 
         // Gradle Managed Device: a headless emulator Gradle provisions/boots/tears down itself, so
@@ -432,7 +436,7 @@ val checkSravaaniModel =
         description = "Fails the build if packaged SraVaani ONNX graphs are missing/corrupt (size+sha256)."
         val graphs =
             listOf(
-                Triple("sravaani_encoder.onnx", 1774013452L, "44f7b888ea5ebc2cdf85bcb34aedb94e9a67bcc534711c40ad75d0d65f4e5b5f"),
+                Triple("sravaani_encoder.onnx", 638695714L, "e074e56a91e71c534b7be72bb75c023c823e0475c9a165cf3551dc461eb5c515"),
                 Triple("sravaani_ctc.onnx", 20504707L, "6001671902c431b533452c78cedc3bafdccbeb8ae4f6ed1c23c0612466e1bb31"),
             ).map { (name, size, sha) ->
                 Triple(layout.projectDirectory.file("src/main/assets/sravaani/$name").asFile, size, sha)
