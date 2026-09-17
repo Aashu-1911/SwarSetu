@@ -531,12 +531,7 @@ dependencies {
     // kotlinx-serialization) — no native tokenizer lib, so nothing to 16 KB-align and no .so added to the APK.
     implementation(libs.litert)
 
-    // Offline STT engine (Vosk — Kaldi-based, Apache-2.0). Ships native .so for on-device inference;
-    // models are extracted from assets, not bundled in this AAR. Used only by stt/VoskEngine;
-    // SttEngineFactory falls back to DefaultSttEngine (no-op) if Vosk is absent.
-    implementation(libs.vosk.android)
-
-    // SraVaani 0.5 runtime (stt/SravaaniEngine): ONNX Runtime Mobile executes the exported
+    // SraVaani 0.5 runtime (stt/sravaani/SravaaniEngine): ONNX Runtime executes the exported
     // encoder + CTC graphs (see gradle/libs.versions.toml for the 1.27.0 pin rationale —
     // must match the version that passed the P3 numeric-equivalence gate). Pure inference
     // runtime, no network, Apache-2.0/MIT. The graphs themselves land in assets/sravaani via

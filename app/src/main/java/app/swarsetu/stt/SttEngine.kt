@@ -56,8 +56,8 @@ interface SttEngine {
      * Streaming transcription: emits partial results as audio is processed, ending with a final result.
      *
      * The default implementation chunks [pcm] and calls [transcribe] on each chunk, emitting partial
-     * results. Engine implementations that support true streaming (e.g. Vosk) should override this
-     * for better latency and accuracy.
+     * results. Engine implementations with native streaming support (SraVaani's cache-aware chunks)
+     * should override this for better latency and accuracy.
      *
      * @param pcm 16-bit signed PCM samples, mono.
      * @param language Language to transcribe.

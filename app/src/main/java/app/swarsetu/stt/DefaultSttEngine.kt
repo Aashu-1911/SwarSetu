@@ -19,8 +19,8 @@ import kotlinx.coroutines.withContext
  * - Thread safety via [Mutex] + [runCatching] (same pattern as [app.swarsetu.moderation.MlTextModerator])
  *
  * The actual model loading and inference are delegated to protected methods that concrete engine
- * implementations (Vosk, sherpa-onnx, Whisper) override. This class provides the scaffolding so
- * each backend only needs to implement [loadModel], [inferPcm], and [releaseModel].
+ * implementations override. This class provides the scaffolding so each backend only needs to
+ * implement [loadModel], [inferPcm], and [releaseModel].
  *
  * **No Knit/networking/TTS dependencies.** This class is a pure audio→text transform.
  */
@@ -115,7 +115,7 @@ open class DefaultSttEngine(
     ): Flow<SttResult> =
         flow {
             // Default implementation: chunk the PCM and emit partial results.
-            // Concrete engines with streaming support (e.g. Vosk) should override this
+            // Concrete engines with streaming support (SraVaani) should override this
             // for better latency.
             val chunkSize = language.sampleRate / 2 // 500ms chunks
             val totalChunks = (pcm.size + chunkSize - 1) / chunkSize

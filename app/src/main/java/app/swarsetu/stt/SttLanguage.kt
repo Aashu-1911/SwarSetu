@@ -1,15 +1,17 @@
 package app.swarsetu.stt
 
 /**
- * Supported STT languages. Each entry maps a BCP-47 code to the language's display name, the expected
- * PCM sample rate (most Indic STT models expect 16 kHz), and a hint for the model manager about which
- * model asset to load.
+ * Supported STT languages. Each entry maps a BCP-47 code to the language's display name and the
+ * expected PCM sample rate.
  *
- * The 10 target languages match PS 26173. The order is deliberate: English is last because it is the
- * fallback when no Indic model is available, not because it is less important.
+ * The 10 target languages match PS 26173. **All 10 are served by ONE multilingual model**
+ * (SraVaani 0.5-live — verified from the official model card: 21 Indian-language tags including
+ * every language in this enum, single language-unconditioned network). There is deliberately
+ * no per-language model and no aliasing: historically Kannada/Malayalam/Odia/Marathi were aliased
+ * to a Hindi Vosk model, which returned Hindi transcripts for those languages — forbidden by the
+ * master spec (§7) and removed. A language selected here is the language the model serves.
  *
- * A future version may add more languages here without changing any public API — the enum is the single
- * source of truth, and [SttLanguage.supported] exposes only the ones with bundled models.
+ * [SttLanguage.supported] therefore exposes ALL entries.
  */
 enum class SttLanguage(
     /** BCP-47 code (e.g. "hi", "en-IN"). */
@@ -22,10 +24,11 @@ enum class SttLanguage(
      */
     val sampleRate: Int = SAMPLE_RATE,
     /**
-     * Asset directory name under `assets/stt/` where this language's model files live. A null value
-     * means the language is declared but no model is bundled yet — [SttModelManager.isAvailable] will
-     * return false for it.
+     * Legacy per-language asset directory name (Vosk era). Kept ONLY so diagnostics listing old
+     * extracted dirs does not break; the SraVaani engine does not use it — the multilingual model
+     * is a single artifact set under `assets/sravaani/`.
      */
+    @Deprecated("Vosk per-language models removed; single multilingual SraVaani artifact set")
     val assetDir: String? = null,
 ) {
     HINDI("hi", "हिन्दी", assetDir = "stt-hi"),

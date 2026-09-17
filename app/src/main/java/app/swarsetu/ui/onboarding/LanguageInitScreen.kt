@@ -25,7 +25,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.swarsetu.data.settings.SettingsStore
-import app.swarsetu.stt.SttLanguage
 import app.swarsetu.stt.SttModelManager
 import app.swarsetu.translation.TranslatorEngine
 import kotlinx.coroutines.launch
@@ -39,7 +38,6 @@ fun LanguageInitScreen(
     onInitializationComplete: () -> Unit,
     settingsStore: SettingsStore = koinInject(),
     translatorEngine: TranslatorEngine = koinInject(),
-    sttModelManager: SttModelManager = koinInject(),
 ) {
     var completedModels by remember { mutableIntStateOf(0) }
     var totalModels by remember { mutableIntStateOf(10) }
@@ -51,7 +49,6 @@ fun LanguageInitScreen(
     val scope = rememberCoroutineScope()
 
     val stageTranslation = stringResource(R.string.lang_init_stage_translation)
-    val stageSpeech = stringResource(R.string.lang_init_stage_speech)
     val speechEn = stringResource(R.string.lang_init_speech_en)
     val speechHi = stringResource(R.string.lang_init_speech_hi)
     val errorDefault = stringResource(R.string.lang_init_error_default)
@@ -63,19 +60,14 @@ fun LanguageInitScreen(
         scope.launch {
             try {
                 val translationCount = 8
-                val speechCount = SttLanguage.entries.size
-                totalModels = translationCount + speechCount
+                totalModels = translationCount
 
+                // Speech models are NOT downloaded: SraVaani 0.5 is packaged in the APK
+                // (fresh install + no internet = working STT, PS 26173 requirement).
                 downloadStage = stageTranslation
                 translatorEngine.downloadAllRequiredModels { completed, total, currentLang ->
                     currentDownloading = "Translation: $currentLang"
                     completedModels = completed
-                }
-
-                downloadStage = stageSpeech
-                sttModelManager.downloadAllRequiredModels { completed, total, currentLang ->
-                    currentDownloading = "Speech Model: ${currentLang.displayName}"
-                    completedModels = translationCount + completed
                 }
 
                 settingsStore.setLanguageInitComplete(true)

@@ -145,11 +145,6 @@ uiautomator = "2.4.0"
 # minSdk 29 for the HEIC/RAW files a modern camera hands us through the picker.
 exifinterface = "1.4.2"
 # Vosk offline speech recognition — JNI wrapper around the Kaldi ASR engine. Apache-2.0,
-# ships native .so (x86_64, arm64-v8a, armeabi-v7a) for on-device inference. Used only by
-# stt/VoskEngine; the rest of the STT module is engine-agnostic. F-Droid: the AAR includes
-# prebuilt .so — verify 16 KB page alignment before shipping if targeting Android 15+.
-# Models are NOT bundled in this dependency; they are extracted from app assets at runtime.
-vosk = "0.3.75"
 # ONNX Runtime Mobile for Android — executes the SraVaani 0.5 encoder + CTC ONNX graphs
 # (P3 of the stt-sravaani plan; see docs/STT_SRAVAANI_GRAPH_VALIDATION.md). MIT, Apache-2.0
 # dual-licensed, ships libonnxruntime4j_jni.so per ABI. Version 1.27.0 is pinned to EXACTLY
@@ -240,7 +235,6 @@ androidx-camera-view = { group = "androidx.camera", name = "camera-view", versio
 reandroid-arsclib = { group = "io.github.reandroid", name = "ARSCLib", version.ref = "arsclib" }
 apksig = { group = "com.android.tools.build", name = "apksig", version.ref = "apksig" }
 
-vosk-android = { group = "com.alphacephei", name = "vosk-android", version.ref = "vosk" }
 onnxruntime-android = { group = "com.microsoft.onnxruntime", name = "onnxruntime-android", version.ref = "onnxruntime" }
 
 # Put onto the root buildscript classpath so AGP 9's built-in Kotlin compiles with this KGP (2.4.0)

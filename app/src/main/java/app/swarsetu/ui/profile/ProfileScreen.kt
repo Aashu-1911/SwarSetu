@@ -104,8 +104,6 @@ internal data class ProfileFormState(
     val preferredLanguage: SttLanguage = SttLanguage.HINDI,
     val availableLanguages: List<SttLanguage> = SttLanguage.entries,
     val installedLanguages: Set<SttLanguage> = emptySet(),
-    val downloadingLanguage: SttLanguage? = null,
-    val downloadProgress: Float = 0f,
     val themePreference: String = "system",
     val autoPlayTts: Boolean = true,
 )
@@ -128,8 +126,6 @@ fun ProfileScreen(
     val preferredLanguage by viewModel.preferredLanguage.collectAsStateWithLifecycle()
     val availableLanguages by viewModel.availableLanguages.collectAsStateWithLifecycle()
     val installedLanguages by viewModel.installedLanguages.collectAsStateWithLifecycle()
-    val downloadingLanguage by viewModel.downloadingLanguage.collectAsStateWithLifecycle()
-    val downloadProgress by viewModel.downloadProgress.collectAsStateWithLifecycle()
     val themePreference by viewModel.themePreference.collectAsStateWithLifecycle()
     val autoPlayTts by viewModel.autoPlayTts.collectAsStateWithLifecycle()
 
@@ -168,8 +164,6 @@ fun ProfileScreen(
                 preferredLanguage = preferredLanguage,
                 availableLanguages = availableLanguages,
                 installedLanguages = installedLanguages,
-                downloadingLanguage = downloadingLanguage,
-                downloadProgress = downloadProgress,
                 themePreference = themePreference,
                 autoPlayTts = autoPlayTts,
             ),
@@ -181,7 +175,6 @@ fun ProfileScreen(
         onStatusCommit = viewModel::commitStatus,
         onToggleContentFiltering = viewModel::setContentFilteringEnabled,
         onLanguageChange = viewModel::setPreferredLanguage,
-        onDownloadModel = viewModel::downloadModel,
         onThemeChange = viewModel::setThemePreference,
         onAutoPlayTtsChange = viewModel::setAutoPlayTts,
         onOpenRelays = onOpenRelays,
@@ -208,7 +201,6 @@ internal fun ProfileScreenContent(
     onStatusCommit: () -> Unit,
     onToggleContentFiltering: (Boolean) -> Unit,
     onLanguageChange: (SttLanguage) -> Unit = {},
-    onDownloadModel: (SttLanguage) -> Unit = {},
     onThemeChange: (String) -> Unit = {},
     onAutoPlayTtsChange: (Boolean) -> Unit = {},
     onOpenRelays: () -> Unit,
@@ -370,10 +362,6 @@ internal fun ProfileScreenContent(
 
                     ActiveVoiceModelSection(
                         language = form.preferredLanguage,
-                        isInstalled = form.installedLanguages.contains(form.preferredLanguage),
-                        isDownloading = form.downloadingLanguage == form.preferredLanguage,
-                        downloadProgress = form.downloadProgress,
-                        onDownload = { onDownloadModel(form.preferredLanguage) },
                     )
 
                     AutoPlayTtsRow(
@@ -613,10 +601,6 @@ private fun PreferredLanguageSection(
 @Composable
 private fun ActiveVoiceModelSection(
     language: SttLanguage,
-    isInstalled: Boolean,
-    isDownloading: Boolean,
-    downloadProgress: Float,
-    onDownload: () -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -656,54 +640,25 @@ private fun ActiveVoiceModelSection(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            text = stringResource(R.string.settings_active_voice_model_vosk, language.displayName),
+                            text = stringResource(R.string.settings_active_voice_model_sravaani, language.displayName),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold,
                         )
                     }
 
-                    if (isInstalled) {
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                        ) {
-                            Text(
-                                text = stringResource(R.string.settings_voice_model_status_ready),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            )
-                        }
-                    } else if (isDownloading) {
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = MaterialTheme.colorScheme.tertiaryContainer,
-                        ) {
-                            Text(
-                                text = stringResource(R.string.settings_voice_model_downloading, (downloadProgress * 100).toInt()),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            )
-                        }
-                    } else {
-                        Button(
-                            onClick = onDownload,
-                            modifier = Modifier.height(32.dp),
-                        ) {
-                            Text(
-                                text = stringResource(R.string.settings_voice_model_download),
-                                style = MaterialTheme.typography.labelSmall,
-                            )
-                        }
+                    // Always ready: the SraVaani model is packaged in the APK and serves all
+                    // 10 languages — there is nothing to download or install per language.
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.settings_voice_model_status_ready),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        )
                     }
-                }
-
-                if (isDownloading) {
-                    LinearProgressIndicator(
-                        progress = { downloadProgress },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
                 }
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))

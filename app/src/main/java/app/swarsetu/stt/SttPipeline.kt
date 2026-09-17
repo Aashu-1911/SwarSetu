@@ -38,7 +38,7 @@ class SttPipeline(
         COMPLETE,
     }
 
-    enum class DiagnosticMode { PRODUCTION, AUDIO_ONLY, VOSK, SHERPA }
+    enum class DiagnosticMode { PRODUCTION, AUDIO_ONLY }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val mutex = Mutex()
@@ -140,12 +140,6 @@ class SttPipeline(
                                 return@withLock
                             }
                         }
-                    }
-
-                    if (VOICE_CAPTURE_DIAGNOSTIC_MODE == DiagnosticMode.VOSK) {
-                        Log.d(TAG, "VOSK_START")
-                    } else if (VOICE_CAPTURE_DIAGNOSTIC_MODE == DiagnosticMode.SHERPA) {
-                        Log.d(TAG, "SHERPA_START")
                     }
 
                     captureAudioWithVad(activeLanguage, silenceTimeoutMs)
@@ -289,6 +283,6 @@ class SttPipeline(
 
     companion object {
         const val TAG = "SttPipeline"
-        val VOICE_CAPTURE_DIAGNOSTIC_MODE = if (app.swarsetu.BuildConfig.DEBUG) DiagnosticMode.VOSK else DiagnosticMode.PRODUCTION
+        val VOICE_CAPTURE_DIAGNOSTIC_MODE = DiagnosticMode.PRODUCTION
     }
 }
