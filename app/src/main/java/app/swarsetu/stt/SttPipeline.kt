@@ -23,6 +23,7 @@ import kotlinx.coroutines.withContext
 class SttPipeline(
     private val context: Context,
     private val engine: SttEngine,
+    private val capture: AudioCapture = PcmCapture(context),
 ) {
     /** Pipeline state. */
     enum class PipelineState {
@@ -43,7 +44,6 @@ class SttPipeline(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val mutex = Mutex()
-    private val capture = PcmCapture(context)
     private val vad = VoiceActivityDetector()
 
     private var captureJob: Job? = null
