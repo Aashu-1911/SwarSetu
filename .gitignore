@@ -60,3 +60,6 @@ app/release/*
 # copied into assets by scripts/sravaani/gen_android_assets.py at build-setup time and
 # integrity-gated by checkSravaaniModel (size+SHA-256 pins in SravaaniPackaging.kt).
 app/src/main/assets/sravaani/*.onnx
+
+# Python bytecode (STT eval/smoke scripts).
+__pycache__/
