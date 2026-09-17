@@ -18,6 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -98,13 +99,11 @@ class SravaaniEngine(
     override suspend fun initialize(config: SttConfig) =
         mutex.withLock {
             check(!released) { throw SttException.EngineNotReady("engine was released") }
+            // Verify packaging BEFORE any state mutation — a failed initialize must not
+            // leave the engine claiming readiness (P10: no half-initialized states).
+            requireGraphsPresent()
             _config = config
             _currentLanguage = config.language
-            // Verify packaging presence so failures surface at init, not mid-conversation.
-            // NOTE: until P7 packages the graphs, this fails loudly on-device by design —
-            // the missing artifact is a packaging gap, not a silent fallback.
-            // (Sessions are NOT built here — see class KDoc.)
-            requireGraphsPresent()
             modelManager.markLoaded(
                 SttModelInfo(
                     language = config.language,
@@ -130,8 +129,8 @@ class SravaaniEngine(
         }
     }
 
-    override suspend fun release() =
-        mutex.withLock {
+    override suspend fun release() {
+        val done = mutex.withLock {
             released = true
             runCatching { internals?.close() }
             internals = null
@@ -140,6 +139,37 @@ class SravaaniEngine(
             Log.i(TAG, "SraVaani engine released")
             Unit
         }
+        // OUTSIDE the lock: drain any queued abandoned-stream closes (they need the mutex;
+        // shutting down while holding it would deadlock the closer thread).
+        streamCloser.shutdown()
+        streamCloser.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS)
+        done
+    }
+
+    /**
+     * Close a live stream's native tensors without racing an in-flight chunk: take the engine
+     * mutex if it is free; otherwise queue the close on a daemon thread that waits for the
+     * current inference to finish. Never blocks the caller on inference (release() is sync).
+     */
+    private fun closeStreamEventually(s: StreamNative) {
+        if (mutex.tryLock()) {
+            try {
+                s.close()
+            } finally {
+                mutex.unlock()
+            }
+        } else {
+            streamCloser.execute {
+                runBlocking { mutex.withLock { } }
+                runCatching { s.close() }
+            }
+        }
+    }
+
+    /** Serializes abandoned-stream tensor closes against inference (see [closeStreamEventually]). */
+    private val streamCloser = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+        Thread(r, "sravaani-stream-closer").apply { isDaemon = true }
+    }
 
     // ------------------------------------------------------------------ inference
 
@@ -308,8 +338,13 @@ class SravaaniEngine(
         }
 
         override fun release() {
-            // Cannot suspend here; the native stream's tensors are closed by finish() —
-            // or, if the caller abandons the session, by the next engine.release().
+            // P10 hardening: an abandoned live session must free its native cache tensors
+            // (~5.4 MB direct memory) immediately — not at next engine.release(). finish()
+            // remains the normal path; release() covers the pipeline's cancel/abandon path.
+            val s = opened ?: return
+            opened = null
+            finished = true // blocks any further pushPcm/finish on this stream
+            closeStreamEventually(s)
         }
     }
 
@@ -510,6 +545,11 @@ class SravaaniEngine(
 
     /** Build (or reuse) the native sessions + tables. Heavy: first call maps ~1.8 GB. */
     private fun lazyInternals(): Internals {
+        // Defensive gate: no inference path may build sessions on an un-initialized or
+        // released engine (P10 — pushPcm previously reached here before initialize).
+        if (released || _config == null) {
+            throw SttException.EngineNotReady("engine was released or never initialized")
+        }
         internals?.let { return it }
         try {
             val dir = extractGraphs()
@@ -656,7 +696,11 @@ class SravaaniEngine(
 
         private var internalBlock = FloatArray(PUSH_SAMPLES)
 
+        private val closed = java.util.concurrent.atomic.AtomicBoolean(false)
+
+        /** Idempotent: finish() and release() may both attempt the close. */
         fun close() {
+            if (!closed.compareAndSet(false, true)) return
             runCatching { cacheCh.close() }
             runCatching { cacheTc.close() }
             runCatching { cacheLen.close() }
