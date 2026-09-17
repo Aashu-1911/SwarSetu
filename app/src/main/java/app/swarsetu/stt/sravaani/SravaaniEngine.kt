@@ -9,6 +9,7 @@ import app.swarsetu.stt.SttConfig
 import app.swarsetu.stt.SttEngine
 import app.swarsetu.stt.SttException
 import app.swarsetu.stt.SttLanguage
+import app.swarsetu.stt.SttLiveStream
 import app.swarsetu.stt.SttModelInfo
 import app.swarsetu.stt.SttModelManager
 import app.swarsetu.stt.SttResult
@@ -52,6 +53,12 @@ import java.nio.ByteOrder
  * state spans chunk seams — the exact mechanism the official docstring identifies as what
  * naive chunked ASR drops. Unlike the official live path, featurization is O(n) incremental
  * (the official one recomputes features over the whole buffer per push).
+ *
+ * **Live pipeline (P4):** [startLiveStream] exposes that cache-carrying state directly to the
+ * capture loop: mic chunks are pushed into ONE session whose featurizer ring and encoder caches
+ * persist across pushes, so each audio sample is transcribed exactly once (total inference work
+ * is O(n) over the utterance) and partials are cumulative. The batch [transcribe]/
+ * [transcribeStream] paths share the same machinery for whole-buffer inputs.
  *
  * **Languages:** one multilingual, language-UNCONDITIONED model covering all 10 required
  * languages (verified from the model card tags + official demo — the model takes NO language
@@ -220,7 +227,109 @@ class SravaaniEngine(
             }
         }.flowOn(Dispatchers.Default)
 
+    // ------------------------------------------------------------------ live streaming (P4)
+
+    override fun startLiveStream(language: SttLanguage): SttLiveStream =
+        SravaaniLiveStream(language)
+
+    /**
+     * One live SraVaani session: a single [StreamNative] whose featurizer ring, encoder caches,
+     * and CTC collapse state persist across [pushPcm] calls. Audio is transcribed exactly once;
+     * partials are the cumulative transcript after each processed chunk. [finish] flushes the
+     * tail chunks (official finalize semantics) and returns the final result.
+     *
+     * NOT thread-safe by itself — the capture loop calls it serially — but pushes/finalizes
+     * serialize against the engine's [mutex] (shared with batch inference).
+     */
+    private inner class SravaaniLiveStream(
+        private val language: SttLanguage,
+    ) : SttLiveStream {
+        private var opened: StreamNative? = null
+        private var finished = false
+
+        override var onPartial: ((String) -> Unit)? = null
+
+        /** Lazily open the native stream on first push (keeps a no-audio session free). */
+        private fun stream(): StreamNative {
+            opened?.let { return it }
+            check(!released && _config != null) {
+                throw SttException.EngineNotReady("engine was released or never initialized")
+            }
+            return internals?.newStream().also { opened = it }
+                ?: throw SttException.EngineNotReady("engine internals not built")
+        }
+
+        override suspend fun pushPcm(samples: ShortArray) {
+            check(!finished) { "live stream already finished" }
+            mutex.withLock {
+                if (samples.isEmpty()) return@withLock
+                val internal = lazyInternals()
+                val s = stream()
+                var offset = 0
+                while (offset < samples.size) {
+                    val n = minOf(FEED_SAMPLES, samples.size - offset)
+                    feedSamples(internal, s, samples, offset, n) { text ->
+                        if (text.isNotBlank()) onPartial?.invoke(text)
+                    }
+                    offset += n
+                }
+            }
+        }
+
+        override suspend fun finish(): SttResult {
+            check(!finished) { "live stream already finished" }
+            finished = true
+            return mutex.withLock {
+                val s = opened ?: return@withLock SttResult.empty(language)
+                try {
+                    val internal = lazyInternals()
+                    // Official finalize: flush trailing partial chunk(s), then stop.
+                    s.state.beginFinalize()
+                    while (s.state.hasChunkReady()) {
+                        runChunk(internal, s)
+                        onPartial?.invoke(internal.tokenizer.decode(s.state.tokens))
+                    }
+                    s.state.markFinalized()
+                    val text = internal.tokenizer.decode(s.state.tokens)
+                    val audioMs = s.state.samplesPushed * 1000L / SttLanguage.SAMPLE_RATE
+                    if (text.isBlank()) SttResult.empty(language)
+                    else {
+                        SttResult(
+                            text = text,
+                            type = SttResultType.FINAL,
+                            language = language,
+                            durationMs = audioMs,
+                        )
+                    }
+                } finally {
+                    s.close()
+                }
+            }
+        }
+
+        override fun release() {
+            // Cannot suspend here; the native stream's tensors are closed by finish() —
+            // or, if the caller abandons the session, by the next engine.release().
+        }
+    }
+
     // ------------------------------------------------------------------ core loop
+
+    /**
+     * Push [count] PCM samples starting at [offset] and drain every chunk that becomes ready
+     * (live mode — no finalize). [emitPartial] gets the cumulative transcript per chunk.
+     */
+    private suspend fun feedSamples(
+        internal: Internals,
+        stream: StreamNative,
+        pcm: ShortArray,
+        offset: Int,
+        count: Int,
+        emitPartial: (suspend (String) -> Unit)?,
+    ) {
+        stream.pushPcm(pcm, offset, count)
+        drainChunks(internal, stream, emitPartial)
+    }
 
     /**
      * Push all PCM, then drain chunks: live chunking while audio keeps coming, then finalize
@@ -578,6 +687,12 @@ class SravaaniEngine(
          * chunk draining.
          */
         const val PUSH_SAMPLES = 8_192
+
+        /**
+         * Live-session push granularity ([SravaaniLiveStream.pushPcm]): like [PUSH_SAMPLES] but
+         * also bounded by a 200 ms window, so live partial latency stays ≤ ~200 ms + chunk time.
+         */
+        const val FEED_SAMPLES = 3_200 // 200 ms @ 16 kHz — also < PUSH_SAMPLES
 
         /** Mid-range big-core default; P10/P11 measure and tune. */
         const val INTRA_OP_THREADS = 4

@@ -108,4 +108,98 @@ interface SttEngine {
      * The language the engine is currently configured for, or null if not initialized.
      */
     val currentLanguage: SttLanguage?
+
+    /**
+     * Open a live streaming session (P4 push-based pipeline). The caller pushes mic chunks as
+     * they are captured and receives cumulative partial transcripts through
+     * [SttLiveStream.onPartial]; [SttLiveStream.finish] commits the final result over ALL
+     * audio pushed to the session.
+     *
+     * This is the true-streaming path: engines with native state (SraVaani's cache-aware
+     * chunks) carry decoder state across pushes, so audio is transcribed exactly once and
+     * partial latency is O(1) per chunk — never a full-buffer retranscription. The default
+     * implementation ([ChunkedSttLiveStream]) batches into periodic whole-buffer transcribes
+     * for engines without native streaming.
+     *
+     * Sessions are single-use: [SttLiveStream.finish] closes the underlying stream. Concurrent
+     * sessions and batch [transcribe] calls serialize on the engine's internal lock.
+     *
+     * @throws SttException.EngineNotReady if the engine has not been initialized or was released.
+     * @throws SttException.UnsupportedLanguage if the language is not declared.
+     */
+    fun startLiveStream(language: SttLanguage): SttLiveStream = ChunkedSttLiveStream(this, language)
+}
+
+/**
+ * One live speech-to-text session over a [SttEngine]. Single-use: push chunks as captured,
+ * collect partials, then [finish] exactly once.
+ *
+ * **Partial semantics:** [onPartial] receives the CUMULATIVE transcript of all audio pushed
+ * so far (not a delta) — the same convention as [SttEngine.transcribeStream] partials.
+ */
+interface SttLiveStream {
+    /** Invoked with the cumulative transcript after each processed chunk. May be null-uncared. */
+    var onPartial: ((String) -> Unit)?
+
+    /**
+     * Push one captured PCM chunk (16-bit mono at the engine's sample rate). Partials may fire
+     * synchronously before this returns.
+     */
+    suspend fun pushPcm(samples: ShortArray)
+
+    /**
+     * Finalize the session: flush all remaining audio and return the FINAL result over the
+     * entire pushed utterance. Closes the session; further pushes throw.
+     */
+    suspend fun finish(): SttResult
+
+    /** Release any resources still held if [finish] was never called. Idempotent. */
+    fun release()
+}
+
+/**
+ * Fallback [SttLiveStream] for engines without native live streaming: buffers pushed PCM and
+ * periodically re-transcribes the whole buffer (batch semantics). This is intentionally the
+ * pre-P4 pipeline behavior, retained only as the interface-level default — production engines
+ * (SraVaani) override [SttEngine.startLiveStream] with true cache-carried streaming.
+ */
+class ChunkedSttLiveStream(
+    private val engine: SttEngine,
+    private val language: SttLanguage,
+    /** Re-transcription cadence in samples (default ~1 s at 16 kHz). */
+    private val retranscribeIntervalSamples: Int = SttLanguage.SAMPLE_RATE,
+) : SttLiveStream {
+    private val buffer = mutableListOf<Short>()
+    private var lastRetranscribedLen = 0
+    private var finished = false
+
+    override var onPartial: ((String) -> Unit)? = null
+
+    override suspend fun pushPcm(samples: ShortArray) {
+        check(!finished) { "live stream already finished" }
+        for (s in samples) buffer.add(s)
+        if (buffer.size - lastRetranscribedLen >= retranscribeIntervalSamples) {
+            lastRetranscribedLen = buffer.size
+            val pcm = ShortArray(buffer.size) { buffer[it] }
+            val text =
+                runCatching { engine.transcribe(pcm, language) }
+                    .getOrNull()
+                    ?.text
+                    .orEmpty()
+            if (text.isNotBlank()) onPartial?.invoke(text)
+        }
+    }
+
+    override suspend fun finish(): SttResult {
+        check(!finished) { "live stream already finished" }
+        finished = true
+        if (buffer.isEmpty()) return SttResult.empty(language)
+        val pcm = ShortArray(buffer.size) { buffer[it] }
+        return engine.transcribe(pcm, language)
+    }
+
+    override fun release() {
+        // Nothing native is held; the buffered list is dropped with this object.
+        buffer.clear()
+    }
 }
