@@ -6,7 +6,7 @@ import app.swarsetu.data.group.GroupEntity
 import app.swarsetu.data.group.GroupMembersStore
 import app.swarsetu.data.message.MessageEntity
 import app.swarsetu.mesh.crypto.ratchet.GroupRatchetStore
-import app.swarsetu.mesh.spool.GroupRootStore
+
 import kotlinx.coroutines.flow.Flow
 
 /** Single source of truth for group chats (and, transactionally, their group-ratchet state hooks). */
@@ -15,10 +15,7 @@ class GroupRepository(
     private val messages: MessageRepository,
     private val db: MeshDatabase,
     private val groupRatchet: GroupRatchetStore,
-    // The spool plane's group root (docs/SPOOL_PROTOCOL.md §3.2) shares this class's two lifecycle hooks:
-    // a departure obliges a re-mint, and leaving/deleting drops the root with the rest of the group's key
-    // state. Nullable so rigs that don't exercise the plane construct unchanged.
-    private val groupRoots: GroupRootStore? = null,
+
 ) {
     fun observeGroups(): Flow<List<GroupEntity>> = dao.observeAll()
 
@@ -76,7 +73,7 @@ class GroupRepository(
             // shrink: record that a re-mint is OWED. The mint itself happens on the heal pass, not here —
             // splitting the obligation from the act is what makes rotation survive a crash between them,
             // and it is what lets the mint grace cover a deterministic re-minter who never comes back.
-            groupRoots?.markRemintDue(groupId, leftAt)
+
             messages.save(
                 MessageEntity(
                     id = "leave:$groupId:$leaverId",
@@ -108,7 +105,7 @@ class GroupRepository(
             // All group ratchet state dies with our membership (chains, skipped keys, outbox) — and with it
             // the group's spool root, so the scope stops being derived the moment we leave.
             groupRatchet.purgeGroup(groupId)
-            groupRoots?.purge(groupId)
+
         }
     }
 
@@ -125,7 +122,7 @@ class GroupRepository(
             // A re-created group (via reconcileGroup) starts with clean ratchet state — and a clean root, so
             // it re-adopts the current one from the first gossiping ctl DM rather than reviving a stale scope.
             groupRatchet.purgeGroup(groupId)
-            groupRoots?.purge(groupId)
+
         }
     }
 }

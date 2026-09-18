@@ -351,7 +351,7 @@ class BluetoothMeshTransport(
             }
             val power = powerState.state.value
             val duty = PowerPolicy.dutyCycle(power)
-            scanner.start(if (power.interactive || power.charging) ScanSettings.SCAN_MODE_BALANCED else ScanSettings.SCAN_MODE_LOW_POWER)
+            scanner.start(if (power.interactive || power.charging) ScanSettings.SCAN_MODE_LOW_LATENCY else ScanSettings.SCAN_MODE_LOW_POWER)
             delay(duty.scanWindowMs)
             scanner.stop()
             val idle =

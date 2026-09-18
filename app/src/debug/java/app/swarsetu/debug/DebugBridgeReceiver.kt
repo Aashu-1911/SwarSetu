@@ -873,43 +873,9 @@ class DebugBridgeReceiver :
         if (intent.hasExtra(EXTRA_ON)) settings.setSpoolEnabled(intent.getBooleanExtra(EXTRA_ON, false))
 
         val spools = JSONArray()
-        mesh.spoolStatus().forEach { spool ->
-            val scopes = JSONArray()
-            spool.scopes.forEach { scope ->
-                scopes.put(
-                    JSONObject()
-                        .put("scope", scope.scopeHex)
-                        // A DM peer's node id or, for a group scope, the group id.
-                        .put("of", scope.label)
-                        .put("local", scope.localCount)
-                        .put("spool", scope.spoolCount)
-                        .put("converged", scope.converged)
-                        .put("invalid", scope.invalidCount)
-                        // A retiring scope is drained, never refilled, so local > spool for its whole
-                        // drain window — expected, not divergence.
-                        .put("retiring", scope.retiring),
-                )
-            }
-            spools.put(
-                JSONObject()
-                    .put("url", spool.url)
-                    .put("connected", spool.connected)
-                    .put("powBits", spool.powBits)
-                    .put("lastError", spool.lastError ?: JSONObject.NULL)
-                    // null ⇒ this spool advertised no attachment support at all (spec §7.3), which is
-                    // also what makes the UI mark a photo "nearby only" — worth being able to confirm
-                    // from the bridge when a field test sees that marker.
-                    .put("maxAttachBytes", spool.maxAttachBytes ?: JSONObject.NULL)
-                    .put("scopes", scopes),
-            )
-        }
-        return JSONObject()
-            .put("status", "ok")
-            .put("enabled", settings.spoolEnabled.first())
-            .put("configured", JSONArray(settings.spoolUrls.first().toList()))
-            .put("spools", spools)
-            .put("counters", metricsJson(metrics.snapshot()))
+        return JSONObject().put("spools", spools)
     }
+
 
     private fun reply(
         status: String,

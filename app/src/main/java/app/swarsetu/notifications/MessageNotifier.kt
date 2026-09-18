@@ -482,14 +482,9 @@ class MessageNotifier(
      * light or dark notification shade. The adaptive mask rounds the square bitmap to the same circle.
      */
     private fun roomAvatar(): Bitmap {
-        // CoralSecondaryContainerLight / CoralOnSecondaryContainerLight — the chat-list room glyph colors.
-        val background = 0xFFE0E0EC.toInt()
-        val logoTint = 0xFF181824.toInt()
         val bitmap = Bitmap.createBitmap(AVATAR_PX, AVATAR_PX, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        canvas.drawColor(background)
-        ContextCompat.getDrawable(context, R.drawable.ic_swarsetu_room)?.mutate()?.apply {
-            setTint(logoTint)
+        ContextCompat.getDrawable(context, R.drawable.group_icon)?.mutate()?.apply {
             setBounds(0, 0, AVATAR_PX, AVATAR_PX)
             draw(canvas)
         }

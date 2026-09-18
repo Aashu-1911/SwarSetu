@@ -21,7 +21,7 @@ import app.swarsetu.data.crypto.IdentityKeyStore
 import app.swarsetu.data.crypto.KeystoreSecret
 import app.swarsetu.data.forward.ForwardRepository
 import app.swarsetu.data.ratchet.GroupRatchetRepository
-import app.swarsetu.data.ratchet.GroupRootRepository
+
 import app.swarsetu.data.ratchet.RatchetRepository
 import app.swarsetu.data.settings.SettingsStore
 import app.swarsetu.demo.DemoComposer
@@ -31,7 +31,7 @@ import app.swarsetu.identity.Identity
 import app.swarsetu.mesh.ForwardStore
 import app.swarsetu.mesh.crypto.ratchet.GroupRatchetStore
 import app.swarsetu.mesh.crypto.ratchet.RatchetStore
-import app.swarsetu.mesh.spool.GroupRootStore
+
 import app.swarsetu.notifications.MessageNotifier
 import app.swarsetu.notifications.Notifier
 import app.swarsetu.review.ReviewPrompter
@@ -107,7 +107,7 @@ val appModule =
         single { MessageReceiptRepository(get(), get(), get()) }
         // BlobRepository: blobDao, messageDao, peerDao, settings, blobVerdictDao, groupDao, forwardDao, db.
         single { BlobRepository(get(), get(), get(), get(), get(), get(), get(), get()) }
-        single { GroupRepository(get(), get(), get(), get(), get()) }
+        single { GroupRepository(get(), get(), get(), get()) }
         // Store-and-forward custody for DMs, backed by the encrypted forward_store table. Takes the shared
         // StoreDigest (from meshModule) so every carry-store mutation keeps the cue-plane content digest in sync,
         // plus the MeshDatabase so store/remove/sweep run their DB writes in a transaction under the repo mutex.
@@ -117,8 +117,4 @@ val appModule =
         single<RatchetStore> { RatchetRepository(get()) }
         // Group sender-key ratchet state (docs/GROUP_FORWARD_SECRECY.md), same transactional posture.
         single<GroupRatchetStore> { GroupRatchetRepository(get()) }
-        // The spool plane's shared group roots (docs/SPOOL_PROTOCOL.md §3.2). Deliberately NOT scoped to the
-        // Internet plane's own lifetime: a device with the plane off still adopts and re-gossips roots, which
-        // is what carries one across a plane-off member sitting between two plane-on ones.
-        single<GroupRootStore> { GroupRootRepository(get()) }
     }

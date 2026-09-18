@@ -4,7 +4,6 @@ import app.swarsetu.data.AttachmentStore
 import app.swarsetu.mesh.protocol.GroupInfo
 import app.swarsetu.mesh.protocol.Mention
 import app.swarsetu.mesh.protocol.ReplyRef
-import app.swarsetu.mesh.spool.SpoolStatus
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -58,7 +57,6 @@ interface MeshController {
      * is a UI action, and forcing a radio rescan/reconnect out of one would disturb the very links about
      * to carry that group's first message. Idempotent — the pass re-derives what is due.
      */
-    fun mintGroupRoots()
 
     /** Tears down and re-establishes the transport (e.g. after Bluetooth toggles back on). */
     fun restart()
@@ -69,7 +67,6 @@ interface MeshController {
      * observability for Diagnostics and the debug bridge; the digests here are the only way to see a
      * scope diverging at a spool, since nothing else in the UI reflects the plane.
      */
-    fun spoolStatus(): List<SpoolStatus> = emptyList()
 
     /**
      * Per-peer DM ratchet state, for diagnosing a session that will not recover. Debug-only observability:

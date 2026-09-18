@@ -17,9 +17,6 @@ import app.swarsetu.data.message.MessageEntity
 import app.swarsetu.data.message.groupTitle
 import app.swarsetu.data.message.receivedPlane
 import app.swarsetu.data.peer.PeerEntity
-import app.swarsetu.data.relay.RelayFacts
-import app.swarsetu.data.relay.RelayPlane
-import app.swarsetu.data.relay.planeFor
 import app.swarsetu.data.settings.SettingsStore
 import app.swarsetu.identity.Identity
 import app.swarsetu.identity.displayNameFor
@@ -68,9 +65,6 @@ data class ChatListUiState(
     val neighborCount: Int = 0,
     // Radio health, so the connection header can distinguish "nobody nearby" from radios off/seized.
     val transportHealth: TransportHealth = TransportHealth.Healthy,
-    // The Internet plane's state for the same header. [RelayPlane.Off] renders nothing, which is also the
-    // default the plane ships in.
-    val relayPlane: RelayPlane = RelayPlane.Off,
     // The radio-off warning banner to show (or null), already accounting for the user's dismissal.
     val radioWarning: RadioWarning? = null,
     // True only for the initial seed value (see [state]'s stateIn below), before the underlying Room +
@@ -92,10 +86,6 @@ class ChatListViewModel(
     identity: Identity,
     meshManager: MeshController,
     private val groups: GroupRepository,
-    // The facts flow rather than the repository, for the reason spelled out on ChatViewModel's copy of this
-    // parameter: the production flow is an infinite poller, which a test driving this VM with
-    // `advanceUntilIdle()` could never let go idle.
-    relayFacts: Flow<RelayFacts>,
     private val context: Context,
 ) : ViewModel() {
     private val myNodeId = MutableStateFlow<String?>(null)
@@ -119,7 +109,7 @@ class ChatListViewModel(
         val neighborCount: Int,
         val health: TransportHealth,
         val warning: RadioWarning?,
-        val relayPlane: RelayPlane,
+
     )
 
     private val messagesAndBlocks =
@@ -154,19 +144,12 @@ class ChatListViewModel(
 
     // Neighbor count + radio health + the banner folded into one source so the main state combine stays
     // within its five-flow arity.
-    // Collapsed to the coarse plane state (and de-duped) before it reaches the combine: the facts flow
-    // re-emits on scope-table churn this screen has no opinion about, and every such emission would
-    // otherwise rebuild the whole conversation list.
-    private val relayPlane =
-        relayFacts.map { planeFor(it) }.distinctUntilChanged()
-
     private val meshStatus =
         combine(
             meshManager.neighborCount,
             meshManager.transportHealth,
             visibleWarning,
-            relayPlane,
-        ) { count, health, warning, plane -> MeshStatus(count, health, warning, plane) }
+        ) { count, health, warning -> MeshStatus(count, health, warning) }
 
     val state: StateFlow<ChatListUiState> =
         combine(
@@ -293,7 +276,6 @@ class ChatListViewModel(
                 requestCount = requestCount,
                 neighborCount = mesh.neighborCount,
                 transportHealth = mesh.health,
-                relayPlane = mesh.relayPlane,
                 radioWarning = mesh.warning,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ChatListUiState(isLoading = true))

@@ -76,7 +76,7 @@ object PowerPolicy {
 
     // Screen on or charging: the original aggressive cadence.
     private const val ACTIVE_WINDOW_MS = 12_000L
-    private const val ACTIVE_INTERVAL_MS = 30_000L
+    private const val ACTIVE_INTERVAL_MS = 12_000L
 
     // Screen off on battery: the main saver — shorter scans, much longer gaps.
     private const val IDLE_WINDOW_MS = 8_000L

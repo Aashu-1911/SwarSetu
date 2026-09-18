@@ -177,8 +177,6 @@ import app.swarsetu.data.VoiceAudio
 import app.swarsetu.data.message.Conversations
 import app.swarsetu.data.message.DeliveryPlane
 import app.swarsetu.data.message.MessageEntity
-import app.swarsetu.data.relay.AttachmentRelay
-import app.swarsetu.data.relay.RelayReach
 import app.swarsetu.demo.DemoComposeCommand
 import app.swarsetu.demo.DemoComposer
 import app.swarsetu.mesh.TransportHealth
@@ -234,7 +232,6 @@ fun ChatScreen(
     val isSending by viewModel.isSending.collectAsStateWithLifecycle()
     val pendingAttachment by viewModel.pendingAttachment.collectAsStateWithLifecycle()
     val confirmAttachment by viewModel.confirmAttachment.collectAsStateWithLifecycle()
-    val stagedAttachmentRelay by viewModel.stagedAttachmentRelay.collectAsStateWithLifecycle()
     val voiceRecording by viewModel.voiceRecording.collectAsStateWithLifecycle()
     val voicePlayback by viewModel.voicePlayback.collectAsStateWithLifecycle()
     val inputState = rememberTextFieldState()
@@ -377,7 +374,6 @@ fun ChatScreen(
         isSending = isSending,
         inputState = inputState,
         pendingAttachment = pendingAttachment,
-        stagedAttachmentRelay = stagedAttachmentRelay,
         replyingTo = replyingTo,
         now = now,
         onBack = onBack,
@@ -462,8 +458,6 @@ internal fun ChatScreenContent(
     isSending: Boolean = false,
     inputState: TextFieldState,
     pendingAttachment: AttachmentStore.Ingested?,
-    // Reach of the staged photo, so the composer can caption it before the send rather than after.
-    stagedAttachmentRelay: AttachmentRelay = AttachmentRelay.Silent,
     replyingTo: ReplyRef?,
     now: Long,
     onBack: () -> Unit,
@@ -510,10 +504,8 @@ internal fun ChatScreenContent(
     var highlightedMessageId by remember { mutableStateOf<String?>(null) }
     var headerMenuOpen by remember { mutableStateOf(false) }
     var showEncryptionInfo by remember { mutableStateOf(false) }
-    var showRelayInfo by remember { mutableStateOf(false) }
     // The message whose "nearby only" marker was tapped, so the explanation can name its actual cause
     // (too big vs. relays that carry no photos). Null when no explanation is open.
-    var relayMarkerExplained by remember { mutableStateOf<AttachmentRelay?>(null) }
     val listState = rememberLazyListState()
     // Aspect ratios of already-decoded image attachments, keyed by content hash, kept above the
     // LazyColumn so they survive item disposal. Coil doesn't memory-cache animated GIFs, so each one
@@ -583,7 +575,7 @@ internal fun ChatScreenContent(
                                         fontWeight = FontWeight.SemiBold,
                                         color = MaterialTheme.colorScheme.primary,
                                     )
-                                    ConnectionStatusRow(state.neighborCount, state.transportHealth, state.relayPlane)
+                                    ConnectionStatusRow(state.neighborCount, state.transportHealth)
                                 }
                             }
                         }
@@ -738,8 +730,7 @@ internal fun ChatScreenContent(
                 state = inputState,
                 isSending = isSending,
                 pendingAttachment = pendingAttachment,
-                stagedAttachmentRelay = stagedAttachmentRelay,
-                candidates = state.mentionCandidates,
+                        candidates = state.mentionCandidates,
                 replyingTo = replyingTo,
                 myNodeId = state.myNodeId,
                 onCancelReply = onCancelReply,
@@ -765,7 +756,6 @@ internal fun ChatScreenContent(
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             ChatBackground()
             Column(modifier = Modifier.fillMaxSize()) {
-                RelayNotice(reach = state.relayReach, onClick = { showRelayInfo = true })
                 if (state.rows.isEmpty() && state.typingPeers.isEmpty()) {
                     EmptyChatState(modifier = Modifier.fillMaxWidth().weight(1f))
                 } else {
@@ -828,7 +818,6 @@ internal fun ChatScreenContent(
                                     onCopy = onCopy,
                                     onReplayTts = onReplayTts,
                                     onOpenMessageDetails = onOpenMessageDetails,
-                                    onExplainRelay = { relayMarkerExplained = it },
                                     voicePlayback = voicePlayback,
                                     onVoicePlay = onVoicePlay,
                                     onVoiceSeek = onVoiceSeek,
@@ -864,105 +853,7 @@ internal fun ChatScreenContent(
         )
     }
 
-    if (showRelayInfo) {
-        val isRoom = state.relayReach == RelayReach.Room
-        AlertDialog(
-            onDismissRequest = { showRelayInfo = false },
-            icon = { Icon(Icons.Filled.CloudOff, contentDescription = null) },
-            title = {
-                Text(stringResource(if (isRoom) R.string.chat_relay_room_title else R.string.chat_relay_pending_title))
-            },
-            text = {
-                Text(stringResource(if (isRoom) R.string.chat_relay_room_body else R.string.chat_relay_pending_body))
-            },
-            confirmButton = {
-                TextButton(onClick = { showRelayInfo = false }) {
-                    Text(stringResource(R.string.action_close))
-                }
-            },
-        )
-    }
 
-    relayMarkerExplained?.let { cause ->
-        // The peer's name makes the fallback concrete ("arrives when you and Ana are in range") rather
-        // than abstract; in the room and in groups the title is already the collective noun.
-        val other = state.title
-        AlertDialog(
-            onDismissRequest = { relayMarkerExplained = null },
-            icon = { Icon(Icons.Filled.CloudOff, contentDescription = null) },
-            title = {
-                Text(
-                    stringResource(
-                        if (cause == AttachmentRelay.Unsupported) {
-                            R.string.chat_relay_unsupported_title
-                        } else {
-                            R.string.chat_relay_too_large_title
-                        },
-                    ),
-                )
-            },
-            text = {
-                Text(
-                    stringResource(
-                        if (cause == AttachmentRelay.Unsupported) {
-                            R.string.chat_relay_unsupported_body
-                        } else {
-                            R.string.chat_relay_too_large_body
-                        },
-                        other,
-                    ),
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { relayMarkerExplained = null }) {
-                    Text(stringResource(R.string.action_close))
-                }
-            },
-        )
-    }
-}
-
-/**
- * The standing statement about a thread's Internet reach, pinned under the header.
- *
- * Renders nothing for [RelayReach.Silent] and [RelayReach.Covered] — coverage is the happy path, and a
- * relay outage is transient and heals itself, so neither earns a permanent line of chrome. Tinted
- * `surfaceVariant` rather than `errorContainer` on purpose: nothing here has failed. The message is
- * delivered by radio exactly as it always was; this only says the Internet shortcut is not available.
- */
-@Composable
-private fun RelayNotice(
-    reach: RelayReach,
-    onClick: () -> Unit,
-) {
-    val label =
-        when (reach) {
-            RelayReach.Room -> R.string.chat_relay_room
-            RelayReach.Pending -> R.string.chat_relay_pending
-            RelayReach.Silent, RelayReach.Covered -> return
-        }
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.fillMaxWidth().testTag("chat_relay_notice"),
-    ) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onClick, role = Role.Button)
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Filled.CloudOff,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-            )
-            Text(text = stringResource(label), style = MaterialTheme.typography.bodySmall)
-        }
-    }
 }
 
 /**
@@ -986,40 +877,6 @@ private fun EncryptionBadge(onClick: () -> Unit) {
     )
 }
 
-/**
- * The in-bubble "nearby only" marker: this attachment will not cross the Internet plane.
- *
- * Deliberately unalarming — `onSurfaceVariant`, not `error`. Nothing has gone wrong: the message is
- * being delivered by radio exactly as it would be with relays switched off. Only *permanent* causes
- * reach this marker (too large for every relay, or relays that carry no photos at all), so it never
- * appears and then quietly disappears once a retry succeeds; see `attachmentReach`.
- */
-@Composable
-private fun ColumnScope.NearbyOnlyMarker(onClick: () -> Unit) {
-    Row(
-        modifier =
-            Modifier
-                .align(Alignment.End)
-                .clip(RoundedCornerShape(4.dp))
-                .clickable(onClick = onClick, role = Role.Button)
-                .padding(horizontal = 2.dp, vertical = 1.dp)
-                .testTag("chat_relay_marker"),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
-    ) {
-        Icon(
-            imageVector = Icons.Filled.CloudOff,
-            contentDescription = stringResource(R.string.chat_relay_nearby_only_desc),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(12.dp),
-        )
-        Text(
-            text = stringResource(R.string.chat_relay_nearby_only),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
 
 /** The short set of quick reactions offered when long-pressing a message. */
 private val REACTION_EMOJI = listOf("👍", "❤️", "😂", "😮", "😢", "🙏")
@@ -1050,7 +907,6 @@ private fun MessageBubble(
     // Opens this message's details screen ("Message info"); defaulted no-op for previews.
     onOpenMessageDetails: (messageId: String) -> Unit = {},
     // Tapping the "nearby only" marker; defaulted no-op for previews and for bubbles that never show it.
-    onExplainRelay: (AttachmentRelay) -> Unit = {},
     // App-wide voice playback state, and this bubble's play/seek actions. The state is app-wide because only
     // one voice note may sound at a time; a bubble compares its own hash against it to know whether the
     // controls it draws are the live ones. Defaulted for the @Preview call sites.
@@ -1262,14 +1118,6 @@ private fun MessageBubble(
                                     }
                                 }
                             }
-                        }
-                        // Reach, not delivery — kept on its own line above the tick so the two facts stay
-                        // visually separate. This says the photo will not take the Internet shortcut; the
-                        // tick below still reports whether the message itself got there.
-                        if (row.attachmentRelay == AttachmentRelay.TooLarge ||
-                            row.attachmentRelay == AttachmentRelay.Unsupported
-                        ) {
-                            NearbyOnlyMarker(onClick = { onExplainRelay(row.attachmentRelay) })
                         }
                         Row(
                             modifier = Modifier.align(Alignment.End),
@@ -2059,7 +1907,6 @@ private fun MessageInput(
     state: TextFieldState,
     isSending: Boolean = false,
     pendingAttachment: AttachmentStore.Ingested?,
-    stagedAttachmentRelay: AttachmentRelay = AttachmentRelay.Silent,
     candidates: List<MentionCandidate>,
     replyingTo: ReplyRef? = null,
     myNodeId: String = "",
@@ -2222,7 +2069,6 @@ private fun MessageInput(
                 } else {
                     AttachmentPreview(
                         image = BlobImage(pendingAttachment.hash, pendingAttachment.mime),
-                        relay = stagedAttachmentRelay,
                         onClear = onClearAttachment,
                     )
                 }
@@ -2630,15 +2476,9 @@ private fun ReplyPreview(
 @Composable
 private fun AttachmentPreview(
     image: BlobImage,
-    relay: AttachmentRelay,
     onClear: () -> Unit,
 ) {
-    val caption =
-        when (relay) {
-            AttachmentRelay.TooLarge -> R.string.chat_relay_staged_too_large
-            AttachmentRelay.Unsupported -> R.string.chat_relay_staged_unsupported
-            AttachmentRelay.Silent, AttachmentRelay.Relayable -> null
-        }
+    val caption: Int? = null
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Box {
             AsyncImage(

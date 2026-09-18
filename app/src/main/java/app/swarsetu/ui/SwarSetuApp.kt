@@ -40,7 +40,7 @@ import app.swarsetu.ui.onboarding.OnboardingScreen
 import app.swarsetu.ui.onboarding.ProfileSetupScreen
 import app.swarsetu.ui.profile.ProfileDetailsScreen
 import app.swarsetu.ui.profile.ProfileScreen
-import app.swarsetu.ui.relay.InternetRelayScreen
+
 import app.swarsetu.ui.requests.MessageRequestsScreen
 import app.swarsetu.ui.review.RateReviewDialog
 import app.swarsetu.ui.review.ReviewPromptInbox
@@ -62,7 +62,6 @@ private object Routes {
     const val MESSAGE_REQUESTS = "requests"
     const val DONATE = "donate"
     const val VERIFY = "verify"
-    const val INTERNET_RELAYS = "relays"
     const val SHARE = "share"
     const val TTS_TEST = "tts_test"
     const val CHAT = "chat/{conversationId}"
@@ -320,17 +319,7 @@ fun SwarSetuApp(startRoute: String? = null) {
         composable(Routes.PROFILE) {
             ProfileScreen(
                 onBack = { navController.popBackStack() },
-                onOpenRelays = { navController.navigate(Routes.INTERNET_RELAYS) },
             )
-        }
-        // The Internet-relay plane's editor exists only in builds that introduce the feature — the route
-        // is not registered at all when it is dark, so nothing (a restored back stack, a future deep
-        // link) can reach a screen whose switch would be inert anyway. Profile hides its row on the same
-        // flag, so nothing navigates here. See app/build.gradle.kts for what INTERNET_PLANE gates.
-        if (BuildConfig.INTERNET_PLANE) {
-            composable(Routes.INTERNET_RELAYS) {
-                InternetRelayScreen(onBack = { navController.popBackStack() })
-            }
         }
         composable(Routes.DIAGNOSTICS) {
             DiagnosticsScreen(

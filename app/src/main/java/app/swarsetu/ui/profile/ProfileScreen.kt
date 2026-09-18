@@ -99,7 +99,7 @@ internal data class ProfileFormState(
     val alias: String,
     val avatarHash: String?,
     val contentFilteringEnabled: Boolean,
-    val relay: RelaySummary,
+
     val isDirty: Boolean,
     val preferredLanguage: SttLanguage = SttLanguage.HINDI,
     val availableLanguages: List<SttLanguage> = SttLanguage.entries,
@@ -113,7 +113,7 @@ internal data class ProfileFormState(
 @Composable
 fun ProfileScreen(
     onBack: () -> Unit,
-    onOpenRelays: () -> Unit = {},
+
     viewModel: ProfileViewModel = koinViewModel(),
 ) {
     val name by viewModel.displayName.collectAsStateWithLifecycle()
@@ -123,7 +123,7 @@ fun ProfileScreen(
     val avatarHash by viewModel.avatarHash.collectAsStateWithLifecycle()
     val cropTarget by viewModel.cropTarget.collectAsStateWithLifecycle()
     val contentFilteringEnabled by viewModel.contentFilteringEnabled.collectAsStateWithLifecycle()
-    val relay by viewModel.relaySummary.collectAsStateWithLifecycle()
+
     val isDirty by viewModel.isDirty.collectAsStateWithLifecycle()
     val preferredLanguage by viewModel.preferredLanguage.collectAsStateWithLifecycle()
     val availableLanguages by viewModel.availableLanguages.collectAsStateWithLifecycle()
@@ -163,7 +163,7 @@ fun ProfileScreen(
                 alias = alias,
                 avatarHash = avatarHash,
                 contentFilteringEnabled = contentFilteringEnabled,
-                relay = relay,
+
                 isDirty = isDirty,
                 preferredLanguage = preferredLanguage,
                 availableLanguages = availableLanguages,
@@ -184,7 +184,7 @@ fun ProfileScreen(
         onDownloadModel = viewModel::downloadModel,
         onThemeChange = viewModel::setThemePreference,
         onAutoPlayTtsChange = viewModel::setAutoPlayTts,
-        onOpenRelays = onOpenRelays,
+
         onPickPhoto = {
             picker.launch(
                 PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
@@ -211,8 +211,7 @@ internal fun ProfileScreenContent(
     onDownloadModel: (SttLanguage) -> Unit = {},
     onThemeChange: (String) -> Unit = {},
     onAutoPlayTtsChange: (Boolean) -> Unit = {},
-    onOpenRelays: () -> Unit,
-    showInternetRelays: Boolean = BuildConfig.INTERNET_PLANE,
+
     onPickPhoto: () -> Unit,
     onClearPhoto: () -> Unit,
     onAllowBattery: () -> Unit,
@@ -407,7 +406,7 @@ internal fun ProfileScreenContent(
                         onToggle = onToggleContentFiltering,
                     )
 
-                    if (showInternetRelays) InternetRelayRow(summary = form.relay, onClick = onOpenRelays)
+
 
                     BatteryOptimizationRow(exempt = batteryExempt, onAllow = onAllowBattery)
                 }
@@ -834,53 +833,7 @@ private fun ContentFilteringRow(
     }
 }
 
-/**
- * Entry point to the Internet (spool) plane's own screen, with its current state as the subtitle.
- *
- * A navigating row rather than the switch it used to be: the switch alone was `BuildConfig.DEBUG`-gated,
- * because the app seeds a default relay and a release user who could enable the plane but not edit the
- * list would be stuck with an endpoint they could not remove. The editor lives behind this row, which is
- * what makes the control shippable.
- */
-@Composable
-private fun InternetRelayRow(
-    summary: RelaySummary,
-    onClick: () -> Unit,
-) {
-    val subtitle =
-        when {
-            !summary.enabled -> stringResource(R.string.relays_summary_off)
-            summary.configured == 0 -> stringResource(R.string.relays_summary_none)
-            else -> stringResource(R.string.relays_summary_on, summary.connected, summary.configured)
-        }
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick, role = Role.Button)
-                .padding(top = 8.dp)
-                .testTag("profile_relays"),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = stringResource(R.string.relays_title),
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Spacer(Modifier.width(12.dp))
-        Icon(
-            Icons.AutoMirrored.Filled.KeyboardArrowRight,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
+
 
 /**
  * Whether the app is currently exempt from battery optimization, refreshed on every screen resume.
@@ -978,7 +931,7 @@ fun ProfileScreenPreview() =
                     alias = "Rustling Rabbit",
                     avatarHash = null,
                     contentFilteringEnabled = true,
-                    relay = RelaySummary(),
+
                     isDirty = true,
                 ),
             batteryExempt = false,
@@ -988,7 +941,7 @@ fun ProfileScreenPreview() =
             onStatusChange = {},
             onStatusCommit = {},
             onToggleContentFiltering = {},
-            onOpenRelays = {},
+
             onPickPhoto = {},
             onClearPhoto = {},
             onAllowBattery = {},
@@ -1010,7 +963,7 @@ fun ProfileScreenNewUserPreview() =
                     alias = "Rustling Rabbit",
                     avatarHash = null,
                     contentFilteringEnabled = true,
-                    relay = RelaySummary(),
+
                     isDirty = false,
                 ),
             batteryExempt = true,
@@ -1020,7 +973,7 @@ fun ProfileScreenNewUserPreview() =
             onStatusChange = {},
             onStatusCommit = {},
             onToggleContentFiltering = {},
-            onOpenRelays = {},
+
             onPickPhoto = {},
             onClearPhoto = {},
             onAllowBattery = {},

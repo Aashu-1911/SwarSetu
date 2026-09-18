@@ -8,7 +8,7 @@ import androidx.lifecycle.viewModelScope
 import app.swarsetu.TextLimits
 import app.swarsetu.data.AvatarStore
 import app.swarsetu.data.BlobRepository
-import app.swarsetu.data.relay.RelayFacts
+
 import app.swarsetu.data.settings.SettingsStore
 import app.swarsetu.identity.Alias
 import app.swarsetu.identity.Identity
@@ -31,22 +31,14 @@ import app.swarsetu.stt.SttLanguage
 import app.swarsetu.stt.SttModelManager
 import kotlinx.coroutines.flow.flow
 
-/** The Internet-relay plane, as the Profile row summarises it before handing off to its own screen. */
-data class RelaySummary(
-    val enabled: Boolean = false,
-    val configured: Int = 0,
-    val connected: Int = 0,
-)
+
 
 class ProfileViewModel(
     private val settings: SettingsStore,
     identity: Identity,
     private val avatars: AvatarStore,
     private val blobs: BlobRepository,
-    // The facts flow, not the repository: the production flow polls forever, and a `runTest` virtual
-    // clock makes its `delay` instant, so a ViewModel test that drives this with `advanceUntilIdle()`
-    // would spin. Taking the flow lets a test supply a finite one.
-    relayFacts: Flow<RelayFacts>,
+
     private val sttModelManager: SttModelManager,
 ) : ViewModel() {
     val nodeId = MutableStateFlow("")
@@ -167,14 +159,7 @@ class ProfileViewModel(
         }
     }
 
-    /**
-     * Summary of the Internet (spool) plane for the row that navigates to its own screen — the switch
-     * itself lives there now, with the relay-list editor it needs to be actionable.
-     */
-    val relaySummary: StateFlow<RelaySummary> =
-        relayFacts
-            .map { RelaySummary(it.enabled, it.configured, it.connected) }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), RelaySummary())
+
 
     init {
         viewModelScope.launch {

@@ -59,7 +59,7 @@ import app.swarsetu.mesh.protocol.WireCodec
 import app.swarsetu.mesh.protocol.WireEnvelope
 import app.swarsetu.mesh.protocol.isStorable
 import app.swarsetu.mesh.protocol.mention
-import app.swarsetu.mesh.spool.ScopeSync
+
 import app.swarsetu.moderation.ImageScreeningService
 import app.swarsetu.notifications.NotifConversation
 import app.swarsetu.notifications.Notifier
@@ -137,15 +137,6 @@ class InboundPipeline(
     // arrived (MeshManager.replayCustodiedGroupFrames) — the local half of the re-serve heal; a frame
     // WE custodied before its seed is never re-served by a peer (no digest divergence to cue it).
     private val replayGroupCustody: suspend (String?, String?) -> Unit = { _, _ -> },
-    // Adopts a gossiped shared group root (MeshManager.adoptGroupRoot, docs/SPOOL_PROTOCOL.md §3.2).
-    // Called INSIDE the ctl commit so the root lands atomically with the DM chain advance that carried
-    // it; returns whether anything was adopted. Lambda-mediated like redistributeGroupKey, so this
-    // pipeline stays free of the spool plane's store.
-    private val adoptGroupRoot: suspend (senderId: String, gk: GroupKeyPayload, now: Long) -> Boolean = { _, _, _ -> false },
-    // Post-commit half of the root exchange (MeshManager.onGroupRootCtl): pass an adopted root onward,
-    // or correct a sender whose gossip proves it is behind ours. Fired for every CTL_GROUP_KEY, not only
-    // adoptions — a stale gossip is the ONLY evidence that an earlier one to that member was lost.
-    private val onGroupRootCtl: suspend (senderId: String, gk: GroupKeyPayload, adopted: Boolean) -> Unit = { _, _, _ -> },
 ) {
     // nodeId -> avatar hash a non-direct peer advertised but whose bytes we're still pulling, so a blob
     // arriving via the multi-hop BlobExchange can be attributed back to the peer that advertised it.
@@ -284,7 +275,7 @@ class InboundPipeline(
      * downstream (column, threading, UI) already speaks the enum.
      */
     private fun planeOf(fromNodeId: String): DeliveryPlane =
-        if (ScopeSync.isSpoolSource(fromNodeId)) DeliveryPlane.Internet else DeliveryPlane.Nearby
+        DeliveryPlane.Nearby
 
     /**
      * Records a best-effort "now typing" cue in [typingTracker] so the chat UI can show it. The conversation is
@@ -721,7 +712,7 @@ class InboundPipeline(
                 // Independent of the seeds: a root-only distribution carries none, and a distribution can
                 // carry a stale epoch alongside a newer root (or the reverse). Fired whether or not
                 // anything was adopted — the not-adopted case is where we correct a lagging sender.
-                plain.gk?.let { onGroupRootCtl(env.senderId, it, outcome.adoptedRoot) }
+
             }
 
             MessageContent.CTL_GROUP_KEY_REQ -> {
@@ -766,7 +757,7 @@ class InboundPipeline(
                 // adoptGroupSeeds short-circuits on that, so nesting the root inside it would drop exactly
                 // the distributions a member sends before it has ever sealed a group frame.
                 val epoch = adoptGroupSeeds(env, plain, now)
-                val root = plain.gk?.let { adoptGroupRoot(env.senderId, it, now) } == true
+                val root = false
                 return CtlOutcome(adoptedEpoch = epoch, adoptedRoot = root)
             }
 

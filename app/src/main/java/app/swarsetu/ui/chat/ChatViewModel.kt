@@ -26,13 +26,6 @@ import app.swarsetu.data.message.groupTitle
 import app.swarsetu.data.message.receivedPlane
 import app.swarsetu.data.message.replyRef
 import app.swarsetu.data.reaction.ReactionEntity
-import app.swarsetu.data.relay.AttachmentRelay
-import app.swarsetu.data.relay.RelayFacts
-import app.swarsetu.data.relay.RelayPlane
-import app.swarsetu.data.relay.RelayReach
-import app.swarsetu.data.relay.attachmentReach
-import app.swarsetu.data.relay.planeFor
-import app.swarsetu.data.relay.reachFor
 import app.swarsetu.data.settings.SettingsStore
 import app.swarsetu.identity.Identity
 import app.swarsetu.identity.displayNameFor
@@ -108,11 +101,7 @@ data class ChatRow(
     // True when on-device screening flagged the attachment as explicit; the bubble blurs it behind a
     // tap-to-view. Only meaningful when [attachmentHash] is non-null.
     val attachmentFlagged: Boolean = false,
-    // Whether this attachment can cross the Internet-relay plane. Anything but [AttachmentRelay.Silent]
-    // or [AttachmentRelay.Relayable] marks the bubble "nearby only" — a statement about *reach*, never
-    // about delivery, which the ✓/✓✓ tick keeps to itself. Set only for our own sends; see the mapping
-    // in [ChatViewModel].
-    val attachmentRelay: AttachmentRelay = AttachmentRelay.Silent,
+
     // A voice note's playing time and waveform bars, both derived locally from the audio (never carried on
     // the wire — see [app.swarsetu.data.VoiceAudio]). Null until the blob has arrived and been
     // described, which is why the bubble can render a length-less placeholder in the meantime.
@@ -182,13 +171,6 @@ data class ChatUiState(
     // Peers currently typing in this thread, shown as an animated indicator above the input. Ephemeral
     // (TTL'd in the mesh layer) and best-effort; empty most of the time.
     val typingPeers: List<TypingPeer> = emptyList(),
-    // Whether the Internet-relay plane covers this thread. Only [RelayReach.Room] and
-    // [RelayReach.Pending] render anything — coverage is the happy path, and an outage is transient and
-    // stays quiet. See [reachFor].
-    val relayReach: RelayReach = RelayReach.Silent,
-    // The Internet plane's whole-device state, for the connection header. Coarser than [relayReach] and
-    // about a different thing: whether the plane is up at all, not whether it covers this thread.
-    val relayPlane: RelayPlane = RelayPlane.Off,
 )
 
 class ChatViewModel(
@@ -209,11 +191,6 @@ class ChatViewModel(
     // App-scoped on purpose: any number of voice-note bubbles can be on screen and only one may sound, so
     // arbitration can't live in a per-screen ViewModel.
     private val voicePlayer: VoicePlayer,
-    // The facts flow, not the repository that produces it. Narrow on purpose: this ViewModel needs a
-    // Flow<RelayFacts> and nothing else, and the production flow is an infinite poller — under a test's
-    // virtual clock its `delay` is instant, so a test that drives this VM with `advanceUntilIdle()` could
-    // never reach idle. Taking the flow lets a test supply a finite one.
-    private val relayFacts: Flow<RelayFacts>,
     private val context: Context,
     private val ttsManager: TtsManager,
     private val voiceMessageAdapter: app.swarsetu.voice.VoiceMessageAdapter,
@@ -337,7 +314,6 @@ class ChatViewModel(
         val neighborCount: Int,
         val transportHealth: TransportHealth,
         val typing: Map<String, Set<String>>,
-        val relay: RelayFacts,
     )
 
     private val meshStatus =
@@ -345,8 +321,7 @@ class ChatViewModel(
             meshManager.neighborCount,
             meshManager.transportHealth,
             meshManager.typing,
-            relayFacts,
-        ) { count, health, typing, relay -> MeshStatus(count, health, typing, relay) }
+        ) { count, health, typing -> MeshStatus(count, health, typing) }
 
     val state: StateFlow<ChatUiState> =
         combine(
@@ -359,7 +334,6 @@ class ChatViewModel(
             val count = mesh.neighborCount
             val health = mesh.transportHealth
             val typingMap = mesh.typing
-            val relay = mesh.relay
             val msgs = bundle.messages
             val reacts = bundle.reactions
             val blocked = bundle.blocked
@@ -413,12 +387,7 @@ class ChatViewModel(
                         voicePeaks = m.voicePeaks,
                         attachmentReady = heldBytes != null,
                         attachmentFlagged = hideSensitive && m.attachmentHash != null && m.attachmentHash in flaggedHashes,
-                        attachmentRelay =
-                            if (mine && heldBytes != null) {
-                                attachmentReach(conversationId, heldBytes, relay)
-                            } else {
-                                AttachmentRelay.Silent
-                            },
+
                         mentions = MentionStore.decode(m.mentions),
                         reactions = tallies,
                         replyTo = m.replyRef(),
@@ -486,20 +455,8 @@ class ChatViewModel(
                 isGroup = isGroup,
                 memberCount = members.size,
                 typingPeers = typingPeers,
-                relayReach = reachFor(conversationId, relay),
-                relayPlane = planeFor(relay),
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ChatUiState(isRoom = isRoom))
-
-    val stagedAttachmentRelay: StateFlow<AttachmentRelay> =
-        combine(
-            _pendingAttachment,
-            blobs.observeSizes(),
-            relayFacts,
-        ) { staged, sizes, relay ->
-            val bytes = staged?.hash?.let { sizes[it] } ?: return@combine AttachmentRelay.Silent
-            attachmentReach(conversationId, bytes, relay)
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AttachmentRelay.Silent)
 
     private val _isSending = MutableStateFlow(false)
     val isSending: StateFlow<Boolean> = _isSending.asStateFlow()

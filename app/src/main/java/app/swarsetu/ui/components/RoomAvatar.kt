@@ -51,11 +51,11 @@ fun RoomAvatar(
                 ),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            painter = painterResource(R.drawable.ic_swarsetu_room),
+        androidx.compose.foundation.Image(
+            painter = painterResource(R.drawable.group_icon),
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSecondaryContainer,
             modifier = Modifier.fillMaxSize(),
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
         )
     }
 }

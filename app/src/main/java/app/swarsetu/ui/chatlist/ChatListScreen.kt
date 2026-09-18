@@ -88,7 +88,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.swarsetu.R
 import app.swarsetu.data.message.DeliveryPlane
-import app.swarsetu.data.relay.RelayPlane
+
 import app.swarsetu.mesh.TransportHealth
 import app.swarsetu.ui.chat.DeliveryStatus
 import app.swarsetu.ui.chat.deliveryIcon
@@ -226,7 +226,7 @@ internal fun ChatListScreenContent(
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.semantics { heading() },
                         )
-                        ConnectionStatusRow(state.neighborCount, state.transportHealth, state.relayPlane)
+                        ConnectionStatusRow(state.neighborCount, state.transportHealth)
                     }
                 },
                 actions = {
@@ -860,7 +860,6 @@ fun ChatListScreenPopulatedPreview() =
                     conversations = previewConversations(),
                     neighborCount = 3,
                     transportHealth = TransportHealth.Healthy,
-                    relayPlane = RelayPlane.Live,
                 ),
             now = PREVIEW_NOW,
             onOpenConversation = {},

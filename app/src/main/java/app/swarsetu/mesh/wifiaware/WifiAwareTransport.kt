@@ -791,6 +791,10 @@ class WifiAwareTransport(
         peers[to.nodeId]?.link?.sendDigest(ids)
     }
 
+    private fun logState(msg: String) {
+        Log.d(TAG, "[WIFI_AWARE_STATE] $msg")
+    }
+
     // --- Attach / discovery ---
 
     /**
@@ -805,6 +809,7 @@ class WifiAwareTransport(
 
     private fun attach() =
         onHandler {
+            logState("attach()")
             val mgr = awareManager ?: return@onHandler
             if (!mgr.isAvailable) {
                 _health.value = TransportHealth.Unavailable // Wi-Fi Aware off (Wi-Fi off / airplane mode)
@@ -822,6 +827,7 @@ class WifiAwareTransport(
             val cb =
                 object : AttachCallback() {
                     override fun onAttached(newSession: WifiAwareSession) {
+                        logState("onAttached()")
                         attaching.set(false)
                         if (gen != attachGen || session != null) { // superseded by a newer attach — never orphan it
                             runCatching { newSession.close() }
@@ -835,6 +841,7 @@ class WifiAwareTransport(
                     }
 
                     override fun onAttachFailed() {
+                        logState("onAttachFailed()")
                         attaching.set(false)
                         reattaching.set(false)
                         _health.value = TransportHealth.Degraded
@@ -842,6 +849,7 @@ class WifiAwareTransport(
                     }
 
                     override fun onAwareSessionTerminated() {
+                        logState("onAwareSessionTerminated()")
                         attaching.set(false)
                         subscribing.set(false)
                         reattaching.set(false)
@@ -857,7 +865,17 @@ class WifiAwareTransport(
                             if (mgr.isAvailable) TransportHealth.Degraded else TransportHealth.Unavailable
                     }
                 }
-            runCatching { mgr.attach(cb, handler) }.onFailure {
+            runCatching { 
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    mgr.attach(cb, object : android.net.wifi.aware.IdentityChangedListener() {
+                        override fun onIdentityChanged(mac: ByteArray) {
+                            logState("onIdentityChanged: " + mac.contentToString())
+                        }
+                    }, handler)
+                } else {
+                    mgr.attach(cb, handler) 
+                }
+            }.onFailure {
                 attaching.set(false)
                 reattaching.set(false)
                 _health.value = TransportHealth.Degraded
@@ -866,12 +884,14 @@ class WifiAwareTransport(
         }
 
     private fun startPublish(gen: Int) {
+        logState("startPublish(gen=)")
         val s = session ?: return
         // Per-generation publish callback: a stale onPublishStarted (from an attach a reattach superseded)
         // closes its session and never arms a responder, so the responder stays single-owner.
         val cb =
             object : DiscoverySessionCallback() {
                 override fun onPublishStarted(publish: PublishDiscoverySession) {
+                    logState("onPublishStarted()")
                     if (gen != attachGen) {
                         runCatching { publish.close() }
                         return
@@ -882,6 +902,7 @@ class WifiAwareTransport(
                 }
 
                 override fun onSessionConfigFailed() {
+                    logState("onSessionConfigFailed()")
                     // With a live publish session this is an updatePublish (keepalive/SSI republish) failing,
                     // not the initial config. Latch the fallback: the ICM relight reverts to the legacy
                     // subscribe re-arm until the next attach — never loop updatePublish against a failing session.
@@ -895,6 +916,7 @@ class WifiAwareTransport(
                 }
 
                 override fun onSessionConfigUpdated() {
+                    logState("onSessionConfigUpdated()")
                     Log.i(TAG, "publish config updated (keepalive/ssi)")
                 }
 
@@ -977,6 +999,7 @@ class WifiAwareTransport(
         }
 
     private fun startSubscribe() {
+        logState("startSubscribe()")
         val s = session ?: return
         // Serialize subscribe (re)starts the same way attach is serialized: onSubscribeStarted arrives
         // asynchronously, so a rearmSubscribe() racing a still-pending subscribe would otherwise leave two
@@ -1381,6 +1404,7 @@ class WifiAwareTransport(
             }
 
             override fun onSessionConfigFailed() {
+                    logState("onSessionConfigFailed()")
                 subscribing.set(false)
                 subscribeSession = null
                 Log.w(TAG, "subscribe config failed")
@@ -1718,6 +1742,7 @@ class WifiAwareTransport(
                 }
 
                 override fun onUnavailable() {
+                    logState("onUnavailable()")
                     // Timeout overload fired: the NDP never came up. Release so the interface + inFlight slot
                     // are freed (without this the request leaks and eventually exhausts NAN interfaces). A *fast*
                     // onUnavailable (well under the handshake timeout) is the stale-handle signature — the peer
@@ -1730,6 +1755,7 @@ class WifiAwareTransport(
                 }
 
                 override fun onLost(network: Network) {
+                    logState("onLost()")
                     teardownPeer(peerNodeId)
                 }
             }
@@ -1791,6 +1817,7 @@ class WifiAwareTransport(
     // --- Server side (persistent accept-any responder) ---
 
     private fun startResponder() {
+        logState("startResponder()")
         val pub = publishSession ?: return
         // Idempotent, single-owner: at most one responder requestNetwork per publish session. If one is
         // already registered, do nothing — issuing a second whose callback overwrites [responderCallback]
@@ -1819,10 +1846,12 @@ class WifiAwareTransport(
         val cb =
             object : ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: Network) {
+                    logState("onAvailable()")
                     if (acceptJob?.isActive != true) acceptJob = scope.launch(Dispatchers.IO) { acceptLoop(ss) }
                 }
 
                 override fun onLost(network: Network) {
+                    logState("onLost()")
                     // The shared responder network dropped — a served client left. Its server link ends via the
                     // read/write loop → teardownPeer → the after-serve reattach() rebuilds a fresh responder; a
                     // radio flap is handled by onAwareSessionTerminated / the availability receiver. Do NOT re-arm
@@ -1832,6 +1861,7 @@ class WifiAwareTransport(
                 }
 
                 override fun onUnavailable() {
+                    logState("onUnavailable()")
                     // The framework declares an accept-any responder request unfulfillable — and silently
                     // REMOVES it from its cache — when an inbound NDP request arrives while this node's own
                     // initiator link holds the one NDI (onDataPathRequest → selectInterfaceForRequest → null →
@@ -1866,6 +1896,7 @@ class WifiAwareTransport(
 
     @Suppress("LoopWithTooManyJumpStatements") // accept → admit-or-close is naturally break+continue
     private fun acceptLoop(ss: ServerSocket) {
+        logState("acceptLoop() started")
         while (scope.isActive && !ss.isClosed) {
             val socket = runCatching { ss.accept() }.getOrNull() ?: break
             Log.i(TAG, "responder accept() returned a socket")
@@ -1879,6 +1910,7 @@ class WifiAwareTransport(
 
     /** A client connected to our accept-any responder: read its identity (HELLO), then register the link. */
     private fun handleAcceptedSocket(socket: Socket) {
+        logState("handleAcceptedSocket()")
         try {
             // The wildcard ServerSocket(0) is reachable from ANY network the device sits on (LAN, VPN), not
             // just the aware NDI; NAN peers always arrive from an IPv6 link-local, so reject everything else
@@ -1919,6 +1951,7 @@ class WifiAwareTransport(
     }
 
     private fun stopResponder() {
+        logState("stopResponder()")
         acceptJob?.cancel()
         acceptJob = null
         responderCallback?.let { runCatching { connectivity.unregisterNetworkCallback(it) } }

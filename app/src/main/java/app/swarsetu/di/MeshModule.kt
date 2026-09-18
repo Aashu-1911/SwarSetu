@@ -6,7 +6,7 @@ import app.swarsetu.BuildConfig
 import app.swarsetu.data.MeshBlobStore
 import app.swarsetu.data.MeshDatabase
 import app.swarsetu.data.crypto.IdentityKeyStore
-import app.swarsetu.data.relay.RelayStatusRepository
+
 import app.swarsetu.mesh.CompositeMeshTransport
 import app.swarsetu.mesh.MeshController
 import app.swarsetu.mesh.MeshManager
@@ -21,8 +21,7 @@ import app.swarsetu.mesh.crypto.ratchet.SessionTransactor
 import app.swarsetu.mesh.meshExceptionHandler
 import app.swarsetu.mesh.power.PowerMonitor
 import app.swarsetu.mesh.power.PowerStateSource
-import app.swarsetu.mesh.spool.OkHttpSpoolDialer
-import app.swarsetu.mesh.spool.SpoolDialer
+
 import app.swarsetu.mesh.wifiaware.WifiAwareTransport
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -62,14 +61,21 @@ val meshModule =
                 val ctx = androidContext()
                 val children =
                     buildList {
+                        val btSupported = BluetoothMeshTransport.isSupported(ctx)
+                        val awareSupported =
+                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && WifiAwareTransport.isSupported(ctx)
+
+                        android.util.Log.i(
+                            "MeshModule",
+                            "Hardware probe -> Bluetooth LE: $btSupported, Wi-Fi Aware: $awareSupported (SDK: ${Build.VERSION.SDK_INT}, Model: ${Build.MANUFACTURER} ${Build.MODEL})"
+                        )
+
                         // Descending send-preference: Bluetooth (persistent links) first, then Wi-Fi Aware (ephemeral).
-                        if (BluetoothMeshTransport.isSupported(ctx)) {
+                        if (btSupported) {
                             add(BluetoothMeshTransport(ctx, get(), get(), get(), get(), get()))
                         }
-                        // WifiAwareTransport is @RequiresApi(31) (its NDP accept-any responder is API 31). The
-                        // explicit SDK_INT guard — redundant with isSupported()'s own — is what lint reads to
-                        // clear the @RequiresApi companion/constructor calls on this pre-31-reachable line.
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && WifiAwareTransport.isSupported(ctx)) {
+                        // WifiAwareTransport is @RequiresApi(31) (its NDP accept-any responder is API 31).
+                        if (awareSupported) {
                             add(WifiAwareTransport(ctx, get(), get(), get(), get(), get()))
                         }
                     }
@@ -114,7 +120,7 @@ val meshModule =
         // LAN daemon (which terminates no TLS of its own); release and staging accept `wss://` only, so a
         // shipped build cannot be pointed at a plaintext relay. The plane itself stays dark until the user
         // opts in AND configures a spool — see SettingsStore.spoolEnabled.
-        single<SpoolDialer> { OkHttpSpoolDialer(allowCleartext = BuildConfig.DEBUG) }
+
         // Constructor order: transport, messages, receipts, groups, reactions, peers, identity, settings,
         // blobs, imageScreening, blobStore, forwardStore, notifier, textModeration, messageCrypto, ratchet,
         // groupRatchet, groupRoots, scope, metrics, db, spoolDialer.
@@ -138,17 +144,15 @@ val meshModule =
                 messageCrypto = get(),
                 ratchet = get(),
                 groupRatchet = get(),
-                groupRoots = get(),
+
                 scope = get(),
                 metrics = get(),
                 db = get(),
-                spoolDialer = getOrNull(),
+
             )
         }
         // UI ViewModels, MeshService, and the notification/debug entry points bind this narrow facade (not
         // the concrete orchestrator) so they can be tested against a fake; the same singleton backs both keys.
         single<MeshController> { get<MeshManager>() }
-        // One place that turns settings + `spoolStatus()` into the relay facts the chat indicator, the
-        // relay settings screen and Diagnostics all read.
-        single { RelayStatusRepository(get(), get()) }
+
     }

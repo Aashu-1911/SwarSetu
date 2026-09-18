@@ -100,7 +100,6 @@ class ContactsViewModel(
             // so we are the preferred minter and mint immediately). Without it the mint waits for the next
             // heal — a heartbeat, a motion trigger or a foreground resume — and the thread reads
             // "Not covered by relays yet" for minutes. After the row exists, since the pass reads it.
-            meshManager.mintGroupRoots()
             _created.tryEmit(groupId)
         }
     }
