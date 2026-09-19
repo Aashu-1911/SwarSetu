@@ -89,6 +89,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -889,6 +890,8 @@ private fun MessageBubble(
     showSenderName: Boolean,
     // myNodeId drives the quote's viewer-relative "You" swap; defaulted for the @Preview call sites.
     myNodeId: String = "",
+    // myLocation is used to calculate bearing and distance for SOS alerts.
+    myLocation: app.swarsetu.mesh.protocol.LocationPayload? = null,
     // Hash-keyed aspect-ratio cache shared across the list so a re-entering image reserves its height
     // before decode (see [ChatScreen]). Defaulted so the @Preview call sites need no extra wiring.
     imageRatios: MutableMap<String, Float> = HashMap(),
@@ -1119,6 +1122,82 @@ private fun MessageBubble(
                                 }
                             }
                         }
+
+                        // SOS Location Widget
+                        if (row.isAlert && row.locationLatitude != null && row.locationLongitude != null) {
+                            val distanceText = if (myLocation != null) {
+                                val dist = app.swarsetu.location.LocationUtils.calculateDistanceMeters(
+                                    myLocation.latitude, myLocation.longitude,
+                                    row.locationLatitude, row.locationLongitude
+                                )
+                                val distKm = dist / 1000f
+                                val bearing = app.swarsetu.location.LocationUtils.calculateBearing(
+                                    myLocation.latitude, myLocation.longitude,
+                                    row.locationLatitude, row.locationLongitude
+                                )
+                                val direction = app.swarsetu.location.LocationUtils.getCardinalDirection(bearing)
+                                
+                                if (distKm < 1f) {
+                                    "${dist.toInt()}m $direction"
+                                } else {
+                                    "${String.format("%.1f", distKm)}km $direction"
+                                }
+                            } else {
+                                "Location Attached (Need your location to show distance)"
+                            }
+
+                            val freshnessText = row.locationTimestamp?.let {
+                                val elapsedMs = now - it
+                                if (elapsedMs < 60000) "just now"
+                                else "${elapsedMs / 60000}m ago"
+                            } ?: ""
+
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.errorContainer,
+                                modifier = Modifier
+                                    .padding(top = 8.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .fillMaxWidth()
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Filled.LocationOn,
+                                        contentDescription = "Location",
+                                        tint = MaterialTheme.colorScheme.onErrorContainer,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Column {
+                                        Text(
+                                            text = distanceText,
+                                            style = MaterialTheme.typography.labelMedium.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                            ),
+                                        )
+                                        Text(
+                                            text = "Lat: ${String.format("%.5f", row.locationLatitude)}, Lng: ${String.format("%.5f", row.locationLongitude)}",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.9f),
+                                            ),
+                                        )
+                                        if (freshnessText.isNotEmpty()) {
+                                            Text(
+                                                text = "Updated $freshnessText",
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f),
+                                                ),
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         Row(
                             modifier = Modifier.align(Alignment.End),
                             verticalAlignment = Alignment.CenterVertically,

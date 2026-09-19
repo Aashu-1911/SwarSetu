@@ -93,6 +93,10 @@ data class MessageEntity(
     val targetLanguage: String? = null,
     val sourceText: String? = null,
     val translatedText: String? = null,
+    val locationLatitude: Double? = null,
+    val locationLongitude: Double? = null,
+    val locationAccuracyMeters: Float? = null,
+    val locationTimestamp: Long? = null,
 ) {
     companion object {
         /** [moderation]: text passed (or was not checked). */

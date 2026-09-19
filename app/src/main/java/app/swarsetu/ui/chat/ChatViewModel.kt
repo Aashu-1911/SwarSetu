@@ -121,6 +121,11 @@ data class ChatRow(
     val targetLanguage: String? = null,
     val sourceText: String? = null,
     val translatedText: String? = null,
+    val isAlert: Boolean = false,
+    val locationLatitude: Double? = null,
+    val locationLongitude: Double? = null,
+    val locationAccuracyMeters: Float? = null,
+    val locationTimestamp: Long? = null,
 )
 
 /**
@@ -171,6 +176,7 @@ data class ChatUiState(
     // Peers currently typing in this thread, shown as an animated indicator above the input. Ephemeral
     // (TTL'd in the mesh layer) and best-effort; empty most of the time.
     val typingPeers: List<TypingPeer> = emptyList(),
+    val myLocation: app.swarsetu.mesh.protocol.LocationPayload? = null,
 )
 
 class ChatViewModel(
@@ -198,6 +204,9 @@ class ChatViewModel(
     private val sttPipeline: SttPipeline,
     private val translatorEngine: app.swarsetu.translation.TranslatorEngine,
 ) : ViewModel() {
+    private val locationProvider = app.swarsetu.location.OfflineLocationProvider(context)
+    val myLocation = locationProvider.observeLocation().stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     private val isRoom = conversationId == Conversations.NEARBY
 
     private val myNodeId = MutableStateFlow<String?>(null)
@@ -323,14 +332,26 @@ class ChatViewModel(
             meshManager.typing,
         ) { count, health, typing -> MeshStatus(count, health, typing) }
 
+    private data class UserContext(
+        val nodeId: String?,
+        val displayName: String,
+        val location: app.swarsetu.mesh.protocol.LocationPayload?
+    )
+
+    private val userContext = combine(myNodeId, settings.displayName, myLocation) { id, name, loc ->
+        UserContext(id, name, loc)
+    }
+
     val state: StateFlow<ChatUiState> =
         combine(
             messagesWithReactions,
             peers.observePeers(),
             meshStatus,
-            myNodeId,
-            settings.displayName,
-        ) { bundle, peerList, mesh, me, myName ->
+            userContext,
+        ) { bundle, peerList, mesh, ctx ->
+            val me = ctx.nodeId
+            val myName = ctx.displayName
+            val location = ctx.location
             val count = mesh.neighborCount
             val health = mesh.transportHealth
             val typingMap = mesh.typing
@@ -396,6 +417,11 @@ class ChatViewModel(
                         targetLanguage = m.targetLanguage,
                         sourceText = m.sourceText,
                         translatedText = m.translatedText,
+                        isAlert = m.isAlert,
+                        locationLatitude = m.locationLatitude,
+                        locationLongitude = m.locationLongitude,
+                        locationAccuracyMeters = m.locationAccuracyMeters,
+                        locationTimestamp = m.locationTimestamp,
                     )
                 }
             val candidates =
@@ -455,6 +481,7 @@ class ChatViewModel(
                 isGroup = isGroup,
                 memberCount = members.size,
                 typingPeers = typingPeers,
+                myLocation = location,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ChatUiState(isRoom = isRoom))
 
@@ -577,6 +604,14 @@ class ChatViewModel(
         _isSending.value = true
         viewModelScope.launch {
             try {
+                val loc = locationProvider.getFreshOrCachedLocation(5000L)
+                val langCode = selectedSttLanguage.value.code
+                val locale = java.util.Locale(langCode)
+                val conf = android.content.res.Configuration(context.resources.configuration)
+                conf.setLocale(locale)
+                val localizedContext = context.createConfigurationContext(conf)
+                val localizedAlertText = localizedContext.getString(R.string.emergency_alert_text)
+                
                 val sent =
                     meshManager.sendChat(
                         text = context.getString(R.string.emergency_alert_text),
@@ -584,6 +619,9 @@ class ChatViewModel(
                         isAlert = true,
                         messageType = app.swarsetu.data.message.MessageEntity.TYPE_TRANSLATED_VOICE,
                         sourceLanguage = selectedSttLanguage.value.toTtsLanguage()?.name,
+                        sourceText = localizedAlertText,
+                        translatedText = localizedAlertText,
+                        location = loc,
                     )
                 if (!sent) {
                     android.util.Log.w("ChatViewModel", "ALERT_BROADCAST_FAILED")

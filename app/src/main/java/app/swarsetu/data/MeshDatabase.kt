@@ -71,7 +71,8 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
     // v8: Semantic translation message types + peer preferred language.
     //     Added messageType, sourceLanguage, targetLanguage, sourceText, translatedText to `messages`.
     //     Added preferredLanguage to `peers`.
-    version = 8,
+    // v9: Location fields for Offline SOS feature.
+    version = 9,
     // Export the schema JSON to app/schemas/ (location set by the androidx.room Gradle plugin's
     // room { schemaDirectory(...) } in app/build.gradle.kts). Keeps the schema diffable in review and feeds
     // the migration test's MigrationTestHelper. Room also errors at compile time if an entity changes without

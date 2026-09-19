@@ -103,6 +103,7 @@ interface MeshController {
         translatedText: String? = null,
         isAlert: Boolean = false,
         messageId: String? = null,
+        location: app.swarsetu.mesh.protocol.LocationPayload? = null,
     ): Boolean
 
     /** Floods a group metadata update (e.g. a rename) immediately, independent of any chat message. */

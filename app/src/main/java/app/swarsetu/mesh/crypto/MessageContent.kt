@@ -64,6 +64,7 @@ data class MessageContent(
     val targetLanguage: String? = null,
     val sourceText: String? = null,
     val translatedText: String? = null,
+    val location: app.swarsetu.mesh.protocol.LocationPayload? = null,
 ) {
     @OptIn(ExperimentalSerializationApi::class)
     fun encode(): ByteArray = cryptoCbor.encodeToByteArray(this)

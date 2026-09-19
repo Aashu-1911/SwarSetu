@@ -597,6 +597,13 @@ class InboundPipeline(
             attachmentMime = plain.attachmentMime,
             enc = null,
             replyTo = plain.replyTo,
+            isAlert = plain.isAlert,
+            messageType = plain.messageType,
+            sourceLanguage = plain.sourceLanguage,
+            targetLanguage = plain.targetLanguage,
+            sourceText = plain.sourceText,
+            translatedText = plain.translatedText,
+            location = plain.location,
         )
 
     /**
@@ -1719,6 +1726,10 @@ class InboundPipeline(
                 targetLanguage = content.targetLanguage,
                 sourceText = content.sourceText,
                 translatedText = content.translatedText,
+                locationLatitude = content.location?.latitude,
+                locationLongitude = content.location?.longitude,
+                locationAccuracyMeters = content.location?.accuracyMeters,
+                locationTimestamp = content.location?.timestamp,
             ).withReply(content.replyTo)
 
         persist(entity)

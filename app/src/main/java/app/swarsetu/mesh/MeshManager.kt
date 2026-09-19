@@ -458,6 +458,7 @@ class MeshManager(
         translatedText: String?,
         isAlert: Boolean,
         messageId: String?,
+        location: app.swarsetu.mesh.protocol.LocationPayload?,
     ): Boolean {
         if (isTextFlagged(text, "outgoing", isRoom = recipientId == null && group == null)) return false
         val me = identity.nodeId()
@@ -491,6 +492,10 @@ class MeshManager(
                     sourceText = sourceText,
                     translatedText = translatedText,
                     isAlert = isAlert,
+                    locationLatitude = location?.latitude,
+                    locationLongitude = location?.longitude,
+                    locationAccuracyMeters = location?.accuracyMeters,
+                    locationTimestamp = location?.timestamp,
                 ).withReply(replyTo),
             )
             val content =
@@ -506,6 +511,7 @@ class MeshManager(
                     sourceText = sourceText,
                     translatedText = translatedText,
                     isAlert = if (isAlert) true else null,
+                    location = location,
                 )
             originateSigned(chatEnvelope(id, me, sentAt, recipientId = null, group = null, content))
             return true
@@ -528,6 +534,7 @@ class MeshManager(
                 sourceText = sourceText,
                 translatedText = translatedText,
                 isAlert = if (isAlert) true else null,
+                location = location,
             )
         val envelope = sealEnvelopeFor(id, me, sentAt, recipientId, group, content)
         // Persist our own plaintext copy regardless, so the sender always sees their message. A DM whose
@@ -555,6 +562,10 @@ class MeshManager(
                 sourceText = sourceText,
                 translatedText = translatedText,
                 isAlert = isAlert,
+                locationLatitude = location?.latitude,
+                locationLongitude = location?.longitude,
+                locationAccuracyMeters = location?.accuracyMeters,
+                locationTimestamp = location?.timestamp,
             ).withReply(replyTo),
         )
         if (envelope == null) {

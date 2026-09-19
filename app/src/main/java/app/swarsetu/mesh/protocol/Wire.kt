@@ -160,6 +160,15 @@ data class ChatContent(
     val targetLanguage: String? = null,
     val sourceText: String? = null,
     val translatedText: String? = null,
+    val location: LocationPayload? = null,
+)
+
+@Serializable
+data class LocationPayload(
+    val latitude: Double,
+    val longitude: Double,
+    val accuracyMeters: Float,
+    val timestamp: Long,
 )
 
 /**

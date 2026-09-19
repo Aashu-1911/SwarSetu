@@ -24,6 +24,7 @@ class AndroidTtsEngine(
     private var tts: TextToSpeech? = null
     private var initDeferred: CompletableDeferred<Boolean>? = null
     private var isReady = false
+    private val previousVolumeMap = java.util.concurrent.ConcurrentHashMap<String, Int>()
 
     override suspend fun initialize(): Boolean =
         withContext(Dispatchers.Main) {
@@ -84,19 +85,40 @@ class AndroidTtsEngine(
                 }
 
                 override fun onDone(utteranceId: String?) {
-                    utteranceId?.let { metricsCollector.onCompleted(it) }
+                    utteranceId?.let { 
+                        restoreAlarmVolumeIfNeeded(it)
+                        metricsCollector.onCompleted(it) 
+                    }
                 }
 
                 @Deprecated("Deprecated in Java", ReplaceWith("onError(utteranceId, TextToSpeech.ERROR)"))
                 override fun onError(utteranceId: String?) {
-                    utteranceId?.let { metricsCollector.onError(it, "Unknown TTS Error") }
+                    utteranceId?.let { 
+                        restoreAlarmVolumeIfNeeded(it)
+                        metricsCollector.onError(it, "Unknown TTS Error") 
+                    }
                 }
 
                 override fun onError(
                     utteranceId: String?,
                     errorCode: Int,
                 ) {
-                    utteranceId?.let { metricsCollector.onError(it, "TTS Error code: $errorCode") }
+                    utteranceId?.let { 
+                        restoreAlarmVolumeIfNeeded(it)
+                        metricsCollector.onError(it, "TTS Error code: $errorCode") 
+                    }
+                }
+
+                private fun restoreAlarmVolumeIfNeeded(utteranceId: String) {
+                    val prevVolume = previousVolumeMap.remove(utteranceId)
+                    if (prevVolume != null) {
+                        try {
+                            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+                            audioManager.setStreamVolume(android.media.AudioManager.STREAM_ALARM, prevVolume, 0)
+                        } catch (e: Exception) {
+                            android.util.Log.w("AndroidTtsEngine", "Failed to restore volume", e)
+                        }
+                    }
                 }
 
                 override fun onStop(
@@ -273,11 +295,23 @@ class AndroidTtsEngine(
                     runCatching { tts?.voice = matchingVoice }
                 }
 
+                val isAlert = request.priority == app.swarsetu.tts.TtsPriority.ALERT || request.isAlert
+                val audioUsage = if (isAlert) AudioAttributes.USAGE_ALARM else AudioAttributes.USAGE_MEDIA
                 val audioAttributes = AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setUsage(audioUsage)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                     .build()
                 tts?.setAudioAttributes(audioAttributes)
+                
+                val utteranceId = request.utteranceId ?: request.requestId
+                
+                if (isAlert) {
+                    val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+                    val prevVolume = audioManager.getStreamVolume(android.media.AudioManager.STREAM_ALARM)
+                    val maxVolume = audioManager.getStreamMaxVolume(android.media.AudioManager.STREAM_ALARM)
+                    previousVolumeMap[utteranceId] = prevVolume
+                    audioManager.setStreamVolume(android.media.AudioManager.STREAM_ALARM, maxVolume, 0)
+                }
             } catch (e: Exception) {
                 android.util.Log.w("AndroidTtsEngine", "Failed setting TTS language/attributes: ${e.message}")
             }

@@ -12,8 +12,8 @@
     <!-- Discovery on API 29-32: Wi-Fi Aware (no NEARBY_WIFI_DEVICES before 33) and the BLE scan (no
          neverForLocation before 31) both require fine location. Android 12 requires COARSE to be declared and
          requested alongside FINE (the precise/approximate toggle). Both capped at 32 so API 33+ is location-free. -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <!-- Data path (NDP): request the Aware network and open a TCP socket over its link-local IPv6. -->
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />

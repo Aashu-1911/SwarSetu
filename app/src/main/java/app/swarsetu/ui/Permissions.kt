@@ -35,6 +35,8 @@ fun requiredMeshPermissions(sdkInt: Int = Build.VERSION.SDK_INT): Array<String> 
                 Manifest.permission.BLUETOOTH_ADVERTISE,
                 Manifest.permission.BLUETOOTH_CONNECT,
                 Manifest.permission.POST_NOTIFICATIONS,
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
             )
         }
 
