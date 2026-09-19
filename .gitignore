@@ -49,3 +49,17 @@ app/release/*
 
 # Private working area: marketing masters (see above) + personal files — kept out of the public repo.
 .private/
+
+# SraVaani 0.5 model artifacts (P1): multi-hundred-MB weights stay out of git; fetched by
+# scripts/sravaani/download_model.py and verified by scripts/sravaani/verify_manifest.py.
+/scratch/sravaani/
+*.fp16.ts
+/sravaani-model/
+
+# Staged (not committed) SraVaani ONNX graphs — >100 MB, cannot be git-tracked. They are
+# copied into assets by scripts/sravaani/gen_android_assets.py at build-setup time and
+# integrity-gated by checkSravaaniModel (size+SHA-256 pins in SravaaniPackaging.kt).
+app/src/main/assets/sravaani/*.onnx
+
+# Python bytecode (STT eval/smoke scripts).
+__pycache__/

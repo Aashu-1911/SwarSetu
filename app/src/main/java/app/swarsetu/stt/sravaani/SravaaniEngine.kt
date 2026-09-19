@@ -1,0 +1,776 @@
+package app.swarsetu.stt.sravaani
+
+import android.content.Context
+import android.util.Log
+import ai.onnxruntime.OnnxTensor
+import ai.onnxruntime.OrtEnvironment
+import ai.onnxruntime.OrtSession
+import app.swarsetu.stt.SttConfig
+import app.swarsetu.stt.SttEngine
+import app.swarsetu.stt.SttException
+import app.swarsetu.stt.SttLanguage
+import app.swarsetu.stt.SttLiveStream
+import app.swarsetu.stt.SttModelInfo
+import app.swarsetu.stt.SttModelManager
+import app.swarsetu.stt.SttResult
+import app.swarsetu.stt.SttResultType
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+
+/**
+ * SraVaani 0.5 [SttEngine] — the ONLY permitted STT model for SIH 26173
+ * ([ARTPARK-IISc/SraVaani-0.5-live](https://huggingface.co/ARTPARK-IISc/SraVaani-0.5-live),
+ * pinned revision `29a15303`, MIT).
+ *
+ * **Architecture (verified in P2, evidence in `docs/STT_SRAVAANI_GRAPH_VALIDATION.md`):**
+ * the official artifact ships a cache-aware streaming FastConformer encoder + CTC head.
+ * This engine executes the P3-exported ONNX graphs of exactly those two components,
+ * with the PRODUCTION encoder being the P9 weight-only INT8 optimization of the fp32 export
+ * (`sravaani_encoder.onnx` 638.7 MB int8 + `sravaani_ctc.onnx` 20.5 MB — provenance chain:
+ * official fp16 artifact → P3 fp32 export (equivalence gate: feat rel 2.6e-05, encoder rel
+ * 4.7e-05, collapsed token streams identical on structured trials) → P9 int8 (collapsed token
+ * streams identical on all probes; FLEURS real-speech WER parity +0.05 pp, 2026-09-17))
+ * via ONNX Runtime, and reimplements the thin streaming brain in Kotlin
+ * ([SravaaniFeaturizer], [SravaaniStreamingState], [SravaaniCtcDecoder], [SravaaniTokenizer]) —
+ * each class is an exact port of the official Python, pinned by golden-vector tests.
+ *
+ * **Graph I/O contract (from `scripts/sravaani/export_onnx.py`, the source of truth):**
+ * - encoder: `feats(B,128,T)` mel-major | `feat_len(1)` i64 | `cache_last_channel(1,17,70,1024)`
+ *   | `cache_last_time(1,17,1024,8)` | `cache_last_channel_len(1)` i64
+ *   → `enc(1,1024,T')` | `enc_len(1)` i64 | `cache_next_*` (same shapes as inputs).
+ * - ctc: `enc(1,1024,T')` → `log_probs(1,T',5001)` — TIME-major, vocab on axis 2 (real-speech
+ *   verified 2026-09-17 vs the official TorchScript wrapper: identical transcript). NOTE: the
+ *   official NeMo CTC export is vocab-major `(1,V,T)`; OUR export flattens the TimeMask/LogSoftmax
+ *   tail to `(1,T,V)` — do not "fix" this back to the official layout.
+ * - The graph's `cache_next_*` outputs stay alive only while its [OrtSession.Result] is open,
+ *   so they are COPIED into per-stream persistent tensors inside the result scope.
+ *
+ * **True streaming:** per-chunk encoder caches are carried across chunks (the graph's
+ * `cache_next_*` outputs become the next `cache_last_*` inputs) and the CTC `prev_id` collapse
+ * state spans chunk seams — the exact mechanism the official docstring identifies as what
+ * naive chunked ASR drops. Unlike the official live path, featurization is O(n) incremental
+ * (the official one recomputes features over the whole buffer per push).
+ *
+ * **Live pipeline (P4):** [startLiveStream] exposes that cache-carrying state directly to the
+ * capture loop: mic chunks are pushed into ONE session whose featurizer ring and encoder caches
+ * persist across pushes, so each audio sample is transcribed exactly once (total inference work
+ * is O(n) over the utterance) and partials are cumulative. The batch [transcribe]/
+ * [transcribeStream] paths share the same machinery for whole-buffer inputs.
+ *
+ * **Languages:** one multilingual, language-UNCONDITIONED model covering all 10 required
+ * languages (verified from the model card tags + official demo — the model takes NO language
+ * input and emits the spoken language's script). There is deliberately no per-language model,
+ * no aliasing, and no auto-detection claim: [SttConfig.autoDetectLanguage] is a documented
+ * no-op (the engine never conditions on language; transcripts come out in whatever language
+ * was spoken).
+ *
+ * **Memory reality (measured, P2/P9):** the production int8 encoder is ~638.7 MB on disk
+ * (fp32 reference is 1.77 GB, kept in scratch); mmap'd by ORT
+ * from app-private storage, mapped pages are file-backed and pageable, but this model class
+ * will not run on 2 GB-RAM devices. Recorded as a known limitation, not hidden.
+ *
+ * **Threading:** all native session calls serialize behind [mutex] (project convention).
+ * Sessions are created lazily on first transcription — [initialize] only verifies packaging,
+ * so a cold app init never pays the ~1.8 GB map unless STT is actually used (P10 hardens
+ * this lifecycle).
+ */
+class SravaaniEngine(
+    private val context: Context,
+    private val modelManager: SttModelManager,
+) : SttEngine {
+
+    private val mutex = Mutex()
+    private var released = false
+    private var _config: SttConfig? = null
+    private var _currentLanguage: SttLanguage? = null
+
+    /** Lazily-built native internals; null until first transcription. */
+    private var internals: Internals? = null
+
+    override val config: SttConfig? get() = _config
+    override val isReady: Boolean get() = _config != null && !released
+    override val currentLanguage: SttLanguage? get() = _currentLanguage
+
+    // ------------------------------------------------------------------ lifecycle
+
+    override suspend fun initialize(config: SttConfig) =
+        mutex.withLock {
+            check(!released) { throw SttException.EngineNotReady("engine was released") }
+            // Verify packaging BEFORE any state mutation — a failed initialize must not
+            // leave the engine claiming readiness (P10: no half-initialized states).
+            requireGraphsPresent()
+            _config = config
+            _currentLanguage = config.language
+            modelManager.markLoaded(
+                SttModelInfo(
+                    language = config.language,
+                    modelPath = ASSET_DIR,
+                    sizeBytes = GRAPH_ENCODER_BYTES + GRAPH_CTC_BYTES,
+                    description = "SraVaani 0.5-live (multilingual, 29a15303, MIT)",
+                ),
+            )
+            Log.i(TAG, "SraVaani 0.5 initialized (packaging verified, sessions lazy)")
+            Unit
+        }
+
+    override suspend fun setLanguage(language: SttLanguage) {
+        require(language in SttLanguage.entries) {
+            throw SttException.UnsupportedLanguage(language)
+        }
+        // Single multilingual unconditioned model: every declared language is served by the
+        // same graph. Config update only — no model swap, no aliasing.
+        mutex.withLock {
+            check(!released) { throw SttException.EngineNotReady("engine was released") }
+            _currentLanguage = language
+            _config = _config?.copy(language = language)
+        }
+    }
+
+    override suspend fun release() {
+        val done = mutex.withLock {
+            released = true
+            runCatching { internals?.close() }
+            internals = null
+            _currentLanguage?.let { modelManager.markReleased(it) }
+            _config = null
+            Log.i(TAG, "SraVaani engine released")
+            Unit
+        }
+        // OUTSIDE the lock: drain any queued abandoned-stream closes (they need the mutex;
+        // shutting down while holding it would deadlock the closer thread).
+        streamCloser.shutdown()
+        streamCloser.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS)
+        done
+    }
+
+    /**
+     * Close a live stream's native tensors without racing an in-flight chunk: take the engine
+     * mutex if it is free; otherwise queue the close on a daemon thread that waits for the
+     * current inference to finish. Never blocks the caller on inference (release() is sync).
+     */
+    private fun closeStreamEventually(s: StreamNative) {
+        if (mutex.tryLock()) {
+            try {
+                s.close()
+            } finally {
+                mutex.unlock()
+            }
+        } else {
+            streamCloser.execute {
+                runBlocking { mutex.withLock { } }
+                runCatching { s.close() }
+            }
+        }
+    }
+
+    /** Serializes abandoned-stream tensor closes against inference (see [closeStreamEventually]). */
+    private val streamCloser = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+        Thread(r, "sravaani-stream-closer").apply { isDaemon = true }
+    }
+
+    // ------------------------------------------------------------------ inference
+
+    override suspend fun transcribe(
+        pcm: ShortArray,
+        language: SttLanguage,
+    ): SttResult =
+        withContext(Dispatchers.Default) {
+            mutex.withLock {
+                if (released || _config == null) {
+                    throw SttException.EngineNotReady("engine was released or never initialized")
+                }
+                if (pcm.isEmpty()) return@withLock SttResult.empty(language)
+                validateDuration(pcm.size)
+                val internal = lazyInternals()
+                val stream = internal.newStream()
+                try {
+                    feedAndDrain(internal, stream, pcm, emitPartial = null)
+                    val text = internal.tokenizer.decode(stream.state.tokens)
+                    val audioMs = stream.state.samplesPushed * 1000L / SttLanguage.SAMPLE_RATE
+                    if (text.isBlank()) SttResult.empty(language)
+                    else {
+                        SttResult(
+                            text = text,
+                            type = SttResultType.FINAL,
+                            language = language,
+                            durationMs = audioMs,
+                        )
+                    }
+                } finally {
+                    stream.close()
+                }
+            }
+        }
+
+    override fun transcribeStream(
+        pcm: ShortArray,
+        language: SttLanguage,
+    ): Flow<SttResult> =
+        flow {
+            mutex.withLock {
+                if (released || _config == null) {
+                    throw SttException.EngineNotReady("engine was released or never initialized")
+                }
+                if (pcm.isEmpty()) {
+                    emit(SttResult.empty(language))
+                    return@flow
+                }
+                validateDuration(pcm.size)
+                val internal = lazyInternals()
+                val stream = internal.newStream()
+                try {
+                    // True streaming: emit a partial after every processed chunk whose text
+                    // changed (official semantics: cumulative text), final after the drain.
+                    var lastPartial: String? = null
+                    feedAndDrain(internal, stream, pcm) { text ->
+                        if (text != lastPartial && text.isNotBlank()) {
+                            lastPartial = text
+                            emit(
+                                SttResult(
+                                    text = text,
+                                    type = SttResultType.PARTIAL,
+                                    language = language,
+                                ),
+                            )
+                        }
+                    }
+                    val text = internal.tokenizer.decode(stream.state.tokens)
+                    val audioMs = stream.state.samplesPushed * 1000L / SttLanguage.SAMPLE_RATE
+                    emit(
+                        if (text.isBlank()) {
+                            SttResult.empty(language)
+                        } else {
+                            SttResult(
+                                text = text,
+                                type = SttResultType.FINAL,
+                                language = language,
+                                durationMs = audioMs,
+                            )
+                        },
+                    )
+                } finally {
+                    stream.close()
+                }
+            }
+        }.flowOn(Dispatchers.Default)
+
+    // ------------------------------------------------------------------ live streaming (P4)
+
+    override fun startLiveStream(language: SttLanguage): SttLiveStream =
+        SravaaniLiveStream(language)
+
+    /**
+     * One live SraVaani session: a single [StreamNative] whose featurizer ring, encoder caches,
+     * and CTC collapse state persist across [pushPcm] calls. Audio is transcribed exactly once;
+     * partials are the cumulative transcript after each processed chunk. [finish] flushes the
+     * tail chunks (official finalize semantics) and returns the final result.
+     *
+     * NOT thread-safe by itself — the capture loop calls it serially — but pushes/finalizes
+     * serialize against the engine's [mutex] (shared with batch inference).
+     */
+    private inner class SravaaniLiveStream(
+        private val language: SttLanguage,
+    ) : SttLiveStream {
+        private var opened: StreamNative? = null
+        private var finished = false
+
+        override var onPartial: ((String) -> Unit)? = null
+
+        /** Lazily open the native stream on first push (keeps a no-audio session free). */
+        private fun stream(): StreamNative {
+            opened?.let { return it }
+            check(!released && _config != null) {
+                throw SttException.EngineNotReady("engine was released or never initialized")
+            }
+            return internals?.newStream().also { opened = it }
+                ?: throw SttException.EngineNotReady("engine internals not built")
+        }
+
+        override suspend fun pushPcm(samples: ShortArray) {
+            check(!finished) { "live stream already finished" }
+            mutex.withLock {
+                if (samples.isEmpty()) return@withLock
+                val internal = lazyInternals()
+                val s = stream()
+                var offset = 0
+                while (offset < samples.size) {
+                    val n = minOf(FEED_SAMPLES, samples.size - offset)
+                    feedSamples(internal, s, samples, offset, n) { text ->
+                        if (text.isNotBlank()) onPartial?.invoke(text)
+                    }
+                    offset += n
+                }
+            }
+        }
+
+        override suspend fun finish(): SttResult {
+            check(!finished) { "live stream already finished" }
+            finished = true
+            return mutex.withLock {
+                val s = opened ?: return@withLock SttResult.empty(language)
+                try {
+                    val internal = lazyInternals()
+                    // Official finalize: flush trailing partial chunk(s), then stop.
+                    s.state.beginFinalize()
+                    while (s.state.hasChunkReady()) {
+                        runChunk(internal, s)
+                        onPartial?.invoke(internal.tokenizer.decode(s.state.tokens))
+                    }
+                    s.state.markFinalized()
+                    val text = internal.tokenizer.decode(s.state.tokens)
+                    val audioMs = s.state.samplesPushed * 1000L / SttLanguage.SAMPLE_RATE
+                    if (text.isBlank()) SttResult.empty(language)
+                    else {
+                        SttResult(
+                            text = text,
+                            type = SttResultType.FINAL,
+                            language = language,
+                            durationMs = audioMs,
+                        )
+                    }
+                } finally {
+                    s.close()
+                }
+            }
+        }
+
+        override fun release() {
+            // P10 hardening: an abandoned live session must free its native cache tensors
+            // (~5.4 MB direct memory) immediately — not at next engine.release(). finish()
+            // remains the normal path; release() covers the pipeline's cancel/abandon path.
+            val s = opened ?: return
+            opened = null
+            finished = true // blocks any further pushPcm/finish on this stream
+            closeStreamEventually(s)
+        }
+    }
+
+    // ------------------------------------------------------------------ core loop
+
+    /**
+     * Push [count] PCM samples starting at [offset] and drain every chunk that becomes ready
+     * (live mode — no finalize). [emitPartial] gets the cumulative transcript per chunk.
+     */
+    private suspend fun feedSamples(
+        internal: Internals,
+        stream: StreamNative,
+        pcm: ShortArray,
+        offset: Int,
+        count: Int,
+        emitPartial: (suspend (String) -> Unit)?,
+    ) {
+        stream.pushPcm(pcm, offset, count)
+        drainChunks(internal, stream, emitPartial)
+    }
+
+    /**
+     * Push all PCM, then drain chunks: live chunking while audio keeps coming, then finalize
+     * semantics for the tail. [emitPartial] (nullable for batch calls) is invoked with the
+     * cumulative transcript text after each processed chunk. Suspend lambda so the streaming
+     * path can emit into its Flow from inside the drain loop.
+     */
+    private suspend fun feedAndDrain(
+        internal: Internals,
+        stream: StreamNative,
+        pcm: ShortArray,
+        emitPartial: (suspend (String) -> Unit)?,
+    ) {
+        // Feed in bounded pushes so the featurizer's ring always covers chunk read-back.
+        var offset = 0
+        while (offset < pcm.size) {
+            val n = minOf(PUSH_SAMPLES, pcm.size - offset)
+            stream.pushPcm(pcm, offset, n)
+            offset += n
+            // While enough frames exist for a full chunk, run chunks (official stream_audio).
+            drainChunks(internal, stream, emitPartial)
+        }
+        // Official finalize: flush trailing partial chunk(s), then stop.
+        stream.state.beginFinalize()
+        while (stream.state.hasChunkReady()) {
+            runChunk(internal, stream)
+            emitPartial?.invoke(internal.tokenizer.decode(stream.state.tokens))
+        }
+        stream.state.markFinalized()
+    }
+
+    /** Run all currently-available full chunks (live mode). */
+    private suspend fun drainChunks(
+        internal: Internals,
+        stream: StreamNative,
+        emitPartial: (suspend (String) -> Unit)?,
+    ) {
+        while (stream.state.hasChunkReady()) {
+            runChunk(internal, stream)
+            emitPartial?.invoke(internal.tokenizer.decode(stream.state.tokens))
+        }
+    }
+
+    /**
+     * Assemble + execute ONE chunk: encoder → CTC head → per-frame argmax → cross-chunk
+     * collapse. Cache outputs are copied into the stream's persistent tensors inside the
+     * result scope (they die with the result).
+     */
+    private fun runChunk(internal: Internals, stream: StreamNative) {
+        val state = stream.state
+        val total = state.assembleChunk(internal.assembled)
+        require(total > 0) { "runChunk called with no chunk ready" }
+        val env = internal.env
+
+        // Transpose the frame-major assembly (T x mel) into the mel-major graph layout
+        // (mel x T), then hand ORT a fresh direct buffer (shape varies on the finalize tail,
+        // and ORT reads direct buffers from their start address).
+        run {
+            val scratch = internal.scratch
+            for (t in 0 until total) {
+                val base = t * MEL_BINS
+                for (m in 0 until MEL_BINS) {
+                    scratch[m * total + t] = internal.assembled[base + m]
+                }
+            }
+        }
+        val featsBuf = directFloatBuffer(total * MEL_BINS)
+        featsBuf.put(internal.scratch, 0, total * MEL_BINS)
+        featsBuf.rewind()
+        val featsTensor = OnnxTensor.createTensor(
+            env,
+            featsBuf,
+            longArrayOf(1, MEL_BINS.toLong(), total.toLong()),
+        )
+        val featLenTensor = OnnxTensor.createTensor(
+            env,
+            directLongBuffer(longArrayOf(total.toLong())),
+            longArrayOf(1),
+        )
+        val results = try {
+            internal.encoderSession.run(
+                mapOf(
+                    "feats" to featsTensor,
+                    "feat_len" to featLenTensor,
+                    "cache_last_channel" to stream.cacheCh,
+                    "cache_last_time" to stream.cacheTc,
+                    "cache_last_channel_len" to stream.cacheLen,
+                ),
+            )
+        } finally {
+            featsTensor.close()
+            featLenTensor.close()
+        }
+
+        // The result scope owns `enc` and the cache_next_* outputs — everything that touches
+        // them must happen inside this block. (enc feeds the CTC session directly.)
+        // Access is BY INDEX: Result.get(String) returns OptionalOnnxValue in modern ORT,
+        // while get(Int) returns OnnxValue directly. Index order is pinned by the export's
+        // output_names: [enc, enc_len, cache_next_channel, cache_next_time, cache_next_len].
+        results.use { r ->
+            val encLen = (r.get(1) as OnnxTensor).longBuffer.get(0)
+
+            // ---- CTC head over the raw encoder output tensor (B, 1024, T') ----
+            val logitsResult = internal.ctcSession.run(mapOf("enc" to (r.get(0) as OnnxTensor)))
+            logitsResult.use { lr ->
+                val lp = (lr.get(0) as OnnxTensor).floatBuffer
+                lp.rewind()
+                val frames = lp.remaining() / VOCAB_PLUS_BLANK
+                require(lp.remaining() % VOCAB_PLUS_BLANK == 0) {
+                    "ctc logits size ${lp.remaining()} not a multiple of $VOCAB_PLUS_BLANK"
+                }
+                val valid = minOf(encLen, frames.toLong()).toInt()
+                // Layout (T, V+1) row-major (TIME-major): element (t, v) at t * (V+1) + v.
+                // The export's LogSoftmax tail flattens to (1, T, 5001); reading it as (1, V, T)
+                // picks TIME indices as token ids (garbage single-char transcripts) — the exact
+                // bug the FLEURS arbitration caught on 2026-09-17.
+                val ids = IntArray(valid)
+                for (t in 0 until valid) {
+                    val base = t * VOCAB_PLUS_BLANK
+                    var best = 0
+                    var bestVal = Float.NEGATIVE_INFINITY
+                    for (v in 0 until VOCAB_PLUS_BLANK) {
+                        val x = lp.get(base + v)
+                        if (x > bestVal) {
+                            bestVal = x
+                            best = v
+                        }
+                    }
+                    ids[t] = best
+                }
+                stream.decoder.acceptFrameIds(ids, state.tokens)
+            }
+
+            // ---- adopt next-caches BY COPY (outputs die with this result) ----
+            val nextCh = (r.get(2) as OnnxTensor).floatBuffer
+            val nextTc = (r.get(3) as OnnxTensor).floatBuffer
+            val nextLen = (r.get(4) as OnnxTensor).longBuffer
+            require(nextCh.remaining() == CACHE_CH_ELEMS) {
+                "cache_next_channel has ${nextCh.remaining()} elems, expected $CACHE_CH_ELEMS"
+            }
+            require(nextTc.remaining() == CACHE_TC_ELEMS) {
+                "cache_next_time has ${nextTc.remaining()} elems, expected $CACHE_TC_ELEMS"
+            }
+            nextCh.rewind()
+            nextTc.rewind()
+            stream.chBuf.clear()
+            stream.chBuf.put(nextCh)
+            stream.chBuf.rewind() // ORT reads inputs from the buffer's current position
+            stream.tcBuf.clear()
+            stream.tcBuf.put(nextTc)
+            stream.tcBuf.rewind()
+            stream.lenBuf.put(0, nextLen.get(0))
+        }
+        state.advanceChunk()
+    }
+
+    // ------------------------------------------------------------------ internals
+
+    private fun validateDuration(sampleCount: Int) {
+        val max = _config?.maxAudioDurationMs ?: 0L
+        if (max > 0 && sampleCount * 1000L / SttLanguage.SAMPLE_RATE > max) {
+            throw SttException.AudioInputError(
+                "pcm duration ${sampleCount * 1000L / SttLanguage.SAMPLE_RATE} ms exceeds maxAudioDurationMs $max",
+            )
+        }
+    }
+
+    private fun requireGraphsPresent() {
+        for (name in listOf(ENCODER_ASSET, CTC_ASSET)) {
+            try {
+                context.assets.open("$ASSET_DIR/$name").use { stream ->
+                    require(stream.read() >= 0) { "empty asset" }
+                }
+            } catch (e: Exception) {
+                throw SttException.ModelLoadError(
+                    "$ASSET_DIR/$name (graphs not packaged yet — see P7 packaging milestone)",
+                    e,
+                )
+            }
+        }
+    }
+
+    /** Build (or reuse) the native sessions + tables. Heavy: first call maps ~1.8 GB. */
+    private fun lazyInternals(): Internals {
+        // Defensive gate: no inference path may build sessions on an un-initialized or
+        // released engine (P10 — pushPcm previously reached here before initialize).
+        if (released || _config == null) {
+            throw SttException.EngineNotReady("engine was released or never initialized")
+        }
+        internals?.let { return it }
+        try {
+            val dir = extractGraphs()
+            val env = OrtEnvironment.getEnvironment()
+            val opts = OrtSession.SessionOptions()
+            opts.setIntraOpNumThreads(INTRA_OP_THREADS)
+            opts.setInterOpNumThreads(1)
+            opts.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+            val encoder =
+                env.createSession(File(dir, ENCODER_ASSET).absolutePath, opts)
+            val ctc = env.createSession(File(dir, CTC_ASSET).absolutePath, opts)
+            opts.close()
+            val tables = context.assets.open("$ASSET_DIR/$TABLES_ASSET").use { s ->
+                SravaaniTables.read(s)
+            }
+            val pieces = context.assets.open("$ASSET_DIR/$TOKENS_ASSET").use { s ->
+                s.readBytes().decodeToString().lineSequence().filter { it.isNotEmpty() }.toList()
+            }
+            require(pieces.size == SravaaniTokenizer.PIECE_COUNT) {
+                "tokens.txt has ${pieces.size} pieces, expected ${SravaaniTokenizer.PIECE_COUNT}"
+            }
+            internals = Internals(
+                env = env,
+                encoderSession = encoder,
+                ctcSession = ctc,
+                tables = tables,
+                tokenizer = SravaaniTokenizer(pieces),
+            )
+            Log.i(TAG, "ORT sessions created (encoder + ctc), tables + tokenizer loaded")
+            return internals!!
+        } catch (e: SttException) {
+            throw e
+        } catch (e: OutOfMemoryError) {
+            throw SttException.OutOfMemory(cause = e)
+        } catch (e: Exception) {
+            throw SttException.ModelLoadError(ASSET_DIR, e)
+        }
+    }
+
+    /**
+     * Copy the ONNX graphs from assets to app-private storage (once) so ORT can mmap them —
+     * assets cannot be mapped directly. Copy is version-guarded by a marker file; every
+     * extraction is SHA-256-verified (P7) against the P3 export manifest pins before the
+     * marker is written, so a corrupt/truncated asset fails LOUDLY instead of loading
+     * garbage weights. Previously-extracted graphs are re-verified on every engine start
+     * (cheap: ORT would map them anyway; hashing catches post-install corruption).
+     */
+    private fun extractGraphs(): File {
+        val dir = File(context.filesDir, EXTRACT_DIR)
+        val marker = File(dir, "graphs.meta")
+        if (marker.exists() && marker.readText().trim() == GRAPHS_VERSION) {
+            for (name in listOf(ENCODER_ASSET, CTC_ASSET)) {
+                SravaaniPackaging.verifyExtracted(dir, name)
+            }
+            return dir
+        }
+        dir.mkdirs()
+        for (name in listOf(ENCODER_ASSET, CTC_ASSET)) {
+            val target = File(dir, name)
+            val tmp = File(dir, "$name.tmp")
+            context.assets.open("$ASSET_DIR/$name").use { input ->
+                tmp.outputStream().use { output -> input.copyTo(output, 1 shl 20) }
+            }
+            if (!tmp.renameTo(target)) {
+                target.delete()
+                if (!tmp.renameTo(target)) throw SttException.ModelLoadError(target.path)
+            }
+            // Verify the extraction BEFORE the marker pins it — a mismatch throws
+            // ModelLoadError (engine surfaces it; factory falls back to DefaultSttEngine).
+            SravaaniPackaging.verifyExtracted(dir, name)
+        }
+        marker.writeText(GRAPHS_VERSION)
+        Log.i(TAG, "Graphs extracted and verified to ${dir.absolutePath}")
+        return dir
+    }
+
+    /**
+     * Native sessions + per-engine immutable state (the 1.77 GB graphs + tables). Per-stream
+     * caches live in [StreamNative].
+     */
+    private inner class Internals(
+        val env: OrtEnvironment,
+        val encoderSession: OrtSession,
+        val ctcSession: OrtSession,
+        val tables: SravaaniTables,
+        val tokenizer: SravaaniTokenizer,
+    ) {
+        /** Encoder input block, mel-major: (PEC + CHUNK frames) x mel values. */
+        val assembled = FloatArray(SravaaniStreamingState.CHUNK_FRAMES * MEL_BINS)
+
+        /** Copy of [assembled] backed into a direct buffer for ORT. */
+        val scratch = FloatArray(SravaaniStreamingState.CHUNK_FRAMES * MEL_BINS)
+
+        fun newStream(): StreamNative = StreamNative()
+
+        fun close() {
+            runCatching { encoderSession.close() }
+            runCatching { ctcSession.close() }
+        }
+    }
+
+    /** One live stream: streaming state + per-stream CTC decoder + persistent cache tensors. */
+    private inner class StreamNative {
+        val state = SravaaniStreamingState(MEL_BINS).also {
+            it.attach(SravaaniFeaturizer(internals!!.tables))
+        }
+
+        /** Per-stream collapse state: prev id must NOT leak between utterances. */
+        val decoder = SravaaniCtcDecoder()
+
+        /** Persistent cache tensors wrapping direct buffers (refilled in-place after runs). */
+        val cacheCh: OnnxTensor
+        val cacheTc: OnnxTensor
+        val cacheLen: OnnxTensor
+        // Accessed from the outer engine's chunk loop — Kotlin private-in-inner would hide them.
+        val chBuf: java.nio.FloatBuffer
+        val tcBuf: java.nio.FloatBuffer
+        val lenBuf: java.nio.LongBuffer
+
+        init {
+            val env = internals!!.env
+            chBuf = directFloatBuffer(CACHE_CH_ELEMS) // direct buffers are zero-initialized
+            tcBuf = directFloatBuffer(CACHE_TC_ELEMS)
+            lenBuf = ByteBuffer.allocateDirect(8).order(ByteOrder.nativeOrder()).asLongBuffer()
+            cacheCh = OnnxTensor.createTensor(
+                env,
+                chBuf,
+                longArrayOf(1, ENC_LAYERS, CACHE_CH_SIZE, ENC_D_MODEL),
+            )
+            cacheTc = OnnxTensor.createTensor(
+                env,
+                tcBuf,
+                longArrayOf(1, ENC_LAYERS, ENC_D_MODEL, CACHE_TC_SIZE),
+            )
+            cacheLen = OnnxTensor.createTensor(env, lenBuf, longArrayOf(1))
+        }
+
+        /** Push a slice of [pcm] (converted to f32) into the stream's featurizer. */
+        fun pushPcm(pcm: ShortArray, offset: Int, count: Int) {
+            if (count > internalBlock.size) internalBlock = FloatArray(count)
+            for (i in 0 until count) internalBlock[i] = pcm[offset + i] / 32768f
+            state.pushPcm(internalBlock, count)
+        }
+
+        private var internalBlock = FloatArray(PUSH_SAMPLES)
+
+        private val closed = java.util.concurrent.atomic.AtomicBoolean(false)
+
+        /** Idempotent: finish() and release() may both attempt the close. */
+        fun close() {
+            if (!closed.compareAndSet(false, true)) return
+            runCatching { cacheCh.close() }
+            runCatching { cacheTc.close() }
+            runCatching { cacheLen.close() }
+        }
+    }
+
+    private companion object {
+        const val TAG = "SravaaniEngine"
+
+        /** Asset dir for tables/tokens + graphs (P7 owns final packaging). */
+        const val ASSET_DIR = "sravaani"
+        const val TABLES_ASSET = "tables.bin"
+        const val TOKENS_ASSET = "tokens.txt"
+        const val ENCODER_ASSET = "sravaani_encoder.onnx"
+        const val CTC_ASSET = "sravaani_ctc.onnx"
+
+        /** App-private extraction dir under filesDir (mmap source). */
+        const val EXTRACT_DIR = "stt/sravaani"
+
+        /** Re-extract graphs when this changes (runtime pin + model revision + artifact selection). */
+        const val GRAPHS_VERSION = "ort-1.27.0-rev-29a15303-int8-prod"
+
+        /** Exact asset byte counts from the P9 production manifest (for SttModelInfo).
+         *  Production encoder = P9 weight-only INT8 (WER parity proven on FLEURS, 2.778× smaller). */
+        const val GRAPH_ENCODER_BYTES = 638_695_714L
+        const val GRAPH_CTC_BYTES = 20_504_707L
+
+        const val MEL_BINS = 128
+        const val VOCAB_PLUS_BLANK = 5_001
+        const val ENC_LAYERS = 17L
+        const val ENC_D_MODEL = 1024L
+        const val CACHE_CH_SIZE = 70L
+        const val CACHE_TC_SIZE = 8L
+        const val CACHE_CH_ELEMS = (1 * ENC_LAYERS * CACHE_CH_SIZE * ENC_D_MODEL).toInt()
+        const val CACHE_TC_ELEMS = (1 * ENC_LAYERS * ENC_D_MODEL * CACHE_TC_SIZE).toInt()
+
+        /**
+         * PCM push granularity: bounded so the featurizer ring (32768 samples) always covers
+         * the chunk read-back (~19.8k samples) with margin, and small enough for live-ish
+         * chunk draining.
+         */
+        const val PUSH_SAMPLES = 8_192
+
+        /**
+         * Live-session push granularity ([SravaaniLiveStream.pushPcm]): like [PUSH_SAMPLES] but
+         * also bounded by a 200 ms window, so live partial latency stays ≤ ~200 ms + chunk time.
+         */
+        const val FEED_SAMPLES = 3_200 // 200 ms @ 16 kHz — also < PUSH_SAMPLES
+
+        /** Mid-range big-core default; P10/P11 measure and tune. */
+        const val INTRA_OP_THREADS = 4
+
+        private fun directFloatBuffer(elems: Int): java.nio.FloatBuffer =
+            ByteBuffer.allocateDirect(elems * 4).order(ByteOrder.nativeOrder()).asFloatBuffer()
+
+        private fun directLongBuffer(values: LongArray): java.nio.LongBuffer {
+            val buf = ByteBuffer.allocateDirect(values.size * 8).order(ByteOrder.nativeOrder()).asLongBuffer()
+            buf.put(values)
+            buf.rewind()
+            return buf
+        }
+    }
+}

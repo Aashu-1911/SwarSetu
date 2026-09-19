@@ -2,6 +2,7 @@ package app.swarsetu.stt
 
 import android.content.Context
 import android.util.Log
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -22,6 +23,7 @@ import kotlinx.coroutines.withContext
 class SttPipeline(
     private val context: Context,
     private val engine: SttEngine,
+    private val capture: AudioCapture = PcmCapture(context),
 ) {
     /** Pipeline state. */
     enum class PipelineState {
@@ -38,11 +40,10 @@ class SttPipeline(
         COMPLETE,
     }
 
-    enum class DiagnosticMode { PRODUCTION, AUDIO_ONLY, VOSK, SHERPA }
+    enum class DiagnosticMode { PRODUCTION, AUDIO_ONLY }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val mutex = Mutex()
-    private val capture = PcmCapture(context)
     private val vad = VoiceActivityDetector()
 
     private var captureJob: Job? = null
@@ -118,37 +119,22 @@ class SttPipeline(
                     }
 
                     // Ensure engine is ready for this language
-                    var activeLanguage = language
                     if (!engine.isReady || engine.currentLanguage != language) {
                         try {
-                            Log.d(TAG, "${VOICE_CAPTURE_DIAGNOSTIC_MODE.name}_CREATED")
                             engine.initialize(SttConfig(language = language))
-                            Log.d(TAG, "${VOICE_CAPTURE_DIAGNOSTIC_MODE.name}_MODEL_READY")
-                            Log.d(TAG, "${VOICE_CAPTURE_DIAGNOSTIC_MODE.name}_STARTED")
+                            Log.d(TAG, "ENGINE_MODEL_READY")
                         } catch (e: Throwable) {
                             Log.e(TAG, "Engine init threw Throwable for ${language.code}: ${e.javaClass.simpleName} - ${e.message}")
-                            // Attempt fallback initialization to base language to prevent failure
-                            val fallback = if (language == SttLanguage.ENGLISH) SttLanguage.HINDI else SttLanguage.ENGLISH
-                            try {
-                                engine.initialize(SttConfig(language = fallback))
-                                activeLanguage = fallback
-                                Log.d(TAG, "Failsafe: Switched to fallback language ${fallback.code}")
-                            } catch (_: Throwable) {
-                                Log.e(TAG, "Failsafe fallback also failed, stopping capture")
-                                withContext(Dispatchers.IO) { capture.stop() }
-                                _state.value = PipelineState.IDLE
-                                return@withLock
-                            }
+                            // The SraVaani model is multilingual + unconditioned: a failed init is
+                            // never a per-language gap, so a language "fallback" would only mislabel
+                            // results. Fail loudly instead (blocker policy — no silent substitution).
+                            withContext(Dispatchers.IO) { capture.stop() }
+                            _state.value = PipelineState.IDLE
+                            return@withLock
                         }
                     }
 
-                    if (VOICE_CAPTURE_DIAGNOSTIC_MODE == DiagnosticMode.VOSK) {
-                        Log.d(TAG, "VOSK_START")
-                    } else if (VOICE_CAPTURE_DIAGNOSTIC_MODE == DiagnosticMode.SHERPA) {
-                        Log.d(TAG, "SHERPA_START")
-                    }
-
-                    captureAudioWithVad(activeLanguage, silenceTimeoutMs)
+                    captureAudioWithVad(language, silenceTimeoutMs)
                 }
             }
     }
@@ -189,73 +175,81 @@ class SttPipeline(
         language: SttLanguage,
         silenceTimeoutMs: Long,
     ) {
-        val allSamples = mutableListOf<Short>()
+        var liveStream: SttLiveStream? = null
         var lastSpeechSample = 0
+        var totalSamples = 0
         val samplesPerSilenceTimeout = (language.sampleRate * silenceTimeoutMs / 1000).toInt()
         val frameSize = language.sampleRate / 33 // ~30ms frames for VAD
-        var samplesSinceLastPartial = 0
-        val partialIntervalSamples = language.sampleRate // ~1 second
 
-        while (_state.value == PipelineState.CAPTURING) {
-            val chunk =
-                withContext(Dispatchers.IO) {
-                    capture.readChunk(maxSamples = frameSize)
+        try {
+            // ONE streaming session for the whole utterance: audio is transcribed exactly once
+            // (cache-carried chunks), partials are cumulative — no full-buffer retranscription.
+            // AUDIO_ONLY diagnostic mode never touches the engine (opening a live session would
+            // lazily map the model, defeating the audio-diagnostic purpose).
+            if (VOICE_CAPTURE_DIAGNOSTIC_MODE != DiagnosticMode.AUDIO_ONLY) {
+                val stream = engine.startLiveStream(language)
+                liveStream = stream
+                stream.onPartial = { text ->
+                    _partialText.value = text
+                    Log.d(TAG, "Partial: \"$text\"")
                 }
-            if (chunk == null) break
-
-            // Update amplitude for UI
-            var maxAmp = 0
-            for (s in chunk) {
-                val a = kotlin.math.abs(s.toInt())
-                if (a > maxAmp) maxAmp = a
-            }
-            _amplitude.value = (maxAmp.toFloat() / Short.MAX_VALUE).coerceIn(0f, 1f)
-
-            // VAD processing
-            val vadState = vad.processFrame(chunk)
-            if (vadState == VoiceActivityDetector.State.SPEECH) {
-                lastSpeechSample = allSamples.size + chunk.size
             }
 
-            // Accumulate
-            for (s in chunk) allSamples.add(s)
-            samplesSinceLastPartial += chunk.size
-
-            // Emit partial transcription every ~1 second so the user sees live text
-            if (samplesSinceLastPartial >= partialIntervalSamples && allSamples.size >= partialIntervalSamples) {
-                samplesSinceLastPartial = 0
-                if (VOICE_CAPTURE_DIAGNOSTIC_MODE != DiagnosticMode.AUDIO_ONLY) {
-                    if (allSamples.size == chunk.size) {
-                        Log.d(TAG, "PCM_FIRST_FRAME")
-                        Log.d(TAG, "${VOICE_CAPTURE_DIAGNOSTIC_MODE.name}_FIRST_FRAME")
-                        Log.d(TAG, "${VOICE_CAPTURE_DIAGNOSTIC_MODE.name}_FIRST_ACCEPT")
+            while (_state.value == PipelineState.CAPTURING) {
+                val chunk =
+                    withContext(Dispatchers.IO) {
+                        capture.readChunk(maxSamples = frameSize)
                     }
-                    try {
-                        val partialPcm = ShortArray(allSamples.size) { allSamples[it] }
-                        val partialResult = engine.transcribe(partialPcm, language)
-                        if (partialResult.text.isNotBlank()) {
-                            _partialText.value = partialResult.text
-                            Log.d(TAG, "Partial: \"${partialResult.text}\"")
-                            Log.d(TAG, "${VOICE_CAPTURE_DIAGNOSTIC_MODE.name}_PARTIAL")
-                        }
-                    } catch (e: Throwable) {
-                        Log.e(TAG, "Partial transcription failed: ${e.javaClass.simpleName} - ${e.message}")
+                if (chunk == null) break
+
+                // Update amplitude for UI
+                var maxAmp = 0
+                for (s in chunk) {
+                    val a = kotlin.math.abs(s.toInt())
+                    if (a > maxAmp) maxAmp = a
+                }
+                _amplitude.value = (maxAmp.toFloat() / Short.MAX_VALUE).coerceIn(0f, 1f)
+
+                // VAD processing
+                val vadState = vad.processFrame(chunk)
+                if (vadState == VoiceActivityDetector.State.SPEECH) {
+                    lastSpeechSample = totalSamples + chunk.size
+                }
+
+                // Stream to the engine immediately — the engine buffers/batches internally.
+                liveStream?.pushPcm(chunk)
+                totalSamples += chunk.size
+
+                // Check if silence timeout reached after speech (when silenceTimeoutMs > 0)
+                if (silenceTimeoutMs > 0 && vadState == VoiceActivityDetector.State.SILENT && lastSpeechSample > 0) {
+                    val silenceSamples = totalSamples - lastSpeechSample
+                    if (silenceSamples >= samplesPerSilenceTimeout) {
+                        Log.d(TAG, "VAD silence timeout after ${totalSamples * 1000L / language.sampleRate}ms")
+                        break
                     }
                 }
             }
-
-            // Check if silence timeout reached after speech (when silenceTimeoutMs > 0)
-            if (silenceTimeoutMs > 0 && vadState == VoiceActivityDetector.State.SILENT && lastSpeechSample > 0) {
-                val silenceSamples = allSamples.size - lastSpeechSample
-                if (silenceSamples >= samplesPerSilenceTimeout) {
-                    Log.d(TAG, "VAD silence timeout after ${allSamples.size * 1000L / language.sampleRate}ms")
-                    break
-                }
+        } catch (e: Throwable) {
+            // Abandon the session (frees any native state). finish() below is skipped —
+            // the captured audio is unusable once the session errored.
+            liveStream?.release()
+            liveStream = null
+            if (e is CancellationException) {
+                // cancelCapture() cancelled this job — propagate instead of swallowing.
+                throw e
             }
+            Log.e(TAG, "Live streaming failed: ${e.javaClass.simpleName} - ${e.message}")
         }
 
-        // Capture complete — process the audio
-        if (allSamples.isEmpty()) {
+        if (VOICE_CAPTURE_DIAGNOSTIC_MODE == DiagnosticMode.AUDIO_ONLY) {
+            Log.d(TAG, "AUDIO_FRAME_COUNT: $totalSamples")
+            Log.d(TAG, "AUDIO_ONLY_STOP")
+            _state.value = PipelineState.IDLE
+            return
+        }
+
+        // Capture complete — finalize the streaming session for the final transcript.
+        if (liveStream == null || totalSamples == 0) {
             _state.value = PipelineState.IDLE
             return
         }
@@ -263,23 +257,13 @@ class SttPipeline(
         _state.value = PipelineState.PROCESSING
         withContext(Dispatchers.IO) { capture.stop() }
 
-        if (VOICE_CAPTURE_DIAGNOSTIC_MODE == DiagnosticMode.AUDIO_ONLY) {
-            Log.d(TAG, "AUDIO_FRAME_COUNT: ${allSamples.size}")
-            Log.d(TAG, "AUDIO_ONLY_STOP")
-            _state.value = PipelineState.IDLE
-            return
-        }
-
         try {
-            val pcm = ShortArray(allSamples.size) { allSamples[it] }
-            val result = engine.transcribe(pcm, language)
+            val result = liveStream.finish()
 
             _latestResult.value = result
             _partialText.value = result.text
             _state.value = PipelineState.COMPLETE
             Log.d(TAG, "Transcription: \"${result.text}\" (${result.type}, ${result.durationMs}ms)")
-            Log.d(TAG, "${VOICE_CAPTURE_DIAGNOSTIC_MODE.name}_FINAL")
-            Log.d(TAG, "${VOICE_CAPTURE_DIAGNOSTIC_MODE.name}_STOP")
             _state.value = PipelineState.IDLE
         } catch (e: Throwable) {
             Log.e(TAG, "Final transcription failed: ${e.javaClass.simpleName} - ${e.message}")
@@ -289,6 +273,6 @@ class SttPipeline(
 
     companion object {
         const val TAG = "SttPipeline"
-        val VOICE_CAPTURE_DIAGNOSTIC_MODE = if (app.swarsetu.BuildConfig.DEBUG) DiagnosticMode.VOSK else DiagnosticMode.PRODUCTION
+        val VOICE_CAPTURE_DIAGNOSTIC_MODE = DiagnosticMode.PRODUCTION
     }
 }

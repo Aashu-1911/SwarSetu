@@ -1,13 +1,21 @@
 package app.swarsetu.stt
 
 import android.content.Context
+import app.swarsetu.stt.sravaani.SravaaniEngine
 
 /**
  * Factory for creating [SttEngine] instances. Abstracts the concrete engine implementation so the
  * application layer (Koin DI) can swap engines without changing consumers.
  *
- * Default implementation returns a [VoskEngine] (Vosk offline STT). If Vosk's native dependencies
- * are unavailable, fall back to [DefaultSttEngine] which gracefully degrades to empty results.
+ * **Production engine: [SravaaniEngine]** (SraVaani 0.5-live, SIH 26173's mandated model).
+ * SraVaani is a single multilingual model serving ALL 10 required languages; there is no
+ * per-language model selection and no aliasing. The Vosk debug-diagnostic path and the
+ * Vosk-era engine were removed in P4 (forbidden substitute + aliased-language fallback).
+ *
+ * If ONNX Runtime is unavailable on an exotic build variant, the factory degrades to
+ * [DefaultSttEngine] (empty results, no crash) rather than silently substituting a different
+ * STT model — per the master spec's blocker policy, a missing runtime is a loud failure at
+ * packaging time, not a model swap.
  *
  * Follows the project's DI convention: the factory is bound as a Koin `single` in
  * [app.swarsetu.di.SttModule], and engines are created via [create].
@@ -22,34 +30,17 @@ class SttEngineFactory(
      *
      * Each call creates a fresh engine; the caller is responsible for calling [SttEngine.release]
      * when done. For a shared singleton engine, use Koin's `single { }` binding instead.
-     *
-     * The factory tries [VoskEngine] first; if the Vosk native library is not available, it
-     * falls back to [DefaultSttEngine] (which returns empty results but doesn't crash).
      */
-    fun create(): SttEngine {
-        if (app.swarsetu.BuildConfig.DEBUG) {
-            when (SttPipeline.VOICE_CAPTURE_DIAGNOSTIC_MODE) {
-                SttPipeline.DiagnosticMode.VOSK -> {
-                    return VoskEngine(context, modelManager)
-                }
-
-                SttPipeline.DiagnosticMode.AUDIO_ONLY -> {
-                    return DefaultSttEngine(context, modelManager)
-                }
-
-                else -> {} // Proceed to normal PRODUCTION fallback
-            }
-        }
-
-        return try {
-            // Probe for Vosk's native library — if it's not on the classpath, this will throw
-            Class.forName("org.vosk.Model")
-            VoskEngine(context, modelManager)
+    fun create(): SttEngine =
+        try {
+            // Probe for ONNX Runtime — SraVaani 0.5's execution runtime (see the version
+            // catalog pin; must match the numeric-equivalence gate version).
+            Class.forName("ai.onnxruntime.OrtEnvironment")
+            SravaaniEngine(context, modelManager)
         } catch (_: ClassNotFoundException) {
-            android.util.Log.w(TAG, "Vosk not available — using DefaultSttEngine (empty results)")
+            android.util.Log.w(TAG, "ONNX Runtime unavailable — DefaultSttEngine (empty results)")
             DefaultSttEngine(context, modelManager)
         }
-    }
 
     private companion object {
         const val TAG = "SttEngineFactory"

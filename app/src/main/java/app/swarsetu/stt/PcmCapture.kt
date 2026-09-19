@@ -39,7 +39,7 @@ import kotlinx.coroutines.withContext
  */
 class PcmCapture(
     private val context: Context,
-) {
+) : AudioCapture {
     /** Current state of the capture. */
     enum class State {
         IDLE,
@@ -51,10 +51,10 @@ class PcmCapture(
     private var _state = MutableStateFlow(State.IDLE)
 
     /** Live capture state. Observable by the UI for status indicators. */
-    val state: StateFlow<State> = _state.asStateFlow()
+    override val state: StateFlow<State> = _state.asStateFlow()
 
     /** Number of samples captured so far during the current [start]→[stop] cycle. */
-    var capturedSamples: Int = 0
+    override var capturedSamples: Int = 0
         private set
 
     /** Duration of captured audio in milliseconds. */
@@ -63,7 +63,7 @@ class PcmCapture(
     /**
      * Whether the device has a microphone and the app has [Manifest.permission.RECORD_AUDIO].
      */
-    fun hasPermission(): Boolean =
+    override fun hasPermission(): Boolean =
         ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.RECORD_AUDIO,
@@ -72,14 +72,14 @@ class PcmCapture(
     /**
      * Whether capture can start (permission granted + not already capturing).
      */
-    fun canCapture(): Boolean = hasPermission() && _state.value != State.CAPTURING
+    override fun canCapture(): Boolean = hasPermission() && _state.value != State.CAPTURING
 
     /**
      * Start capturing PCM audio. Opens the microphone.
      *
      * @return true if capture started successfully, false if the microphone couldn't be opened.
      */
-    fun start(): Boolean {
+    override fun start(): Boolean {
         if (!canCapture()) return false
 
         val bufferSize =
@@ -93,8 +93,12 @@ class PcmCapture(
             return false
         }
 
-        // Double the min buffer to avoid overruns
-        val actualBufferSize = bufferSize * 2
+        // Headroom for inference bursts: a SraVaani chunk run (~1 s of audio through the
+        // encoder) can take longer than this 2x-min ring takes to fill on the audio thread.
+        // If the ring wraps, AudioRecord silently overwrites unread samples (words clipped).
+        // 4x min (≥ ~40–80 ms of audio on typical devices) is still far below the
+        // VOICE_RECOGNITION latency budget; P10/P11 soak tests validate the choice.
+        val actualBufferSize = bufferSize * 4
 
         try {
             recorder =
@@ -134,7 +138,7 @@ class PcmCapture(
      * @param maxSamples Maximum number of samples to read. The actual number read may be fewer.
      * @return PCM samples as a ShortArray, or null when capture is not active.
      */
-    suspend fun readChunk(maxSamples: Int = SAMPLE_RATE / 10): ShortArray? =
+    override suspend fun readChunk(maxSamples: Int): ShortArray? =
         withContext(Dispatchers.IO) {
             val rec = recorder ?: return@withContext null
             if (_state.value != State.CAPTURING) return@withContext null
@@ -223,7 +227,7 @@ class PcmCapture(
     /**
      * Stop capturing and release the microphone. Idempotent.
      */
-    fun stop() {
+    override fun stop() {
         Log.d(TAG, "PCM_STOP_REQUESTED")
         if (_state.value != State.CAPTURING) return
         _state.value = State.IDLE
@@ -242,7 +246,7 @@ class PcmCapture(
     /**
      * Cancel an in-progress capture and discard all captured audio.
      */
-    fun cancel() {
+    override fun cancel() {
         Log.d(TAG, "PCM_STOP_REQUESTED (Cancel)")
         _state.value = State.IDLE
         runCatching {
@@ -257,8 +261,8 @@ class PcmCapture(
         capturedSamples = 0
     }
 
-    private companion object {
-        const val TAG = "PcmCapture"
+    companion object {
+        private const val TAG = "PcmCapture"
         const val SAMPLE_RATE = 16_000
         const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
         const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT

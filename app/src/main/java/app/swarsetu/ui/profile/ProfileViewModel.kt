@@ -61,12 +61,6 @@ class ProfileViewModel(
     private val _installedLanguages = MutableStateFlow<Set<SttLanguage>>(emptySet())
     val installedLanguages: StateFlow<Set<SttLanguage>> = _installedLanguages.asStateFlow()
 
-    private val _downloadingLanguage = MutableStateFlow<SttLanguage?>(null)
-    val downloadingLanguage: StateFlow<SttLanguage?> = _downloadingLanguage.asStateFlow()
-
-    private val _downloadProgress = MutableStateFlow(0f)
-    val downloadProgress: StateFlow<Float> = _downloadProgress.asStateFlow()
-
     fun checkInstalledLanguages() {
         viewModelScope.launch {
             val installed = SttLanguage.entries.filter { sttModelManager.isAvailable(it) }.toSet()
@@ -77,27 +71,9 @@ class ProfileViewModel(
     fun setPreferredLanguage(language: SttLanguage) {
         viewModelScope.launch {
             settings.setSttLanguageCode(language.code)
-            if (!sttModelManager.isAvailable(language)) {
-                downloadModel(language)
-            } else {
-                checkInstalledLanguages()
-            }
-        }
-    }
-
-    fun downloadModel(language: SttLanguage) {
-        if (_downloadingLanguage.value != null) return
-        _downloadingLanguage.value = language
-        _downloadProgress.value = 0f
-        viewModelScope.launch {
-            try {
-                sttModelManager.downloadSttModel(language) { progress ->
-                    _downloadProgress.value = progress
-                }
-                checkInstalledLanguages()
-            } finally {
-                _downloadingLanguage.value = null
-            }
+            // All 10 languages are served by the one packaged SraVaani model — selecting a
+            // language never triggers a download (fresh-install-offline contract).
+            checkInstalledLanguages()
         }
     }
 

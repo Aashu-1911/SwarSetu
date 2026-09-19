@@ -1,4 +1,5 @@
 import org.jlleitschuh.gradle.ktlint.reporter.ReporterType
+import java.security.MessageDigest
 import java.util.Properties
 
 plugins {
@@ -279,6 +280,9 @@ android {
     androidResources {
         // On-device model files must stay uncompressed so TFLite can mmap them from the APK.
         noCompress += listOf("tflite")
+        // SraVaani 0.5 ONNX graphs (stt/sravaani/) must also stay uncompressed so ONNX Runtime
+        // can mmap them from the APK instead of copying ~1.8 GB into RAM at session-create.
+        noCompress += listOf("onnx")
     }
 
     // AGP otherwise embeds a "Dependency metadata" blob (a compressed, signed dependency list, for Play's
@@ -318,6 +322,10 @@ android {
             // app/src/test/resources/robolectric.properties.
             isIncludeAndroidResources = true
             isReturnDefaultValues = true
+            // The packaged SraVaani graphs are real (P9 int8 encoder 638.7 MB + CTC 20.5 MB) and
+            // Robolectric opens the asset container in-heap (CppAssetManager2 → FileMap), so the
+            // default 512 MB JVM heap OOMs. 3 GB headroom covers the mmapped asset pages.
+            all { it.maxHeapSize = "3072m" }
         }
 
         // Gradle Managed Device: a headless emulator Gradle provisions/boots/tears down itself, so
@@ -416,6 +424,66 @@ val checkModerationModels =
     }
 
 tasks.named("preBuild") { dependsOn(checkModerationModels) }
+
+// P7 offline-packaging gate: when the SraVaani graphs ARE packaged (release/AAB builds;
+// debug builds may stage them via scripts/sravaani/gen_android_assets.py), verify exact size
+// + SHA-256 against the P3 export manifest so a truncated/stub/substituted graph can never
+// ship. Graphs are NOT git-tracked (provenance via scripts; see docs/STT_SRAVAANI_*.md), so
+// this task is conditional: nothing to check in a clean checkout — the engine's runtime
+// extraction check (SravaaniPackaging) covers the on-device path.
+val checkSravaaniModel =
+    tasks.register("checkSravaaniModel") {
+        description = "Fails the build if packaged SraVaani ONNX graphs are missing/corrupt (size+sha256)."
+        val graphs =
+            listOf(
+                Triple("sravaani_encoder.onnx", 638695714L, "e074e56a91e71c534b7be72bb75c023c823e0475c9a165cf3551dc461eb5c515"),
+                Triple("sravaani_ctc.onnx", 20504707L, "6001671902c431b533452c78cedc3bafdccbeb8ae4f6ed1c23c0612466e1bb31"),
+            ).map { (name, size, sha) ->
+                Triple(layout.projectDirectory.file("src/main/assets/sravaani/$name").asFile, size, sha)
+            }
+        val stamp = layout.buildDirectory.file("tmp/checkSravaaniModel.stamp")
+        inputs.files(graphs.map { it.first }).withPropertyName("sravaaniGraphs")
+        outputs.file(stamp)
+        doLast {
+            graphs.forEach { (file, expectedSize, expectedSha) ->
+                if (!file.isFile) {
+                    // Absent graphs skip verification: a clean checkout has none, and the
+                    // offline-contract enforcement (graphs must exist for a shipped build)
+                    // is applied by CI wiring this task into release builds with assets staged.
+                    return@forEach
+                }
+                if (file.length() != expectedSize) {
+                    throw GradleException(
+                        "SraVaani graph ${file.name} is ${file.length()} bytes, expected $expectedSize — " +
+                            "truncated or substituted. Re-run scripts/sravaani/gen_android_assets.py.",
+                    )
+                }
+                val md = MessageDigest.getInstance("SHA-256")
+                file.inputStream().use { s ->
+                    val buf = ByteArray(1 shl 20)
+                    while (true) {
+                        val n = s.read(buf)
+                        if (n < 0) break
+                        md.update(buf, 0, n)
+                    }
+                }
+                val actual = md.digest().joinToString("") { b -> "%02x".format(b) }
+                if (!actual.equals(expectedSha, ignoreCase = true)) {
+                    throw GradleException(
+                        "SraVaani graph ${file.name} sha256 $actual != expected $expectedSha — " +
+                            "do not ship substituted weights (SraVaani-only rule).",
+                    )
+                }
+            }
+            stamp
+                .get()
+                .asFile
+                .apply { parentFile.mkdirs() }
+                .writeText("ok")
+        }
+    }
+
+tasks.named("preBuild") { dependsOn(checkSravaaniModel) }
 
 room {
     // Export the Room schema JSON via the Room Gradle plugin (replaces the raw ksp `room.schemaLocation`
@@ -528,10 +596,12 @@ dependencies {
     // kotlinx-serialization) — no native tokenizer lib, so nothing to 16 KB-align and no .so added to the APK.
     implementation(libs.litert)
 
-    // Offline STT engine (Vosk — Kaldi-based, Apache-2.0). Ships native .so for on-device inference;
-    // models are extracted from assets, not bundled in this AAR. Used only by stt/VoskEngine;
-    // SttEngineFactory falls back to DefaultSttEngine (no-op) if Vosk is absent.
-    implementation(libs.vosk.android)
+    // SraVaani 0.5 runtime (stt/sravaani/SravaaniEngine): ONNX Runtime executes the exported
+    // encoder + CTC graphs (see gradle/libs.versions.toml for the 1.27.0 pin rationale —
+    // must match the version that passed the P3 numeric-equivalence gate). Pure inference
+    // runtime, no network, Apache-2.0/MIT. The graphs themselves land in assets/sravaani via
+    // scripts/sravaani/export_onnx.py + gen_android_assets.py (P7 gates the packaging).
+    implementation(libs.onnxruntime.android)
 
     // E2E encryption (Tink — Java + native, no Kotlin metadata / no Gradle plugin, like SQLCipher)
     implementation(libs.tink.android)
