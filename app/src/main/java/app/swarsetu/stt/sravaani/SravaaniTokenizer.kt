@@ -29,7 +29,7 @@ class SravaaniTokenizer(pieces: List<String>) {
     }
 
     private enum class Script {
-        DEVANAGARI, BENGALI, GUJARATI, ODIA, TAMIL, TELUGU, KANNADA, MALAYALAM, LATIN, COMMON
+        DEVANAGARI, BENGALI, GURMUKHI, GUJARATI, ODIA, TAMIL, TELUGU, KANNADA, MALAYALAM, ARABIC, OTHER_NON_LATIN, LATIN, COMMON
     }
 
     private fun classifyPiece(piece: String): Script {
@@ -37,38 +37,53 @@ class SravaaniTokenizer(pieces: List<String>) {
         if (clean.isEmpty() || clean == UNK_PIECE) return Script.COMMON
         var hasDevanagari = false
         var hasBengali = false
+        var hasGurmukhi = false
         var hasGujarati = false
         var hasOdia = false
         var hasTamil = false
         var hasTelugu = false
         var hasKannada = false
         var hasMalayalam = false
+        var hasArabic = false
+        var hasOtherNonLatin = false
         var hasLatin = false
 
         for (i in clean.indices) {
             val cp = clean[i].code
             when (cp) {
-                in 0x0900..0x097F -> hasDevanagari = true
+                in 0x0900..0x097F, in 0xA8E0..0xA8FF -> hasDevanagari = true
                 in 0x0980..0x09FF -> hasBengali = true
+                in 0x0A00..0x0A7F -> hasGurmukhi = true
                 in 0x0A80..0x0AFF -> hasGujarati = true
                 in 0x0B00..0x0B7F -> hasOdia = true
                 in 0x0B80..0x0BFF -> hasTamil = true
                 in 0x0C00..0x0C7F -> hasTelugu = true
                 in 0x0C80..0x0CFF -> hasKannada = true
                 in 0x0D00..0x0D7F -> hasMalayalam = true
-                in 0x0041..0x005A, in 0x0061..0x007A, in 0x00C0..0x024F -> hasLatin = true
+                in 0x0600..0x06FF, in 0x0750..0x077F, in 0x08A0..0x08FF, in 0xFB50..0xFEFF -> hasArabic = true
+                in 0x0041..0x005A, in 0x0061..0x007A, in 0x00C0..0x024F, in 0x1E00..0x1EFF -> hasLatin = true
+                in 0x0030..0x0039 -> {} // ASCII digits are common
+                in 0x0020..0x00BF, in 0x2000..0x206F -> {
+                    // Punctuation and symbols are common
+                }
+                else -> {
+                    hasOtherNonLatin = true
+                }
             }
         }
 
         return when {
             hasDevanagari -> Script.DEVANAGARI
             hasBengali -> Script.BENGALI
+            hasGurmukhi -> Script.GURMUKHI
             hasGujarati -> Script.GUJARATI
             hasOdia -> Script.ODIA
             hasTamil -> Script.TAMIL
             hasTelugu -> Script.TELUGU
             hasKannada -> Script.KANNADA
             hasMalayalam -> Script.MALAYALAM
+            hasArabic -> Script.ARABIC
+            hasOtherNonLatin -> Script.OTHER_NON_LATIN
             hasLatin -> Script.LATIN
             else -> Script.COMMON
         }

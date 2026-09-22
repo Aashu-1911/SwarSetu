@@ -152,17 +152,25 @@ class SravaaniLanguageCoverageTest {
         val pieces = loadPieces()
         val tokenizer = SravaaniTokenizer(pieces)
 
-        val nativeRanges = mapOf(
-            SttLanguage.ENGLISH to (0x0041..0x024F),
-            SttLanguage.HINDI to (0x0900..0x097F),
-            SttLanguage.MARATHI to (0x0900..0x097F),
-            SttLanguage.BENGALI to (0x0980..0x09FF),
-            SttLanguage.GUJARATI to (0x0A80..0x0AFF),
-            SttLanguage.ODIA to (0x0B00..0x0B7F),
-            SttLanguage.TAMIL to (0x0B80..0x0BFF),
-            SttLanguage.TELUGU to (0x0C00..0x0C7F),
-            SttLanguage.KANNADA to (0x0C80..0x0CFF),
-            SttLanguage.MALAYALAM to (0x0D00..0x0D7F),
+        val nativeRanges: Map<SttLanguage, List<IntRange>> = mapOf(
+            SttLanguage.ENGLISH to listOf(0x0041..0x005A, 0x0061..0x007A, 0x00C0..0x024F),
+            SttLanguage.HINDI to listOf(0x0900..0x097F),
+            SttLanguage.MARATHI to listOf(0x0900..0x097F),
+            SttLanguage.BENGALI to listOf(0x0980..0x09FF),
+            SttLanguage.GUJARATI to listOf(0x0A80..0x0AFF),
+            SttLanguage.ODIA to listOf(0x0B00..0x0B7F),
+            SttLanguage.TAMIL to listOf(0x0B80..0x0BFF),
+            SttLanguage.TELUGU to listOf(0x0C00..0x0C7F),
+            SttLanguage.KANNADA to listOf(0x0C80..0x0CFF),
+            SttLanguage.MALAYALAM to listOf(0x0D00..0x0D7F),
+        )
+
+        val nonLatinOtherRanges = listOf(
+            0x0A00..0x0A7F, // Gurmukhi
+            0x0600..0x06FF, // Arabic/Urdu
+            0x0750..0x077F,
+            0x08A0..0x08FF,
+            0xFB50..0xFEFF,
         )
 
         for (lang in SttLanguage.entries) {
@@ -170,22 +178,23 @@ class SravaaniLanguageCoverageTest {
             org.junit.Assert.assertNotNull("Mask must exist for ${lang.code}", mask)
             assertTrue("BLANK_ID (5000) must be allowed for ${lang.code}", mask!![SravaaniTokenizer.BLANK_ID])
 
-            val targetRange = nativeRanges.getValue(lang)
+            val targetRanges = nativeRanges.getValue(lang)
             for (i in pieces.indices) {
                 val core = pieces[i].replace("\u2581", "").trim()
                 if (core.isNotEmpty()) {
                     val cp = core[0].code
                     // Native script tokens must be allowed
-                    if (cp in targetRange) {
+                    if (targetRanges.any { cp in it }) {
                         assertTrue("Native piece '${pieces[i]}' must be allowed for ${lang.code}", mask[i])
                     }
                     // Non-native Indic scripts must NOT be allowed
-                    val isOtherIndic = nativeRanges.entries.any { (otherLang, range) ->
+                    val isOtherIndic = nativeRanges.entries.any { (otherLang, ranges) ->
                         otherLang != lang && otherLang != SttLanguage.ENGLISH &&
                             (lang != SttLanguage.HINDI || otherLang != SttLanguage.MARATHI) &&
                             (lang != SttLanguage.MARATHI || otherLang != SttLanguage.HINDI) &&
-                            cp in range
-                    }
+                            ranges.any { cp in it }
+                    } || nonLatinOtherRanges.any { cp in it }
+
                     if (isOtherIndic) {
                         assertEquals("Foreign piece '${pieces[i]}' must be masked out for ${lang.code}", false, mask[i])
                     }
