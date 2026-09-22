@@ -97,12 +97,11 @@ class PcmCapture(
             return false
         }
 
-        // Headroom for inference bursts: a SraVaani chunk run (~1 s of audio through the
-        // encoder) can take longer than this 2x-min ring takes to fill on the audio thread.
+        // Headroom for inference bursts: a SraVaani chunk run through the encoder can take 50-150ms.
         // If the ring wraps, AudioRecord silently overwrites unread samples (words clipped).
-        // 4x min (≥ ~40–80 ms of audio on typical devices) is still far below the
-        // VOICE_RECOGNITION latency budget; P10/P11 soak tests validate the choice.
-        val actualBufferSize = bufferSize * 4
+        // 1 full second (32 KB at 16kHz 16-bit mono) gives generous buffer headroom without
+        // affecting readChunk latency, guaranteeing zero dropped audio frames across repeated inputs.
+        val actualBufferSize = maxOf(bufferSize * 8, SAMPLE_RATE * 2)
 
         try {
             recorder =

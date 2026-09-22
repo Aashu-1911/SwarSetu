@@ -10,6 +10,7 @@ import app.swarsetu.stt.SttPipeline
 import app.swarsetu.stt.SttResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 
@@ -28,6 +29,7 @@ class VoiceMessageAdapter(
     private val translatorEngine: app.swarsetu.translation.TranslatorEngine,
     private val peers: app.swarsetu.data.PeerRepository,
     private val groups: app.swarsetu.data.GroupRepository,
+    private val settingsStore: app.swarsetu.data.settings.SettingsStore? = null,
 ) {
     private data class RoutingContext(
         val language: SttLanguage,
@@ -110,7 +112,8 @@ class VoiceMessageAdapter(
                     
                     if (targetLanguage != normalizedSource) {
                         android.util.Log.d("SW_TRANSLATION", "TRANSLATION_START ($normalizedSource -> $targetLanguage)")
-                        val protectedNouns = listOfNotNull(peer?.name)
+                        val myName = runCatching { settingsStore?.displayName?.first() }.getOrNull()
+                        val protectedNouns = listOfNotNull(peer?.name, myName).filter { it.isNotBlank() }
                         val res = translatorEngine.translate(result.text, normalizedSource, targetLanguage, protectedNouns)
                         if (res.isNotBlank() && res != result.text) {
                             translatedText = res

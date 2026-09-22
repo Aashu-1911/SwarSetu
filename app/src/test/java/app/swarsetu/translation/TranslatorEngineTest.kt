@@ -116,4 +116,49 @@ class TranslatorEngineTest {
         val unmasked4 = method.invoke(engine, text4, tagMap) as String
         assertEquals("નમસ્તે Ashish Kumar, તમારું New Delhi માં સ્વાગત છે.", unmasked4)
     }
+
+    @Test
+    fun `maskEntities handles lowercase voice STT sentences without swallowing grammar`() {
+        val method = TranslatorEngine::class.java.getDeclaredMethod("maskEntities", String::class.java, List::class.java)
+        method.isAccessible = true
+
+        val input = "my name is aashu and i am in delhi near rajiv chowk"
+        val res = method.invoke(engine, input, emptyList<String>())
+        assertNotNull(res)
+
+        val maskedField = res.javaClass.getDeclaredField("text").apply { isAccessible = true }
+        val replacementsField = res.javaClass.getDeclaredField("replacements").apply { isAccessible = true }
+
+        val maskedText = maskedField.get(res) as String
+        @Suppress("UNCHECKED_CAST")
+        val replacements = replacementsField.get(res) as Map<String, String>
+
+        assertTrue("Should extract aashu from intro pattern", replacements.values.any { it.equals("aashu", ignoreCase = true) })
+        assertTrue("Should extract delhi from critical entities", replacements.values.any { it.equals("delhi", ignoreCase = true) })
+        assertTrue("Should extract rajiv chowk from locations", replacements.values.any { it.equals("rajiv chowk", ignoreCase = true) })
+        
+        // Ensure conjunctions and prepositions are preserved in maskedText
+        assertTrue("Conjunction 'and' must be preserved in maskedText", maskedText.contains(" and "))
+        assertTrue("Pronoun 'i am' must be preserved in maskedText", maskedText.contains(" i am ") || maskedText.contains(" I am "))
+        assertTrue("Preposition 'in' must be preserved in maskedText", maskedText.contains(" in "))
+        assertTrue("Preposition 'near' must be preserved in maskedText", maskedText.contains(" near "))
+    }
+
+    @Test
+    fun `maskEntities handles action verbs and prepositions with proper nouns`() {
+        val method = TranslatorEngine::class.java.getDeclaredMethod("maskEntities", String::class.java, List::class.java)
+        method.isAccessible = true
+
+        val input = "Please call Rohit and meet Priya at AIIMS"
+        val res = method.invoke(engine, input, emptyList<String>())
+        assertNotNull(res)
+
+        val replacementsField = res.javaClass.getDeclaredField("replacements").apply { isAccessible = true }
+        @Suppress("UNCHECKED_CAST")
+        val replacements = replacementsField.get(res) as Map<String, String>
+
+        assertTrue("Should extract Rohit from call action", replacements.values.any { it.equals("Rohit", ignoreCase = true) })
+        assertTrue("Should extract Priya from meet action", replacements.values.any { it.equals("Priya", ignoreCase = true) })
+        assertTrue("Should extract AIIMS from critical entities", replacements.values.any { it.equals("AIIMS", ignoreCase = true) })
+    }
 }

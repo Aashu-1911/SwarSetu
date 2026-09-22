@@ -139,17 +139,23 @@ class SttPipeline(
                     }
 
                     // Warm up (and initialize if needed) the engine concurrently with the first chunk reads
-                    // so the mic is live immediately.
-                    val warmUpJob = async(Dispatchers.Default) {
-                        runCatching {
-                            if (!engine.isReady || engine.currentLanguage != language) {
-                                Log.d("SW_STT", "STT_ENGINE_INITIALIZE_START")
-                                engine.initialize(SttConfig(language = language))
-                                Log.d("SW_STT", "STT_ENGINE_INITIALIZE_SUCCESS")
+                    // so the mic is live immediately. On repeated inputs where the engine is already initialized
+                    // for the target language, warmUpJob is omitted so the live stream opens immediately with zero backlog.
+                    val isEngineReadyForLang = engine.isReady && engine.currentLanguage == language
+                    val warmUpJob = if (isEngineReadyForLang) {
+                        null
+                    } else {
+                        async(Dispatchers.Default) {
+                            runCatching {
+                                if (!engine.isReady || engine.currentLanguage != language) {
+                                    Log.d("SW_STT", "STT_ENGINE_INITIALIZE_START")
+                                    engine.initialize(SttConfig(language = language))
+                                    Log.d("SW_STT", "STT_ENGINE_INITIALIZE_SUCCESS")
+                                }
+                                engine.warmUp()
+                            }.onFailure {
+                                Log.e("SW_STT", "STT_ENGINE_INITIALIZE_FAILED: ${it.message}", it)
                             }
-                            engine.warmUp()
-                        }.onFailure {
-                            Log.e("SW_STT", "STT_ENGINE_INITIALIZE_FAILED: ${it.message}", it)
                         }
                     }
 

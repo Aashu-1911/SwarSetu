@@ -114,7 +114,49 @@ class SravaaniTokenizer(pieces: List<String>) {
         }
         var text = sb.toString().replace("\u2581", " ")
         if (text.startsWith(" ")) text = text.substring(1)
-        return text
+        return formatTranscript(text)
+    }
+
+    /**
+     * Cleans up whitespace, handles English pronoun capitalization ("I", "I'm"),
+     * and normalizes well-known proper acronyms/entities for optimal readability and downstream translation.
+     */
+    private fun formatTranscript(raw: String): String {
+        var clean = raw.replace(Regex("""\s+"""), " ").trim()
+        if (clean.isEmpty()) return clean
+
+        // If text contains Latin characters, apply pronoun/acronym casing
+        val hasLatin = clean.any { it in 'a'..'z' || it in 'A'..'Z' }
+        if (hasLatin) {
+            // 1. Fix standalone English pronouns: "i", "i'm", "i'll", "i've", "i'd"
+            clean = clean.replace(Regex("""\b(i)(['’](?:m|ll|ve|d|s))?\b""")) { match ->
+                "I" + (match.groupValues[2])
+            }
+
+            // 2. Format titles and honorifics
+            clean = clean.replace(Regex("""\b(?:dr|mr|mrs|ms|prof)\b\.?""", RegexOption.IGNORE_CASE)) { match ->
+                when (match.value.lowercase().removeSuffix(".")) {
+                    "dr" -> "Dr."
+                    "mr" -> "Mr."
+                    "mrs" -> "Mrs."
+                    "ms" -> "Ms."
+                    "prof" -> "Prof."
+                    else -> match.value
+                }
+            }
+
+            // 3. Properly case well-known emergency/national acronyms in English
+            val acronyms = listOf(
+                "isro" to "ISRO", "ndrf" to "NDRF", "sdrf" to "SDRF", "aiims" to "AIIMS",
+                "drdo" to "DRDO", "imd" to "IMD", "sos" to "SOS", "swarsetu" to "SwarSetu", "itantra" to "iTantra"
+            )
+            for ((lower, proper) in acronyms) {
+                val regex = Regex("""(?i)\b${Regex.escape(lower)}\b""")
+                clean = regex.replace(clean, proper)
+            }
+        }
+
+        return clean
     }
 
     companion object {

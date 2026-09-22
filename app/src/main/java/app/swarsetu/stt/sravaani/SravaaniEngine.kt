@@ -467,17 +467,20 @@ class SravaaniEngine(
                 }
             }
         }
-        val featsBuf = directFloatBuffer(total * MEL_BINS)
+        val featsBuf = internal.featsDirectBuf
+        featsBuf.clear()
         featsBuf.put(internal.scratch, 0, total * MEL_BINS)
-        featsBuf.rewind()
+        featsBuf.flip()
         val featsTensor = OnnxTensor.createTensor(
             env,
             featsBuf,
             longArrayOf(1, MEL_BINS.toLong(), total.toLong()),
         )
+        internal.featLenDirectBuf.put(0, total.toLong())
+        internal.featLenDirectBuf.rewind()
         val featLenTensor = OnnxTensor.createTensor(
             env,
-            directLongBuffer(longArrayOf(total.toLong())),
+            internal.featLenDirectBuf,
             longArrayOf(1),
         )
         val results = try {
@@ -793,7 +796,16 @@ class SravaaniEngine(
         /** Copy of [assembled] backed into a direct buffer for ORT. */
         val scratch = FloatArray(SravaaniStreamingState.CHUNK_FRAMES * MEL_BINS)
 
-        fun newStream(language: SttLanguage? = null): StreamNative = StreamNative(language)
+        /** Reusable direct buffer for encoder input features to avoid allocations per chunk. */
+        val featsDirectBuf: java.nio.FloatBuffer = directFloatBuffer(SravaaniStreamingState.CHUNK_FRAMES * MEL_BINS)
+
+        /** Reusable direct buffer for encoder feature lengths. */
+        val featLenDirectBuf: java.nio.LongBuffer = directLongBuffer(longArrayOf(0L))
+
+        fun newStream(language: SttLanguage? = null): StreamNative {
+            val effLang = language ?: _currentLanguage ?: _config?.language ?: SttLanguage.ENGLISH
+            return StreamNative(effLang)
+        }
 
         fun close() {
             runCatching { encoderSession.close() }
@@ -802,12 +814,12 @@ class SravaaniEngine(
     }
 
     /** One live stream: streaming state + RNN-T decoder states. */
-    private inner class StreamNative(val language: SttLanguage? = null) {
+    private inner class StreamNative(val language: SttLanguage) {
         val state = SravaaniStreamingState(MEL_BINS).also {
             it.attach(SravaaniFeaturizer(internals!!.tables))
         }
 
-        /** Precomputed language mask for constraining vocabulary argmax. */
+        /** Precomputed language mask for constraining vocabulary argmax to the target language script. */
         val allowedMask: BooleanArray? = internals?.tokenizer?.getAllowedMask(language)
 
         /** Frame acoustic buffer for decoder step (1 x 1024 x 1). */

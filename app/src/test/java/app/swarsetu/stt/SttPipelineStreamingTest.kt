@@ -4,7 +4,10 @@ import android.content.Context
 import android.content.pm.PackageManager
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -223,5 +226,59 @@ class SttPipelineStreamingTest {
         for (lang in SttLanguage.entries) {
             assertFalse(lang.code.isBlank())
         }
+    }
+
+    private class ScriptedAudioCapture(private val chunksPerSession: Int = 4) : AudioCapture {
+        private val _state = MutableStateFlow(PcmCapture.State.IDLE)
+        override val state: StateFlow<PcmCapture.State> = _state
+        override var capturedSamples: Int = 0
+            private set
+        private var chunkCount = 0
+
+        override fun hasPermission(): Boolean = true
+        override fun canCapture(): Boolean = _state.value != PcmCapture.State.CAPTURING
+        override fun start(): Boolean {
+            _state.value = PcmCapture.State.CAPTURING
+            capturedSamples = 0
+            chunkCount = 0
+            return true
+        }
+
+        override suspend fun readChunk(maxSamples: Int): ShortArray? {
+            if (_state.value != PcmCapture.State.CAPTURING) return null
+            if (chunkCount >= chunksPerSession) return null
+            chunkCount++
+            capturedSamples += maxSamples
+            return ShortArray(maxSamples) { 1000 }
+        }
+
+        override fun stop() {
+            _state.value = PcmCapture.State.IDLE
+        }
+
+        override fun cancel() {
+            _state.value = PcmCapture.State.IDLE
+        }
+    }
+
+    @Test
+    fun `repeated voice inputs execute cleanly across multiple sessions`() = runTest {
+        val engine = RecordingEngine()
+        engine.initialize(SttConfig(language = SttLanguage.HINDI))
+        val capture = ScriptedAudioCapture(chunksPerSession = 4)
+        val pipeline = SttPipeline(mockk(relaxed = true), engine, capture)
+
+        for (i in 1..5) {
+            pipeline.startCapture(SttLanguage.HINDI, silenceTimeoutMs = 0)
+            var waited = 0
+            while (pipeline.state.value != SttPipeline.PipelineState.IDLE && waited < 200) {
+                Thread.sleep(20)
+                waited++
+            }
+            assertEquals("Iteration $i state", SttPipeline.PipelineState.IDLE, pipeline.state.value)
+            assertEquals("final transcript", pipeline.latestResult.value?.text)
+            assertEquals(i, engine.liveSessionsOpened)
+        }
+        assertEquals(5, engine.liveSessionsOpened)
     }
 }

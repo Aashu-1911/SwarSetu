@@ -92,6 +92,9 @@ class TranslatorEngine {
         "if", "then", "else", "when", "while", "where", "after", "before", "until", "as", "than",
         "in", "on", "at", "to", "from", "with", "without", "by", "about", "against", "between", "into",
         "through", "during", "above", "below", "up", "down", "out", "off", "over", "under", "again",
+        "near", "inside", "outside", "behind", "front", "beside", "among", "across", "along", "around",
+        "towards", "toward", "past", "throughout", "via", "upon", "onto", "within", "beyond", "during",
+        "before", "after", "since", "until", "till",
         "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "first", "second", "third",
         "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
         "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december",
@@ -99,10 +102,36 @@ class TranslatorEngine {
         "person", "people", "man", "woman", "boy", "girl", "sir", "madam", "team", "group", "room", "water", "food",
     )
 
+    private val COMMON_INDIC_WORDS = setOf(
+        "है", "हूँ", "हु", "हूं", "हो", "था", "थी", "थे", "हैं", "का", "की", "के", "को", "से", "में", "पर", "ने", "और", "या", "भी", "तो", "ही", "लिए", "वाला", "वाली", "वाले", "रहा", "रही", "रहे", "सकता", "सकती", "सकते", "चाहिए", "पास", "साथ", "बोल", "कहा", "गया", "गई", "गए", "कर", "करना", "करते", "करता", "करती", "यहाँ", "वहाँ", "कहाँ", "कब", "कैसे", "क्यों", "क्या", "हम", "आप", "तुम", "मेरा", "मेरी", "मेरे", "तुम्हारा", "तुम्हारी", "तुम्हारे", "आपका", "आपकी", "आपके", "इसका", "उसका",
+        "आहे", "होतो", "होती", "होते", "आहोत", "नाही", "चा", "ची", "चे", "ला", "ना", "कडून", "वरून", "मध्ये", "वर", "आणि", "किंवा", "पण", "सुद्धा", "बोलतोय", "बोलतेय", "माझे", "माझी", "माझा", "तुमचे", "तुमची", "तुमचा",
+        "છે", "હતો", "હતી", "હતા", "છું", "છો", "છીએ", "નથી", "નો", "ની", "નું", "ના", "ને", "થી", "માં", "પર", "અને", "કે", "પણ", "હું", "તમે", "અમે", "તેઓ", "મારું", "મારો", "મારી", "તમારું", "તમારો", "તમારી",
+        "হয়", "হলো", "ছিল", "আছে", "এর", "কে", "থেকে", "তে", "এ", "এবং", "বা", "আর", "আমি", "তুমি", "আপনি", "আমার", "তোমার", "আপনার",
+        "ଅଟେ", "ଅଛି", "ଥିଲା", "ଏବଂ", "ବା", "ରୁ", "ରେ", "ମୁଁ", "ତୁମେ", "ଆପଣ", "ମୋର", "ତୁମର", "ଆପଣଙ୍କ",
+        "இருக்கிறேன்", "இருக்கிறார்", "உள்ளது", "உள்ளார்", "மற்றும்", "அல்லது", "இருந்து", "இல்", "நான்", "நீங்கள்", "என்", "உங்கள்",
+        "ఉన్నాను", "ఉన్నారు", "ఉంది", "మరియు", "లేదా", "నుండి", "లో", "నేను", "మీరు", "నా", "మీ",
+        "ಇದ್ದೇನೆ", "ಇದ್ದಾರೆ", "ಇದೆ", "ಮತ್ತು", "ಅಥವಾ", "ಇಂದ", "ನಲ್ಲಿ", "ನಾನು", "ನೀವು", "ನನ್ನ", "ನಿಮ್ಮ",
+        "ആണ്", "ഉണ്ട്", "ആയിരുന്നു", "ഒപ്പം", "നിന്ന്", "ഇൽ", "ഞാൻ", "നിങ്ങൾ", "എന്റെ", "നിങ്ങളുടെ"
+    )
+
     private val KNOWN_CRITICAL_ENTITIES = listOf(
         "SwarSetu", "iTantra", "ISRO", "NDRF", "SDRF", "AIIMS", "DRDO", "IMD", "SOS", "FIR",
-        "New Delhi", "Connaught Place", "Sector 18", "MG Road", "Marine Drive", "Park Street",
-        "Salt Lake", "IIT Bombay", "IIT Delhi", "IIT Madras", "IIT Kanpur", "IIT Kharagpur",
+        "New Delhi", "Delhi", "Connaught Place", "Sector 18", "MG Road", "Marine Drive", "Park Street",
+        "Salt Lake", "IIT Bombay", "IIT Delhi", "IIT Madras", "IIT Kanpur", "IIT Kharagpur", "IIT Roorkee",
+        "Mumbai", "Bengaluru", "Bangalore", "Kolkata", "Chennai", "Hyderabad", "Pune", "Ahmedabad",
+        "Jaipur", "Surat", "Lucknow", "Kanpur", "Nagpur", "Indore", "Thane", "Bhopal", "Visakhapatnam",
+        "Patna", "Vadodara", "Ghaziabad", "Ludhiana", "Agra", "Nashik", "Faridabad", "Meerut", "Rajkot",
+        "Varanasi", "Srinagar", "Aurangabad", "Dhanbad", "Amritsar", "Navi Mumbai", "Allahabad", "Prayagraj",
+        "Ranchi", "Howrah", "Coimbatore", "Jabalpur", "Gwalior", "Vijayawada", "Jodhpur", "Madurai",
+        "Raipur", "Kota", "Guwahati", "Chandigarh", "Solapur", "Hubli", "Mysore", "Gurgaon", "Gurugram",
+        "Noida", "Greater Noida", "Bhubaneswar", "Kochi", "Thiruvananthapuram", "Dehradun", "Shimla", "Jammu",
+        "Mangalore", "Kozhikode", "Trichy", "Tirupati", "Pondicherry", "Puducherry", "Panaji", "Goa",
+        "Shillong", "Imphal", "Agartala", "Aizawl", "Kohima", "Gangtok", "Itanagar", "Andheri", "Bandra",
+        "Borivali", "Dadar", "Juhu", "Powai", "Kalyan", "Karol Bagh", "Chandni Chowk", "Lajpat Nagar",
+        "Saket", "Hauz Khas", "Rohini", "Dwarka", "Koramangala", "Indiranagar", "Whitefield", "HSR Layout",
+        "Jayanagar", "T Nagar", "Adyar", "Anna Nagar", "Velachery", "New Town", "Gariahat", "Ballygunge",
+        "Hinjewadi", "Viman Nagar", "Kothrud", "Baner", "Banjara Hills", "Jubilee Hills", "Gachibowli",
+        "Hitec City", "Rajiv Chowk", "India", "Bharat", "Hindustan",
     )
 
     private val ENTITY_REGEX = Regex(
@@ -111,13 +140,29 @@ class TranslatorEngine {
     )
 
     private val NAME_INTRODUCTION_PATTERNS = listOf(
-        Regex("""(?i)(?:मेरा\s+नाम|नाम\s+है|माझे\s+नाव|नाव\s+आहे|મારું\s+નામ|મારુ\s+નામ|મારા\s+ભાઈ|আমার\s+নাম|என்\s+பெயர்|నా\s+పేరు|ನನ್ನ\s+ಹೆಸರು|എന്റെ\s+പേര്|ମୋର\s+ନାମ|ମୋ\s+ନାମ)\s+([^\s,।!?]+(?:\s+[^\s,।!?]+)?)"""),
-        Regex("""(?i)(?:मैं|मै|હું|मी|আমি|ഞാൻ|నేను|ನಾನು|ମୁଁ)\s+([^\s,।!?]+(?:\s+[^\s,।!?]+)?)\s+(?:हूँ|हु|हूं|છું|बोल रहा हूँ|बोलतोय)"""),
-        Regex("""(?i)(?:my\s+name\s+is|this\s+is|call\s+me|speaking\s+with|meet\s+my\s+friend)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)"""),
-        Regex("""\bI\s+am\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b(?!\s+(?:going|coming|doing|here|there|not|at|in|on|with|from|a|an|the|very|so|too|feeling|trying|ready))"""),
-        Regex("""(?i)(?:Dr\.?|Mr\.?|Mrs\.?|Ms\.?|Prof\.?|Shri|Smt\.?|Sir|Madam|Pt\.?|Pandit|Swami|श्री|श्रीमती|डॉ\.?|डॉक्टर|प्रोफेसर|मिस्टर|मिस|पंडित|स्वामी)\s+([^\s,।!?]+(?:\s+[^\s,।!?]+)?)"""),
-        Regex("""(?i)([^\s,।!?]+(?:\s+[^\s,।!?]+)?)\s+(?:जी|भाई|साहेब|साहब|सर|मैडम|दीदी|दादा|काका|अंकल|आंटी|గారు|அவர்கள்|ಅವರು)"""),
+        Regex("""(?i)(?:मेरा\s+नाम|नाम\s+है|माझे\s+नाव|नाव\s+आहे|મારું\s+નામ|મારુ\s+નામ|મારા\s+ભાઈ|আমার\s+নাম|என்\s+பெயர்|నా\s+పేరు|ನನ್ನ\s+ಹೆಸರು|എന്റെ\s+പേര്|ମୋର\s+ନାମ|ମୋ\s+ନାମ)\s+([^\s,।!?]+(?:\s+[^\s,।!?]+)*)"""),
+        Regex("""(?i)(?:मैं|मै|હું|मी|আমি|ഞാൻ|నేను|ನಾನು|ମୁଁ)\s+([^\s,।!?]+(?:\s+[^\s,।!?]+)*)\s+(?:हूँ|हु|हूं|છું|बोल रहा हूँ|बोलतोय)"""),
+        Regex("""(?i)(?:my\s+name\s+is|this\s+is|call\s+me|speaking\s+with|speaking\s+to|meet\s+my\s+friend)\s+([a-zA-Z\u0900-\u0D7F]+(?:\s+[a-zA-Z\u0900-\u0D7F]+)*)"""),
+        Regex("""(?i)\b(?:I\s+am|i'm|im)\s+([a-zA-Z\u0900-\u0D7F]+(?:\s+[a-zA-Z\u0900-\u0D7F]+)*)\b(?!\s+(?:going|coming|doing|here|there|not|at|in|on|with|from|a|an|the|very|so|too|feeling|trying|ready|fine|good|ok|okay|happy|sad|well))"""),
+        Regex("""(?i)(?:Dr\.?|Mr\.?|Mrs\.?|Ms\.?|Prof\.?|Shri|Smt\.?|Sir|Madam|Pt\.?|Pandit|Swami|श्री|श्रीमती|डॉ\.?|डॉक्टर|प्रोफेसर|मिस्टर|मिस|पंडित|स्वामी)\s+([^\s,।!?]+(?:\s+[^\s,।!?]+)*)"""),
+        Regex("""(?i)([^\s,।!?]+(?:\s+[^\s,।!?]+)*)\s+(?:जी|भाई|साहेब|साहब|सर|मैडम|दीदी|दादा|काका|अंकल|आंटी|ગારુ|அவர்கள்|ಅವರು)"""),
     )
+
+    private fun cleanCandidateNoun(candidate: String): String? {
+        val words = candidate.trim().split(Regex("""\s+"""))
+        val validWords = mutableListOf<String>()
+        for (w in words) {
+            val lower = w.lowercase().trim('.', ',', '!', '?', '।', ':', ';')
+            if (lower.isEmpty()) continue
+            if (lower in COMMON_ENGLISH_WORDS || lower in COMMON_INDIC_WORDS) {
+                break // Stop as soon as a grammar stop word / particle is reached
+            }
+            validWords.add(w.trim('.', ',', '!', '?', '।', ':', ';'))
+        }
+        if (validWords.isEmpty()) return null
+        val joined = validWords.joinToString(" ").trim()
+        return if (joined.length >= 2) joined else null
+    }
 
     private data class MaskedText(
         val text: String,
@@ -133,49 +178,72 @@ class TranslatorEngine {
 
         val allNouns = customProtectedNouns.filter { it.isNotBlank() }.toMutableList()
 
-        // 1. Add known emergency and landmark entities if present in raw text
+        // 1. Add known emergency, city, and landmark entities if present in raw text
         for (known in KNOWN_CRITICAL_ENTITIES) {
             if (rawText.contains(known, ignoreCase = true) && !allNouns.any { it.equals(known, ignoreCase = true) }) {
                 allNouns.add(known)
             }
         }
 
-        // 2. Extract multi-word & single-word names from conversational patterns
+        // 2. Extract names from conversational introduction patterns
         for (pattern in NAME_INTRODUCTION_PATTERNS) {
             val matches = pattern.findAll(rawText)
             for (match in matches) {
                 if (match.groupValues.size > 1) {
-                    val candidateName = match.groupValues[1].trim()
-                    val words = candidateName.split(Regex("""\s+"""))
-                    if (candidateName.length >= 2 && !words.all { it.lowercase() in COMMON_ENGLISH_WORDS } && !allNouns.contains(candidateName)) {
-                        allNouns.add(candidateName)
+                    val candidate = match.groupValues[1]
+                    val cleaned = cleanCandidateNoun(candidate)
+                    if (cleaned != null && !allNouns.any { it.equals(cleaned, ignoreCase = true) }) {
+                        allNouns.add(cleaned)
                     }
                 }
             }
         }
 
-        // 3. Extract multi-word capitalized proper noun phrases in English/Latin (e.g. "Ashish Kumar", "New Delhi", "Sector 18")
+        // 3. Extract entities following action/communication verbs (e.g. "call Rahul", "meet Priya", "hello Ashish")
+        val commActionPattern = Regex("""(?i)\b(?:call|tell|ask|meet|contact|speaking\s+with|speaking\s+to|talk\s+to|with|for|dear|hello|hi|hey)\s+([a-zA-Z\u0900-\u0D7F]+(?:\s+[a-zA-Z\u0900-\u0D7F]+)*)""")
+        for (match in commActionPattern.findAll(rawText)) {
+            if (match.groupValues.size > 1) {
+                val cleaned = cleanCandidateNoun(match.groupValues[1])
+                if (cleaned != null && !allNouns.any { it.equals(cleaned, ignoreCase = true) }) {
+                    allNouns.add(cleaned)
+                }
+            }
+        }
+
+        // 4. Extract location candidates following prepositions (e.g. "in Pune", "at AIIMS", "near Rajiv Chowk")
+        val prepLocationPattern = Regex("""(?i)\b(?:in|at|near|from|to|around|towards)\s+([a-zA-Z\u0900-\u0D7F]+(?:\s+[a-zA-Z\u0900-\u0D7F]+)*)""")
+        for (match in prepLocationPattern.findAll(rawText)) {
+            if (match.groupValues.size > 1) {
+                val cleaned = cleanCandidateNoun(match.groupValues[1])
+                if (cleaned != null && !allNouns.any { it.equals(cleaned, ignoreCase = true) }) {
+                    allNouns.add(cleaned)
+                }
+            }
+        }
+
+        // 5. Extract multi-word capitalized proper noun phrases in English/Latin (e.g. "Ashish Kumar", "New Delhi", "Sector 18")
         val multiWordCap = Regex("""\b[A-Z][a-zA-Z0-9_.-]*(?:\s+[A-Z0-9][a-zA-Z0-9_.-]*)+\b""").findAll(rawText)
         for (mMatch in multiWordCap) {
             val phrase = mMatch.value.trim()
-            val words = phrase.split(Regex("""\s+"""))
-            if (!words.all { it.lowercase() in COMMON_ENGLISH_WORDS } && !allNouns.contains(phrase)) {
-                allNouns.add(phrase)
+            val cleaned = cleanCandidateNoun(phrase)
+            if (cleaned != null && !allNouns.any { it.equals(cleaned, ignoreCase = true) }) {
+                allNouns.add(cleaned)
             }
         }
 
-        // 4. Extract single capitalized proper nouns in English/Latin (e.g. Ashish, Mumbai, Pune)
+        // 6. Extract single capitalized proper nouns in English/Latin (e.g. Ashish, Mumbai, Pune)
         val singleCap = Regex("""\b[A-Z][a-zA-Z0-9_]{1,25}\b""").findAll(rawText)
         for (capMatch in singleCap) {
             val word = capMatch.value.trim()
-            if (word.lowercase() !in COMMON_ENGLISH_WORDS && !allNouns.contains(word)) {
-                allNouns.add(word)
+            val cleaned = cleanCandidateNoun(word)
+            if (cleaned != null && !allNouns.any { it.equals(cleaned, ignoreCase = true) }) {
+                allNouns.add(cleaned)
             }
         }
 
-        // 5. Shield custom and dynamically extracted proper nouns (longest matches first to preserve multi-word entities)
+        // 7. Shield custom and dynamically extracted proper nouns (longest matches first to preserve multi-word entities)
         for (noun in allNouns.distinct().sortedByDescending { it.length }) {
-            if (noun.isBlank()) continue
+            if (noun.isBlank() || noun.length < 2) continue
             val unicodeBoundaryRegex = Regex("""(?i)(?<=^|[\s\p{Punct}])${Regex.escape(noun)}(?=$|[\s\p{Punct}])""")
             if (unicodeBoundaryRegex.containsMatchIn(processed)) {
                 val placeholder = "__N${counter}__"
@@ -195,7 +263,7 @@ class TranslatorEngine {
             }
         }
 
-        // 6. Shield URLs, emails, mentions, numbers, and technical acronyms
+        // 8. Shield URLs, emails, mentions, numbers, and technical acronyms
         processed = ENTITY_REGEX.replace(processed) { matchResult ->
             val placeholder = "__N${counter}__"
             replacements[placeholder] = matchResult.value

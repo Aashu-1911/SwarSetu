@@ -193,4 +193,16 @@ class SravaaniLanguageCoverageTest {
             }
         }
     }
+
+    @Test
+    fun `tokenizer properly formats transcripts with pronoun capitalization and proper nouns`() {
+        val testPieces = listOf("<unk>", "\u2581i", "\u2581am", "\u2581at", "\u2581isro", "\u2581dr", "\u2581sharma")
+        val tokenizer = SravaaniTokenizer(testPieces)
+        val decoded = tokenizer.decode(listOf(1, 2, 3, 4, 5, 6))
+
+        // Pronoun 'I', acronym 'ISRO', and title 'Dr.' must be properly formatted
+        assertTrue("Decoded text should contain capitalized pronoun I: $decoded", decoded.contains("I am"))
+        assertTrue("ISRO should be uppercase: $decoded", decoded.contains("ISRO"))
+        assertTrue("Dr. should be properly formatted: $decoded", decoded.contains("Dr."))
+    }
 }
