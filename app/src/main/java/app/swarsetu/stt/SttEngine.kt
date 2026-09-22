@@ -110,6 +110,17 @@ interface SttEngine {
     val currentLanguage: SttLanguage?
 
     /**
+     * Eagerly build any heavy native resources (ORT sessions, mmap'd graphs) that would otherwise
+     * be created on the first [transcribe] / [pushPcm] call.
+     *
+     * The default implementation is a no-op; engines with lazy initialization (SraVaani) override
+     * this to move the cost off the user-triggered PTT hot-path. [warmUp] MUST be called after
+     * [initialize]; calling it before is a no-op. Failures are swallowed — the engine degrades
+     * gracefully to lazy init on the first real call.
+     */
+    suspend fun warmUp() { /* default: no-op for engines without lazy heavy resources */ }
+
+    /**
      * Open a live streaming session (P4 push-based pipeline). The caller pushes mic chunks as
      * they are captured and receives cumulative partial transcripts through
      * [SttLiveStream.onPartial]; [SttLiveStream.finish] commits the final result over ALL

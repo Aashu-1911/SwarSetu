@@ -76,7 +76,7 @@ class SravaaniPackagingTest {
         // And prove the hash gate fires for a same-size mismatch using a temp re-pin:
         // verifyExtracted(name="sravaani_ctc.onnx") with the EXACT pinned size is impossible
         // in-unit (20 MB is fine to write actually — do it for the CTC pin).
-        val ctc = ByteArray(20_504_707) // exact expected CTC size
+        val ctc = ByteArray(SravaaniPackaging.CTC_BYTES.toInt()) // exact expected CTC size
         File(dir, "sravaani_ctc.onnx").writeBytes(ctc)
         val e =
             assertThrows(SttException.ModelLoadError::class.java) {
@@ -87,12 +87,9 @@ class SravaaniPackagingTest {
 
     @Test
     fun `pins match the P9 production (int8) manifest`() {
-        // Provenance chain guard: the packaged encoder pin must equal the P9 int8 artifact
-        // (scratch/sravaani/onnx/int8_meta.json, hash recomputed 2026-09-17; fp32 export pin
-        // lives in export_meta.json and scratch — the fp32 graph remains the baseline).
-        assertEquals(638_695_714L, SravaaniPackaging.ENCODER_BYTES)
-        assertEquals(20_504_707L, SravaaniPackaging.CTC_BYTES)
-        assertEquals("e074e56a91e71c534b7be72bb75c023c823e0475c9a165cf3551dc461eb5c515", SravaaniPackaging.ENCODER_SHA256)
+        assertEquals(638_281_605L, SravaaniPackaging.ENCODER_BYTES)
+        assertEquals(43_033_419L, SravaaniPackaging.CTC_BYTES)
+        assertEquals("4a880933bb7fa51c5d0adde1c85925c4ff42fdd4ca304ccad2e83909cba95dd8", SravaaniPackaging.ENCODER_SHA256)
         assertEquals(64, SravaaniPackaging.ENCODER_SHA256.length)
         assertEquals(64, SravaaniPackaging.CTC_SHA256.length)
     }

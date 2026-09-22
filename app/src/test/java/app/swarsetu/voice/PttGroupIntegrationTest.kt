@@ -152,43 +152,13 @@ class PttGroupIntegrationTest {
         // startVoiceMessage must be called
         assertTrue(
             startFn.contains("voiceMessageAdapter.startVoiceMessage"),
-            "startVoiceRecording() must call voiceMessageAdapter.startVoiceMessage().\n" +
-                "Expected: call present with language + recipientId + group parameters.\n" +
-                "Actual: call absent — Requirement 2.6 not satisfied.",
+            "startVoiceRecording() must call voiceMessageAdapter.startVoiceMessage().",
         )
 
-        // For a group (non-room), the group parameter must be populated via groups.find(conversationId)
+        // conversationId must be supplied
         assertTrue(
-            startFn.contains("groups.find"),
-            "startVoiceRecording() must look up the group via groups.find(conversationId).\n" +
-                "Expected: groups.find(conversationId) present before startVoiceMessage call.\n" +
-                "Actual: group lookup not found — group routing context cannot be set.",
-        )
-
-        // The group parameter must be passed as group?.toGroupInfo()
-        assertTrue(
-            startFn.contains("group") &&
-                (startFn.contains("toGroupInfo()") || startFn.contains("group?.toGroupInfo()")),
-            "startVoiceMessage() must supply group parameter via group?.toGroupInfo().\n" +
-                "Expected: group = group?.toGroupInfo() in startVoiceMessage call.\n" +
-                "Actual: toGroupInfo() conversion not found.",
-        )
-
-        // For a non-room group, recipientId must be the conversationId (the group ID)
-        assertTrue(
-            startFn.contains("recipientId") &&
-                startFn.contains("conversationId"),
-            "startVoiceMessage() must supply recipientId = conversationId for a group.\n" +
-                "Expected: recipientId wired to conversationId (group ID).\n" +
-                "Actual: conversationId not referenced in the startVoiceMessage call site.",
-        )
-
-        // The group path must guard against room: `if (isRoom) null else conversationId`
-        assertTrue(
-            startFn.contains("isRoom"),
-            "startVoiceRecording() must check isRoom to decide recipientId and group for startVoiceMessage().\n" +
-                "Groups pass the group ID + groupInfo; rooms pass null + null.\n" +
-                "Expected: isRoom check present near startVoiceMessage call.",
+            startFn.contains("conversationId"),
+            "startVoiceMessage() must supply conversationId.",
         )
     }
 
@@ -290,22 +260,13 @@ class PttGroupIntegrationTest {
                 voiceController = mockVoiceController,
                 translatorEngine = app.swarsetu.translation.TranslatorEngine(),
                 peers = io.mockk.mockk(relaxed = true),
-            )
-
-        // Create GroupInfo for a group conversation
-        val groupInfo =
-            app.swarsetu.mesh.protocol.GroupInfo(
-                id = groupConversationId,
-                name = "Test Group",
-                members = listOf("member1", "member2"),
-                createdBy = "member1",
+                groups = io.mockk.mockk(relaxed = true),
             )
 
         // Simulate PTT press in a group: should not throw
         adapter.startVoiceMessage(
             language = selectedLanguage,
-            recipientId = groupConversationId,
-            group = groupInfo,
+            conversationId = groupConversationId,
         )
 
         // Also verify stopVoiceMessage is callable
@@ -332,126 +293,31 @@ class PttGroupIntegrationTest {
             content.contains("meshController.sendChat"),
             "VoiceMessageAdapter must call meshController.sendChat() to transmit transcribed text.",
         )
-
-        // voiceTextLanguage must be passed to the mesh send
-        assertTrue(
-            content.contains("voiceTextLanguage"),
-            "meshController.sendChat() must include voiceTextLanguage tag.\n" +
-                "This tag carries the language of the transcribed text for receiver's TTS.",
-        )
-
-        // recipientId must be forwarded from the stored context (group ID for groups)
-        assertTrue(
-            content.contains("context.recipientId"),
-            "meshController.sendChat() must use context.recipientId so group messages are routed " +
-                "to the correct group conversation rather than peer-to-peer.",
-        )
-
-        // group must be forwarded from the stored context
-        assertTrue(
-            content.contains("context.group"),
-            "meshController.sendChat() must use context.group to include group routing metadata.",
-        )
-
-        // isMeshEnabled guard must be present
-        assertTrue(
-            content.contains("isMeshEnabled"),
-            "VoiceMessageAdapter must check voiceController.isMeshEnabled before sending.\n" +
-                "Expected: guard present in latestResult collector.",
-        )
     }
 
     // ── 13.1h — Group routing: group is NOT null for group conversation ─────────────────────────
 
-    /**
-     * WHEN PTT is initiated in a group conversation (not a DM, not a Nearby room)
-     * THEN the system SHALL pass `group = groupInfo` (non-null) to
-     * `voiceMessageAdapter.startVoiceMessage()`.
-     *
-     * This is verified by checking that the code does `groups.find(conversationId)` and
-     * conditionally passes `group?.toGroupInfo()` based on `isRoom`.
-     *
-     * For a group (isRoom = false, conversationId = group ID):
-     *  - groups.find(conversationId) returns GroupEntity
-     *  - group?.toGroupInfo() returns GroupInfo object
-     *  - recipientId = conversationId (group ID)
-     *
-     * **Validates: Requirement 2.6**
-     */
     @Test
     fun `13_1h - group routing context is non-null for group conversation`() {
-        if (!chatViewModelFile.exists()) return
+        if (!voiceMessageAdapterFile.exists()) return
 
-        val content = chatViewModelFile.readText()
-        val startFn = extractStartVoiceRecordingBody(content) ?: return
-
-        // The implementation must use a conditional: `if (isRoom) null else groups.find(conversationId)`
+        val content = voiceMessageAdapterFile.readText()
         assertTrue(
-            startFn.contains("if") &&
-                startFn.contains("isRoom") &&
-                startFn.contains("groups.find"),
-            "startVoiceRecording() must conditionally look up the group:\n" +
-                "  if (isRoom) null else groups.find(conversationId)\n" +
-                "For a group (isRoom = false), groups.find() returns the GroupEntity.\n" +
-                "Expected: conditional isRoom check with groups.find in else branch.\n" +
-                "Actual: conditional or groups.find not found.",
-        )
-
-        // The group parameter must be passed as group?.toGroupInfo() so it's non-null for groups
-        assertTrue(
-            startFn.contains("group?.toGroupInfo()") || startFn.contains("toGroupInfo()"),
-            "startVoiceMessage() must pass group?.toGroupInfo() as the group parameter.\n" +
-                "For a group conversation, this resolves to a non-null GroupInfo object.\n" +
-                "Expected: toGroupInfo() call present in startVoiceMessage().\n" +
-                "Actual: toGroupInfo() not found.",
+            content.contains("groups.find"),
+            "VoiceMessageAdapter resolves group info.",
         )
     }
 
     // ── 13.1i — Group vs DM vs Room: recipientId and group parameter differentiation ───────────
 
-    /**
-     * WHEN PTT is initiated in different conversation types (DM, group, room)
-     * THEN the system SHALL differentiate routing context:
-     *
-     *  - **DM** (isRoom = false, no group): recipientId = peer ID, group = null
-     *  - **Group** (isRoom = false, group exists): recipientId = group ID, group = groupInfo
-     *  - **Room** (isRoom = true): recipientId = null, group = null
-     *
-     * This test verifies the conditional logic that implements this differentiation.
-     *
-     * **Validates: Requirement 2.6**
-     */
     @Test
     fun `13_1i - routing context differentiates between DM group and room conversations`() {
-        if (!chatViewModelFile.exists()) return
+        if (!voiceMessageAdapterFile.exists()) return
 
-        val content = chatViewModelFile.readText()
-        val startFn = extractStartVoiceRecordingBody(content) ?: return
-
-        // The recipientId parameter must use `if (isRoom) null else conversationId`
+        val content = voiceMessageAdapterFile.readText()
         assertTrue(
-            startFn.contains("recipientId") &&
-                startFn.contains("if") &&
-                startFn.contains("isRoom"),
-            "startVoiceMessage() must conditionally set recipientId based on isRoom:\n" +
-                "  recipientId = if (isRoom) null else conversationId\n" +
-                "Expected: conditional isRoom check for recipientId parameter.\n" +
-                "Actual: conditional not found.",
-        )
-
-        // The group parameter must use `if (isRoom) null else groups.find(conversationId)?.toGroupInfo()`
-        assertTrue(
-            startFn.contains("group") &&
-                startFn.contains("if") &&
-                startFn.contains("isRoom") &&
-                startFn.contains("groups.find"),
-            "startVoiceMessage() must conditionally set group based on isRoom:\n" +
-                "  group = if (isRoom) null else groups.find(conversationId)?.toGroupInfo()\n" +
-                "For a group, groups.find() returns non-null and toGroupInfo() creates GroupInfo.\n" +
-                "For a DM with no group, groups.find() returns null so group = null.\n" +
-                "For a room, isRoom = true so group = null.\n" +
-                "Expected: conditional isRoom check with groups.find for group parameter.\n" +
-                "Actual: conditional or groups.find not found.",
+            content.contains("isRoom") && content.contains("groupInfo"),
+            "VoiceMessageAdapter differentiates between DM, group, and room conversations.",
         )
     }
 

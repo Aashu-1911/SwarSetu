@@ -3,7 +3,6 @@ package app.swarsetu.ui.profile
 import app.swarsetu.TextLimits
 import app.swarsetu.data.AvatarStore
 import app.swarsetu.data.BlobRepository
-import app.swarsetu.data.relay.RelayFacts
 import app.swarsetu.data.settings.SettingsStore
 import app.swarsetu.identity.Identity
 import io.mockk.coEvery
@@ -64,7 +63,7 @@ class ProfileViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun vm() = ProfileViewModel(settings, identity, avatars, blobs, MutableStateFlow(RelayFacts()), sttModelManager)
+    private fun vm() = ProfileViewModel(settings, identity, avatars, blobs, sttModelManager)
 
     @Test
     fun loadsPersistedProfileAndIsNotDirty() =

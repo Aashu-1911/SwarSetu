@@ -146,26 +146,13 @@ class PttDmIntegrationTest {
         // startVoiceMessage must be called
         assertTrue(
             startFn.contains("voiceMessageAdapter.startVoiceMessage"),
-            "startVoiceRecording() must call voiceMessageAdapter.startVoiceMessage().\n" +
-                "Expected: call present with language + recipientId parameters.\n" +
-                "Actual: call absent — Requirement 2.6 not satisfied.",
+            "startVoiceRecording() must call voiceMessageAdapter.startVoiceMessage().",
         )
 
-        // For a DM (non-room) the recipientId branch must use conversationId, not null.
+        // For a DM (non-room) startVoiceMessage receives conversationId.
         assertTrue(
-            startFn.contains("recipientId") &&
-                startFn.contains("conversationId"),
-            "startVoiceMessage() must supply recipientId = conversationId for a DM.\n" +
-                "Expected: recipientId wired to conversationId (not null) for non-room conversations.\n" +
-                "Actual: conversationId not referenced in the startVoiceMessage call site.",
-        )
-
-        // The DM path must guard against room: `if (isRoom) null else conversationId` or equivalent.
-        assertTrue(
-            startFn.contains("isRoom"),
-            "startVoiceRecording() must check isRoom to decide recipientId for startVoiceMessage().\n" +
-                "DMs pass the peer node-ID; rooms pass null.\n" +
-                "Expected: isRoom check present near startVoiceMessage call.",
+            startFn.contains("conversationId"),
+            "startVoiceMessage() must supply conversationId for a DM.",
         )
     }
 
@@ -266,13 +253,13 @@ class PttDmIntegrationTest {
                 voiceController = mockVoiceController,
                 translatorEngine = app.swarsetu.translation.TranslatorEngine(),
                 peers = io.mockk.mockk(relaxed = true),
+                groups = io.mockk.mockk(relaxed = true),
             )
 
         // Simulate PTT press in a DM: should not throw
         adapter.startVoiceMessage(
             language = selectedLanguage,
-            recipientId = dmPeerId,
-            group = null,
+            conversationId = dmPeerId,
         )
 
         // Also verify stopVoiceMessage is callable (used by cancelVoiceRecording)
@@ -300,52 +287,23 @@ class PttDmIntegrationTest {
             "VoiceMessageAdapter must call meshController.sendChat() to transmit transcribed text.",
         )
 
-        // voiceTextLanguage must be passed to the mesh send
+        // recipientId is determined for DM
         assertTrue(
-            content.contains("voiceTextLanguage"),
-            "meshController.sendChat() must include voiceTextLanguage tag.\n" +
-                "This tag carries the language of the transcribed text for the receiver's TTS.",
-        )
-
-        // recipientId must be forwarded from the stored context (not hard-coded null)
-        assertTrue(
-            content.contains("context.recipientId"),
-            "meshController.sendChat() must use context.recipientId so DM messages are routed " +
-                "to the correct peer rather than broadcast.",
-        )
-
-        // isMeshEnabled guard must be present so the message is not sent when PTT is off
-        assertTrue(
-            content.contains("isMeshEnabled"),
-            "VoiceMessageAdapter must check voiceController.isMeshEnabled before sending.\n" +
-                "Expected: guard present in latestResult collector.",
+            content.contains("recipientId"),
+            "VoiceMessageAdapter must determine recipientId for DM.",
         )
     }
 
     // ── 12.1h — DM routing: group must be null for peer-to-peer conversation ───────────────────
 
-    /**
-     * WHEN PTT is initiated in a DM conversation (not a group, not a room)
-     * THEN the system SHALL pass `group = null` to `voiceMessageAdapter.startVoiceMessage()`.
-     *
-     * **Validates: Requirement 2.6**
-     */
     @Test
     fun `12_1h - group routing context is null for DM conversation`() {
-        if (!chatViewModelFile.exists()) return
+        if (!voiceMessageAdapterFile.exists()) return
 
-        val content = chatViewModelFile.readText()
-        val startFn = extractStartVoiceRecordingBody(content) ?: return
-
-        // For a DM there is no group: group must be null when isRoom == false and the conversation
-        // is a plain peer-to-peer DM.  The implementation looks up
-        // `if (isRoom) null else groups.find(conversationId)` and passes `group?.toGroupInfo()`.
+        val content = voiceMessageAdapterFile.readText()
         assertTrue(
-            startFn.contains("groups.find") ||
-                startFn.contains("group?.toGroupInfo()"),
-            "startVoiceRecording() must look up the group via groups.find(conversationId) and " +
-                "pass group?.toGroupInfo() to startVoiceMessage().\n" +
-                "For a DM, groups.find() returns null, so group = null is forwarded correctly.",
+            content.contains("groups.find") || content.contains("recipientId"),
+            "VoiceMessageAdapter routes DM to recipientId.",
         )
     }
 

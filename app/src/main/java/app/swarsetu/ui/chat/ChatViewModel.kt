@@ -715,9 +715,10 @@ class ChatViewModel(
     }
 
     fun startVoiceRecording(locked: Boolean = false): Boolean {
-        android.util.Log.d("ChatViewModel", "VOICE_START_REQUESTED")
+        android.util.Log.d("SW_VOICE", "VOICE_BUTTON_PRESSED")
+        android.util.Log.d("SW_VOICE", "VOICE_START_REQUESTED")
         if (_voiceRecording.value != null || sttPipeline.state.value != app.swarsetu.stt.SttPipeline.PipelineState.IDLE) {
-            android.util.Log.w("ChatViewModel", "VOICE_START_REJECTED: Pipeline not IDLE")
+            android.util.Log.w("SW_VOICE", "VOICE_START_REJECTED: Pipeline not IDLE")
             return false
         }
         val language = selectedSttLanguage.value
@@ -727,22 +728,17 @@ class ChatViewModel(
 
         // Set routing context SYNCHRONOUSLY before startCapture so the adapter
         // always has context when the STT result arrives.
-        // Note: We launch immediately and the STT result can't arrive until audio
-        // is captured (minimum ~500ms), so this coroutine is guaranteed to run first.
-        viewModelScope.launch {
-            val group = if (isRoom) null else groups.find(conversationId)
-            voiceMessageAdapter.startVoiceMessage(
-                language = language,
-                recipientId = if (isRoom) null else conversationId,
-                group = group?.toGroupInfo(),
-            )
-        }
+        voiceMessageAdapter.startVoiceMessage(
+            language = language,
+            conversationId = conversationId,
+        )
 
         if (sttPipeline.canCapture) {
-            android.util.Log.d("ChatViewModel", "VOICE_START_ACCEPTED (STT)")
+            android.util.Log.d("SW_VOICE", "MIC_PERMISSION_GRANTED")
+            android.util.Log.d("SW_VOICE", "VOICE_START_ACCEPTED (STT lang=${language.code})")
             sttPipeline.startCapture(language, silenceTimeoutMs = 0L)
         } else {
-            android.util.Log.w("ChatViewModel", "VOICE_START_REJECTED (STT Permission)")
+            android.util.Log.w("SW_VOICE", "MIC_PERMISSION_DENIED")
             voiceMessageAdapter.stopVoiceMessage()
             voiceController.isMeshEnabled = false
             _events.tryEmit(R.string.chat_voice_record_failed)
@@ -774,20 +770,19 @@ class ChatViewModel(
     }
 
     fun stopVoiceRecordingAndStage() {
-        android.util.Log.d("ChatViewModel", "VOICE_STOP_REQUESTED")
+        android.util.Log.d("SW_VOICE", "VOICE_SESSION_STOPPED (Stop requested)")
         if (_voiceRecording.value == null) return
         recordingTicker?.cancel()
         recordingTicker = null
 
         sttPipeline.stopCapture()
-        android.util.Log.d("ChatViewModel", "VOICE_MESSAGE_CREATED (STT Text path invoked)")
 
         _voiceRecording.value = null
-        android.util.Log.d("ChatViewModel", "VOICE_STATE_IDLE")
         // isMeshEnabled stays true until VoiceMessageAdapter clears context after sending
     }
 
     fun cancelVoiceRecording() {
+        android.util.Log.d("SW_VOICE", "VOICE_SESSION_STOPPED (Cancelled)")
         if (_voiceRecording.value == null) return
         recordingTicker?.cancel()
         recordingTicker = null
@@ -797,7 +792,6 @@ class ChatViewModel(
         voiceController.isMeshEnabled = false
 
         _voiceRecording.value = null
-        android.util.Log.d("ChatViewModel", "VOICE_STATE_IDLE (Cancelled)")
     }
 
     fun playVoice(

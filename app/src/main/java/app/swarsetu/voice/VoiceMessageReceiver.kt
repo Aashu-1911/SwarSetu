@@ -45,24 +45,30 @@ class VoiceMessageReceiver(
             // If the message has not been translated to receiver's preferred language, translate now
             if (originalLanguage != preferredLanguage && (languageToSpeak != preferredLanguage || entity.translatedText == null)) {
                 if (inputToTranslate.isNotBlank()) {
+                    android.util.Log.d("SW_RECEIVER", "RECEIVER_TRANSLATION_START ($originalLanguage -> $preferredLanguage)")
                     val myName = runCatching { settingsStore.displayName.first() }.getOrNull()
-                    val translated = if (!myName.isNullOrBlank()) {
-                        translatorEngine.translate(
-                            text = inputToTranslate,
-                            sourceLang = originalLanguage,
-                            targetLang = preferredLanguage,
-                            protectedNouns = listOf(myName),
-                        )
-                    } else {
-                        translatorEngine.translate(
-                            text = inputToTranslate,
-                            sourceLang = originalLanguage,
-                            targetLang = preferredLanguage,
-                        )
-                    }
-                    if (translated.isNotBlank() && translated != inputToTranslate) {
+                    val translated = runCatching {
+                        if (!myName.isNullOrBlank()) {
+                            translatorEngine.translate(
+                                text = inputToTranslate,
+                                sourceLang = originalLanguage,
+                                targetLang = preferredLanguage,
+                                protectedNouns = listOf(myName),
+                            )
+                        } else {
+                            translatorEngine.translate(
+                                text = inputToTranslate,
+                                sourceLang = originalLanguage,
+                                targetLang = preferredLanguage,
+                            )
+                        }
+                    }.onFailure {
+                        android.util.Log.e("SW_RECEIVER", "RECEIVER_TRANSLATION_FAILED: ${it.message}", it)
+                    }.getOrNull()
+                    if (!translated.isNullOrBlank() && translated != inputToTranslate) {
                         textToSpeak = translated
                         languageToSpeak = preferredLanguage
+                        android.util.Log.d("SW_RECEIVER", "RECEIVER_TRANSLATION_SUCCESS ($originalLanguage -> $preferredLanguage)")
 
                         // Update entity in DB with translated text for local display
                         val updatedEntity = entity.copy(

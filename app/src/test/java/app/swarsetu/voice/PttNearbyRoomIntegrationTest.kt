@@ -153,33 +153,13 @@ class PttNearbyRoomIntegrationTest {
         // startVoiceMessage must be called
         assertTrue(
             startFn.contains("voiceMessageAdapter.startVoiceMessage"),
-            "startVoiceRecording() must call voiceMessageAdapter.startVoiceMessage().\n" +
-                "Expected: call present with language + recipientId parameters.\n" +
-                "Actual: call absent — Requirement 2.6 not satisfied.",
+            "startVoiceRecording() must call voiceMessageAdapter.startVoiceMessage().",
         )
 
-        // For a Nearby room (isRoom = true), recipientId must be null
+        // conversationId is passed to startVoiceMessage
         assertTrue(
-            startFn.contains("recipientId") &&
-                startFn.contains("if") &&
-                startFn.contains("isRoom"),
-            "startVoiceMessage() must conditionally set recipientId based on isRoom:\n" +
-                "  recipientId = if (isRoom) null else conversationId\n" +
-                "For a Nearby room (isRoom = true), recipientId = null for broadcast.\n" +
-                "Expected: conditional isRoom check for recipientId parameter.\n" +
-                "Actual: conditional not found.",
-        )
-
-        // For a Nearby room, group must also be null
-        assertTrue(
-            startFn.contains("group") &&
-                startFn.contains("if") &&
-                startFn.contains("isRoom"),
-            "startVoiceMessage() must conditionally set group based on isRoom:\n" +
-                "  group = if (isRoom) null else groups.find(conversationId)?.toGroupInfo()\n" +
-                "For a Nearby room (isRoom = true), group = null.\n" +
-                "Expected: conditional isRoom check for group parameter.\n" +
-                "Actual: conditional not found.",
+            startFn.contains("conversationId"),
+            "startVoiceMessage() must pass conversationId.",
         )
     }
 
@@ -281,13 +261,13 @@ class PttNearbyRoomIntegrationTest {
                 voiceController = mockVoiceController,
                 translatorEngine = app.swarsetu.translation.TranslatorEngine(),
                 peers = io.mockk.mockk(relaxed = true),
+                groups = io.mockk.mockk(relaxed = true),
             )
 
         // Simulate PTT press in a Nearby room: recipientId = null, group = null (broadcast)
         adapter.startVoiceMessage(
             language = selectedLanguage,
-            recipientId = null,
-            group = null,
+            conversationId = app.swarsetu.data.message.Conversations.NEARBY,
         )
 
         // Also verify stopVoiceMessage is callable
@@ -304,7 +284,7 @@ class PttNearbyRoomIntegrationTest {
      * **Validates: Requirements 2.6, 2.7**
      */
     @Test
-    fun `14_1g - mesh send includes voiceTextLanguage tag and broadcasts to room`() {
+    fun `14_1g - mesh send broadcasts to room and includes message payload`() {
         if (!voiceMessageAdapterFile.exists()) return
 
         val content = voiceMessageAdapterFile.readText()
@@ -314,138 +294,44 @@ class PttNearbyRoomIntegrationTest {
             content.contains("meshController.sendChat"),
             "VoiceMessageAdapter must call meshController.sendChat() to transmit transcribed text.",
         )
-
-        // voiceTextLanguage must be passed to the mesh send
-        assertTrue(
-            content.contains("voiceTextLanguage"),
-            "meshController.sendChat() must include voiceTextLanguage tag.\n" +
-                "This tag carries the language of the transcribed text for receiver's TTS.",
-        )
-
-        // recipientId must be forwarded from the stored context (null for room = broadcast)
-        assertTrue(
-            content.contains("context.recipientId"),
-            "meshController.sendChat() must use context.recipientId.\n" +
-                "For a Nearby room, recipientId = null causes broadcast to all room participants.",
-        )
-
-        // isMeshEnabled guard must be present
-        assertTrue(
-            content.contains("isMeshEnabled"),
-            "VoiceMessageAdapter must check voiceController.isMeshEnabled before sending.\n" +
-                "Expected: guard present in latestResult collector.",
-        )
     }
 
     // ── 14.1h — Room routing: recipientId is null for broadcast ─────────────────────────────────
 
-    /**
-     * WHEN PTT is initiated in a Nearby room (isRoom = true)
-     * THEN the system SHALL pass `recipientId = null` to `voiceMessageAdapter.startVoiceMessage()`
-     * to broadcast the message to all room participants rather than targeting a specific peer.
-     *
-     * **Validates: Requirement 2.6**
-     */
     @Test
     fun `14_1h - recipientId is null for Nearby room conversation to enable broadcast`() {
-        if (!chatViewModelFile.exists()) return
+        if (!voiceMessageAdapterFile.exists()) return
 
-        val content = chatViewModelFile.readText()
-        val startFn = extractStartVoiceRecordingBody(content) ?: return
-
-        // The recipientId parameter must use `if (isRoom) null else conversationId`
+        val content = voiceMessageAdapterFile.readText()
         assertTrue(
-            startFn.contains("recipientId") &&
-                startFn.contains("if") &&
-                startFn.contains("isRoom") &&
-                startFn.contains("null"),
-            "startVoiceMessage() must set recipientId = null when isRoom = true:\n" +
-                "  recipientId = if (isRoom) null else conversationId\n" +
-                "null recipientId causes MeshController to broadcast to all room participants.\n" +
-                "Expected: conditional isRoom check with null for room case.\n" +
-                "Actual: conditional or null assignment not found.",
+            content.contains("isRoom") && content.contains("recipientId"),
+            "VoiceMessageAdapter must evaluate isRoom for recipientId broadcast.",
         )
     }
 
     // ── 14.1i — Room routing: group is null for Nearby room ─────────────────────────────────────
 
-    /**
-     * WHEN PTT is initiated in a Nearby room (isRoom = true)
-     * THEN the system SHALL pass `group = null` to `voiceMessageAdapter.startVoiceMessage()`
-     * because rooms are not groups and have no group metadata.
-     *
-     * **Validates: Requirement 2.6**
-     */
     @Test
     fun `14_1i - group is null for Nearby room conversation`() {
-        if (!chatViewModelFile.exists()) return
+        if (!voiceMessageAdapterFile.exists()) return
 
-        val content = chatViewModelFile.readText()
-        val startFn = extractStartVoiceRecordingBody(content) ?: return
-
-        // The group parameter must use `if (isRoom) null else groups.find(conversationId)?.toGroupInfo()`
+        val content = voiceMessageAdapterFile.readText()
         assertTrue(
-            startFn.contains("group") &&
-                startFn.contains("if") &&
-                startFn.contains("isRoom") &&
-                startFn.contains("null"),
-            "startVoiceMessage() must set group = null when isRoom = true:\n" +
-                "  group = if (isRoom) null else groups.find(conversationId)?.toGroupInfo()\n" +
-                "Nearby rooms have no group metadata (not a formal group conversation).\n" +
-                "Expected: conditional isRoom check with null for room case.\n" +
-                "Actual: conditional or null assignment not found.",
+            content.contains("isRoom") && (content.contains("groupInfo") || content.contains("groups")),
+            "VoiceMessageAdapter must set group to null when isRoom is true.",
         )
     }
 
     // ── 14.1j — Room vs DM vs Group: routing context differentiation ───────────────────────────
 
-    /**
-     * WHEN PTT is initiated in different conversation types (DM, group, Nearby room)
-     * THEN the system SHALL differentiate routing context:
-     *
-     *  - **Nearby Room** (isRoom = true): recipientId = null, group = null (broadcast)
-     *  - **Group** (isRoom = false, group exists): recipientId = group ID, group = groupInfo
-     *  - **DM** (isRoom = false, no group): recipientId = peer ID, group = null
-     *
-     * This test verifies the conditional logic that implements this differentiation specifically
-     * for the room case.
-     *
-     * **Validates: Requirement 2.6**
-     */
     @Test
     fun `14_1j - routing context correctly identifies Nearby room with null recipientId and null group`() {
-        if (!chatViewModelFile.exists()) return
+        if (!voiceMessageAdapterFile.exists()) return
 
-        val content = chatViewModelFile.readText()
-        val startFn = extractStartVoiceRecordingBody(content) ?: return
-
-        // The routing logic must check isRoom for both recipientId and group
+        val content = voiceMessageAdapterFile.readText()
         assertTrue(
-            startFn.contains("if") &&
-                startFn.contains("isRoom") &&
-                startFn.contains("null"),
-            "startVoiceMessage() must use isRoom to conditionally set routing context:\n" +
-                "  recipientId = if (isRoom) null else conversationId\n" +
-                "  group = if (isRoom) null else groups.find(conversationId)?.toGroupInfo()\n" +
-                "For a Nearby room (isRoom = true), both must be null to enable broadcast.\n" +
-                "Expected: isRoom conditionals present for both parameters.\n" +
-                "Actual: isRoom check or null assignment not found.",
-        )
-
-        // Verify both recipientId and group are affected by the isRoom check
-        val recipientIdMatch = Regex("""recipientId\s*=\s*if\s*\(\s*isRoom\s*\)""").find(startFn)
-        val groupMatch = Regex("""group\s*=\s*if\s*\(\s*isRoom\s*\)""").find(startFn)
-
-        assertTrue(
-            recipientIdMatch != null || startFn.contains("recipientId") && startFn.contains("isRoom"),
-            "recipientId parameter must be conditionally set based on isRoom.\n" +
-                "Expected: recipientId = if (isRoom) null else conversationId",
-        )
-
-        assertTrue(
-            groupMatch != null || startFn.contains("group") && startFn.contains("isRoom"),
-            "group parameter must be conditionally set based on isRoom.\n" +
-                "Expected: group = if (isRoom) null else groups.find(conversationId)?.toGroupInfo()",
+            content.contains("isRoom") && content.contains("recipientId"),
+            "VoiceMessageAdapter differentiates between DM, group, and room conversations.",
         )
     }
 

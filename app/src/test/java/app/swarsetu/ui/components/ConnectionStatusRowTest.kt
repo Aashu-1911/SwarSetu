@@ -7,7 +7,6 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.swarsetu.R
-import app.swarsetu.data.relay.RelayPlane
 import app.swarsetu.mesh.TransportHealth
 import app.swarsetu.ui.theme.SwarSetuTheme
 import org.junit.Rule
@@ -33,90 +32,33 @@ class ConnectionStatusRowTest {
     private fun show(
         neighborCount: Int,
         health: TransportHealth,
-        relay: RelayPlane,
     ) {
         compose.setContent {
             SwarSetuTheme {
-                ConnectionStatusRow(neighborCount = neighborCount, health = health, relay = relay)
+                ConnectionStatusRow(neighborCount = neighborCount, health = health)
             }
         }
     }
 
-    private fun described(
-        label: String,
-        plane: Int?,
-    ): String = plane?.let { context.getString(R.string.chat_connection_desc, label, context.getString(it)) } ?: label
-
     @Test
-    fun aParkedPlaneLeavesTheMeshLineExactlyAsItWas() {
-        show(3, TransportHealth.Healthy, RelayPlane.Off)
+    fun connectedNodesShowsCorrectCount() {
+        show(3, TransportHealth.Healthy)
 
         val mesh = context.resources.getQuantityString(R.plurals.chat_connection_count, 3, 3)
-        compose.onNodeWithContentDescription(described(mesh, plane = null)).assertIsDisplayed()
+        compose.onNodeWithContentDescription(mesh).assertIsDisplayed()
     }
 
     @Test
-    fun bothPlanesUpKeepsTheMeshCountAndAddsOnlyTheGlyph() {
-        show(3, TransportHealth.Healthy, RelayPlane.Live)
+    fun zeroNodesHealthyShowsSearching() {
+        show(0, TransportHealth.Healthy)
 
-        val mesh = context.resources.getQuantityString(R.plurals.chat_connection_count, 3, 3)
-        compose
-            .onNodeWithContentDescription(described(mesh, R.string.chat_connection_relay_live_desc))
-            .assertIsDisplayed()
+        compose.onNodeWithContentDescription(context.getString(R.string.chat_connection_none)).assertIsDisplayed()
     }
 
     @Test
-    fun relaysCarryingWithNobodyNearbyReplacesTheEmptyMeshLine() {
-        // "No mesh nodes connected" would be false here: messages are still moving, over the Internet.
-        show(0, TransportHealth.Healthy, RelayPlane.Live)
+    fun radiosUnavailableShowsRadioOff() {
+        show(0, TransportHealth.Unavailable)
 
-        compose
-            .onNodeWithContentDescription(
-                described(
-                    context.getString(R.string.chat_connection_relay_only),
-                    R.string.chat_connection_relay_live_desc,
-                ),
-            ).assertIsDisplayed()
-    }
-
-    @Test
-    fun radiosOffButRelaysUpDropsTheTurnThemOnHint() {
-        show(0, TransportHealth.Unavailable, RelayPlane.Live)
-
-        compose
-            .onNodeWithContentDescription(
-                described(
-                    context.getString(R.string.chat_connection_relay_no_radios),
-                    R.string.chat_connection_relay_live_desc,
-                ),
-            ).assertIsDisplayed()
-    }
-
-    @Test
-    fun aSeizedRadioWithRelaysUpReadsTheSameWayAsRadiosOff() {
-        // Degraded and Unavailable differ in cause but not in consequence once the Internet is carrying.
-        show(0, TransportHealth.Degraded, RelayPlane.Live)
-
-        compose
-            .onNodeWithContentDescription(
-                described(
-                    context.getString(R.string.chat_connection_relay_no_radios),
-                    R.string.chat_connection_relay_live_desc,
-                ),
-            ).assertIsDisplayed()
-    }
-
-    @Test
-    fun aDownPlaneNeverClaimsToBeRelaying() {
-        show(0, TransportHealth.Unavailable, RelayPlane.Down)
-
-        // Nothing crosses the plane, so the radio hint is still the useful thing to say.
-        compose
-            .onNodeWithContentDescription(
-                described(
-                    context.getString(R.string.chat_connection_radio_off),
-                    R.string.chat_connection_relay_down_desc,
-                ),
-            ).assertIsDisplayed()
+        compose.onNodeWithContentDescription(context.getString(R.string.chat_connection_radio_off)).assertIsDisplayed()
     }
 }

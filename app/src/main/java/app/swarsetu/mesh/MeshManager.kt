@@ -470,6 +470,7 @@ class MeshManager(
 
         // Broadcast room: plaintext (no fixed recipient set to encrypt to) — the legacy path, unchanged.
         if (recipientId == null && group == null) {
+            Log.d("SW_MESH", "SERIALIZE_START (Room Broadcast)")
             messages.save(
                 MessageEntity(
                     id = id,
@@ -513,12 +514,16 @@ class MeshManager(
                     isAlert = if (isAlert) true else null,
                     location = location,
                 )
+            Log.d("SW_MESH", "SERIALIZE_SUCCESS (Room Broadcast)")
+            Log.d("SW_MESH", "MESH_SEND_START (Room Broadcast id=$id)")
             originateSigned(chatEnvelope(id, me, sentAt, recipientId = null, group = null, content))
+            Log.d("SW_MESH", "MESH_SEND_SUCCESS (Room Broadcast id=$id)")
             return true
         }
 
         // DM or group: end-to-end encrypt. The attachment (if any) is encrypted to its own key and
         // re-addressed by its ciphertext hash; body/mentions/attachment refs go into the sealed content.
+        Log.d("SW_MESH", "ENCRYPT_START (id=$id, recipient=$recipientId, group=${group?.id})")
         val sealedAttachment = attachment?.let { sealAttachment(it) }
         val content =
             MessageContent(
@@ -537,6 +542,11 @@ class MeshManager(
                 location = location,
             )
         val envelope = sealEnvelopeFor(id, me, sentAt, recipientId, group, content)
+        if (envelope != null) {
+            Log.d("SW_MESH", "ENCRYPT_SUCCESS (id=$id)")
+        } else {
+            Log.w("SW_MESH", "ENCRYPT_FAILED: No known recipient key for id=$id")
+        }
         // Persist our own plaintext copy regardless, so the sender always sees their message. A DM whose
         // recipient key isn't known yet is flagged pendingKey so handleProfile can retransmit it when the
         // recipient's profile (carrying the key) finally arrives (groups stay unsent, as before).
@@ -580,6 +590,7 @@ class MeshManager(
         // the type, so publishing it only told a carrier whether this was a photo or a voice note. The
         // decryption key is sealed there too, and a fresh per-send key means the ciphertext hash never
         // correlates identical images across sends — so this leaks only "this message carries ~N opaque bytes".
+        Log.d("SW_MESH", "MESH_SEND_START (id=$id)")
         originateSigned(
             chatEnvelope(
                 id,
@@ -593,6 +604,7 @@ class MeshManager(
                 ),
             ),
         )
+        Log.d("SW_MESH", "MESH_SEND_SUCCESS (id=$id)")
         return true
     }
 

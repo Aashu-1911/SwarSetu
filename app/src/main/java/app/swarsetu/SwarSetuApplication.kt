@@ -17,6 +17,8 @@ import app.swarsetu.di.uiModule
 import app.swarsetu.di.voiceModule
 import app.swarsetu.moderation.MlTextModerator
 import app.swarsetu.notifications.Notifier
+import app.swarsetu.stt.SttLanguage
+import app.swarsetu.stt.SttPipeline
 import app.swarsetu.ui.image.BlobFetcher
 import app.swarsetu.ui.image.BlobKeyer
 import coil3.ImageLoader
@@ -61,6 +63,16 @@ class SwarSetuApplication :
         // gracefully if the assets fail to load, and warmUp() dedupes against a racing first send.
         koinApp.koin.get<CoroutineScope>().launch {
             koinApp.koin.get<MlTextModerator>().warmUp()
+        }
+
+        // Pre-warm the SraVaani STT engine off the PTT hot-path. On first use this builds the
+        // ORT sessions (5–15 s: 680 MB SHA-256 verify + mmap), blocking the first PTT press
+        // completely. Fire-and-forget here so users open a chat and press PTT immediately without
+        // waiting. The language used here is the default; SttPipeline re-initializes for the
+        // active language when startCapture() is called and the engine is multilingual (no swap
+        // cost). prewarm() is idempotent — no-op if sessions are already live.
+        koinApp.koin.get<CoroutineScope>().launch {
+            koinApp.koin.get<SttPipeline>().prewarm(SttLanguage.HINDI)
         }
 
         // Seed the shipped default spools once (res/values/spools.xml). Opens no socket by itself — the

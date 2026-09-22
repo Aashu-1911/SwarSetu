@@ -2,23 +2,14 @@ package app.swarsetu.stt
 
 import android.content.Context
 import app.swarsetu.stt.sravaani.SravaaniEngine
+import java.io.File
 
 /**
  * Factory for creating [SttEngine] instances. Abstracts the concrete engine implementation so the
  * application layer (Koin DI) can swap engines without changing consumers.
  *
  * **Production engine: [SravaaniEngine]** (SraVaani 0.5-live, SIH 26173's mandated model).
- * SraVaani is a single multilingual model serving ALL 10 required languages; there is no
- * per-language model selection and no aliasing. The Vosk debug-diagnostic path and the
- * Vosk-era engine were removed in P4 (forbidden substitute + aliased-language fallback).
- *
- * If ONNX Runtime is unavailable on an exotic build variant, the factory degrades to
- * [DefaultSttEngine] (empty results, no crash) rather than silently substituting a different
- * STT model — per the master spec's blocker policy, a missing runtime is a loud failure at
- * packaging time, not a model swap.
- *
- * Follows the project's DI convention: the factory is bound as a Koin `single` in
- * [app.swarsetu.di.SttModule], and engines are created via [create].
+ * SraVaani is a single multilingual model serving ALL 10 required languages.
  */
 class SttEngineFactory(
     private val context: Context,
@@ -27,22 +18,45 @@ class SttEngineFactory(
     /**
      * Create a new [SttEngine] instance. The engine is not initialized — call [SttEngine.initialize]
      * before use.
-     *
-     * Each call creates a fresh engine; the caller is responsible for calling [SttEngine.release]
-     * when done. For a shared singleton engine, use Koin's `single { }` binding instead.
      */
-    fun create(): SttEngine =
-        try {
-            // Probe for ONNX Runtime — SraVaani 0.5's execution runtime (see the version
-            // catalog pin; must match the numeric-equivalence gate version).
+    fun create(): SttEngine {
+        // 1. Check ONNX Runtime availability.
+        val ortAvailable = try {
             Class.forName("ai.onnxruntime.OrtEnvironment")
-            SravaaniEngine(context, modelManager)
+            true
         } catch (_: ClassNotFoundException) {
-            android.util.Log.w(TAG, "ONNX Runtime unavailable — DefaultSttEngine (empty results)")
-            DefaultSttEngine(context, modelManager)
+            false
         }
+
+        if (!ortAvailable) {
+            android.util.Log.e(TAG, "ONNX Runtime unavailable — cannot load SraVaani engine")
+            return DefaultSttEngine(context, modelManager)
+        }
+
+        // 2. Check that the SraVaani ONNX graphs are present — either in APK assets (fresh
+        //    install) or already extracted to app-private storage (post-first-use / sideloaded).
+        val extractDir = File(File(context.filesDir, "stt/sravaani"), "sravaani_encoder.onnx")
+        val encoderPresent = extractDir.isFile || try {
+            context.assets.open("sravaani/sravaani_encoder.onnx").use { it.read() >= 0 }
+        } catch (_: Exception) {
+            false
+        }
+
+        if (!encoderPresent) {
+            android.util.Log.w(
+                TAG,
+                "SraVaani ONNX graphs missing from both APK assets and app-private storage" +
+                    " — fallback to DefaultSttEngine"
+            )
+            return DefaultSttEngine(context, modelManager)
+        }
+
+        // 3. All prerequisites met: use production SraVaani engine.
+        return SravaaniEngine(context, modelManager)
+    }
 
     private companion object {
         const val TAG = "SttEngineFactory"
     }
 }
+

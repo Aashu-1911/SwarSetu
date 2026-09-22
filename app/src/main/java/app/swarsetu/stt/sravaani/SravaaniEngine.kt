@@ -104,22 +104,28 @@ class SravaaniEngine(
 
     override suspend fun initialize(config: SttConfig) =
         mutex.withLock {
-            check(!released) { throw SttException.EngineNotReady("engine was released") }
-            // Verify packaging BEFORE any state mutation — a failed initialize must not
-            // leave the engine claiming readiness (P10: no half-initialized states).
-            requireGraphsPresent()
-            _config = config
-            _currentLanguage = config.language
-            modelManager.markLoaded(
-                SttModelInfo(
-                    language = config.language,
-                    modelPath = ASSET_DIR,
-                    sizeBytes = GRAPH_ENCODER_BYTES + GRAPH_CTC_BYTES,
-                    description = "SraVaani 0.5-live (multilingual, 29a15303, MIT)",
-                ),
-            )
-            Log.i(TAG, "SraVaani 0.5 initialized (packaging verified, sessions lazy)")
-            Unit
+            Log.d("SW_SRAVAANI", "STT_ENGINE_INITIALIZE_START (lang=${config.language.code})")
+            try {
+                check(!released) { throw SttException.EngineNotReady("engine was released") }
+                // Verify packaging BEFORE any state mutation — a failed initialize must not
+                // leave the engine claiming readiness (P10: no half-initialized states).
+                requireGraphsPresent()
+                _config = config
+                _currentLanguage = config.language
+                modelManager.markLoaded(
+                    SttModelInfo(
+                        language = config.language,
+                        modelPath = ASSET_DIR,
+                        sizeBytes = GRAPH_ENCODER_BYTES + GRAPH_CTC_BYTES,
+                        description = "SraVaani 0.5-live (multilingual, 29a15303, MIT)",
+                    ),
+                )
+                Log.i("SW_SRAVAANI", "STT_ENGINE_INITIALIZE_SUCCESS (SraVaani 0.5 initialized)")
+                Unit
+            } catch (e: Exception) {
+                Log.e("SW_SRAVAANI", "STT_ENGINE_INITIALIZE_FAILED: ${e.message}", e)
+                throw e
+            }
         }
 
     override suspend fun setLanguage(language: SttLanguage) {
@@ -136,20 +142,43 @@ class SravaaniEngine(
     }
 
     override suspend fun release() {
-        val done = mutex.withLock {
+        mutex.withLock {
             released = true
             runCatching { internals?.close() }
             internals = null
             _currentLanguage?.let { modelManager.markReleased(it) }
             _config = null
             Log.i(TAG, "SraVaani engine released")
-            Unit
         }
         // OUTSIDE the lock: drain any queued abandoned-stream closes (they need the mutex;
         // shutting down while holding it would deadlock the closer thread).
         streamCloser.shutdown()
         streamCloser.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS)
-        done
+    }
+
+    /**
+     * Eagerly build the ORT sessions so they are ready before the first PTT press.
+     *
+     * On first call (after [initialize]): calls [extractGraphs] (SHA-256 verify + possible
+     * 680 MB copy from assets) then creates the ORT encoder + CTC sessions. All of this is
+     * on [Dispatchers.Default], inside the [mutex], so it serializes safely with any racing
+     * batch or live-stream call.  Failures are logged and swallowed — the engine falls back to
+     * lazy init on the first real [transcribe]/[pushPcm] (same as before this method existed).
+     *
+     * On subsequent calls: the [internals] reference is already populated; this is O(1).
+     */
+    override suspend fun warmUp() {
+        if (released || _config == null) return // not initialized yet — nothing to warm
+        runCatching {
+            mutex.withLock {
+                if (!released && _config != null) {
+                    lazyInternals() // idempotent: returns the cached Internals after first call
+                    Log.i(TAG, "warmUp: ORT sessions ready")
+                }
+            }
+        }.onFailure { e ->
+            Log.w(TAG, "warmUp failed (will retry lazily on first use): ${e.javaClass.simpleName} — ${e.message}")
+        }
     }
 
     /**
@@ -424,6 +453,7 @@ class SravaaniEngine(
         val total = state.assembleChunk(internal.assembled)
         require(total > 0) { "runChunk called with no chunk ready" }
         val env = internal.env
+        Log.d("SW_SRAVAANI", "RUN_CHUNK_START (featIdx=${state.featIdx}, frames=$total)")
 
         // Transpose the frame-major assembly (T x mel) into the mel-major graph layout
         // (mel x T), then hand ORT a fresh direct buffer (shape varies on the finalize tail,
@@ -454,10 +484,7 @@ class SravaaniEngine(
             internal.encoderSession.run(
                 mapOf(
                     "feats" to featsTensor,
-                    "feat_len" to featLenTensor,
-                    "cache_last_channel" to stream.cacheCh,
-                    "cache_last_time" to stream.cacheTc,
-                    "cache_last_channel_len" to stream.cacheLen,
+                    "feature_lengths" to featLenTensor,
                 ),
             )
         } finally {
@@ -465,64 +492,146 @@ class SravaaniEngine(
             featLenTensor.close()
         }
 
-        // The result scope owns `enc` and the cache_next_* outputs — everything that touches
-        // them must happen inside this block. (enc feeds the CTC session directly.)
-        // Access is BY INDEX: Result.get(String) returns OptionalOnnxValue in modern ORT,
-        // while get(Int) returns OnnxValue directly. Index order is pinned by the export's
-        // output_names: [enc, enc_len, cache_next_channel, cache_next_time, cache_next_len].
         results.use { r ->
-            val encLen = (r.get(1) as OnnxTensor).longBuffer.get(0)
+            val encTensor = r.get(0) as OnnxTensor
+            val encLenTensor = r.get(1) as OnnxTensor
+            val encLen = encLenTensor.longBuffer.get(0).toInt()
+            val encBuffer = encTensor.floatBuffer
+            encBuffer.rewind()
+            val encShape = encTensor.info.shape
+            val encTime = if (encShape.size >= 3) encShape[2].toInt() else (encBuffer.remaining() / ENC_D_MODEL.toInt())
 
-            // ---- CTC head over the raw encoder output tensor (B, 1024, T') ----
-            val logitsResult = internal.ctcSession.run(mapOf("enc" to (r.get(0) as OnnxTensor)))
-            logitsResult.use { lr ->
-                val lp = (lr.get(0) as OnnxTensor).floatBuffer
-                lp.rewind()
-                val frames = lp.remaining() / VOCAB_PLUS_BLANK
-                require(lp.remaining() % VOCAB_PLUS_BLANK == 0) {
-                    "ctc logits size ${lp.remaining()} not a multiple of $VOCAB_PLUS_BLANK"
+            val validFrames = minOf(encLen, encTime)
+            Log.d("SW_SRAVAANI", "ENCODER_SUCCESS (encLen=$encLen, encTime=$encTime, validFrames=$validFrames)")
+
+            var newTokensCount = 0
+            // ---- TDT / RNN-T greedy decoding loop over acoustic frames t ----
+            var t = 0
+            while (t < validFrames) {
+                // Slice acoustic frame t: shape [1, 1024, 1]
+                for (d in 0 until ENC_D_MODEL.toInt()) {
+                    stream.fBuf.put(d, encBuffer.get(d * encTime + t))
                 }
-                val valid = minOf(encLen, frames.toLong()).toInt()
-                // Layout (T, V+1) row-major (TIME-major): element (t, v) at t * (V+1) + v.
-                // The export's LogSoftmax tail flattens to (1, T, 5001); reading it as (1, V, T)
-                // picks TIME indices as token ids (garbage single-char transcripts) — the exact
-                // bug the FLEURS arbitration caught on 2026-09-17.
-                val ids = IntArray(valid)
-                for (t in 0 until valid) {
-                    val base = t * VOCAB_PLUS_BLANK
-                    var best = 0
-                    var bestVal = Float.NEGATIVE_INFINITY
-                    for (v in 0 until VOCAB_PLUS_BLANK) {
-                        val x = lp.get(base + v)
-                        if (x > bestVal) {
-                            bestVal = x
-                            best = v
+                stream.fBuf.rewind()
+
+                var symbolsInFrame = 0
+                var advanceFrames = 1
+                while (symbolsInFrame < MAX_SYMBOLS_PER_FRAME) {
+                    stream.tgtBuf.put(0, minOf(stream.prevToken, BLANK_ID))
+                    stream.tgtBuf.rewind()
+                    stream.tlenBuf.put(0, 1)
+                    stream.tlenBuf.rewind()
+                    stream.hBuf.rewind()
+                    stream.cBuf.rewind()
+
+                    val fTensor = OnnxTensor.createTensor(env, stream.fBuf, longArrayOf(1, ENC_D_MODEL, 1))
+                    val tgtTensor = OnnxTensor.createTensor(env, stream.tgtBuf, longArrayOf(1, 1))
+                    val tlenTensor = OnnxTensor.createTensor(env, stream.tlenBuf, longArrayOf(1))
+                    val hTensor = OnnxTensor.createTensor(env, stream.hBuf, longArrayOf(1, 1, RNNT_HIDDEN_DIM))
+                    val cTensor = OnnxTensor.createTensor(env, stream.cBuf, longArrayOf(1, 1, RNNT_HIDDEN_DIM))
+
+                    val stepResult = try {
+                        internal.ctcSession.run(
+                            mapOf(
+                                "f" to fTensor,
+                                "tgt" to tgtTensor,
+                                "tlen" to tlenTensor,
+                                "h_in" to hTensor,
+                                "c_in" to cTensor,
+                            ),
+                        )
+                    } finally {
+                        fTensor.close()
+                        tgtTensor.close()
+                        tlenTensor.close()
+                        hTensor.close()
+                        cTensor.close()
+                    }
+
+                    advanceFrames = 1
+
+                    stepResult.use { sr ->
+                        val logitsTensor = sr.get(0) as OnnxTensor
+                        val logitsBuf = logitsTensor.floatBuffer
+                        logitsBuf.rewind()
+                        val totalLogits = logitsBuf.remaining()
+
+                        // 1. Vocabulary logits: 0 until minOf(totalLogits, VOCAB_WITH_BLANK = 5001)
+                        var bestToken = 0
+                        var maxLogit = Float.NEGATIVE_INFINITY
+                        var secondToken = 0
+                        var secondLogit = Float.NEGATIVE_INFINITY
+                        val vocabLimit = minOf(totalLogits, VOCAB_WITH_BLANK)
+                        for (v in 0 until vocabLimit) {
+                            val l = logitsBuf.get(v)
+                            if (l > maxLogit) {
+                                secondLogit = maxLogit
+                                secondToken = bestToken
+                                maxLogit = l
+                                bestToken = v
+                            } else if (l > secondLogit) {
+                                secondLogit = l
+                                secondToken = v
+                            }
+                        }
+
+                        // 2. Duration logits: VOCAB_WITH_BLANK until totalLogits (indices 5001..5005 -> durations 0..4)
+                        var bestDur = 0
+                        var maxDurLogit = Float.NEGATIVE_INFINITY
+                        for (d in VOCAB_WITH_BLANK until totalLogits) {
+                            val l = logitsBuf.get(d)
+                            if (l > maxDurLogit) {
+                                maxDurLogit = l
+                                bestDur = d - VOCAB_WITH_BLANK
+                            }
+                        }
+
+                        if (t % 2 == 0 || bestToken < BLANK_ID) {
+                            Log.d("SW_SRAVAANI", "FRAME $t (sym=$symbolsInFrame): vocabTop1=$bestToken ($maxLogit), top2=$secondToken ($secondLogit), dur=$bestDur ($maxDurLogit)")
+                        }
+
+                        if (bestToken >= BLANK_ID) {
+                            // Blank token: advance to next acoustic frame
+                            advanceFrames = if (bestDur > 0) bestDur else 1
+                            symbolsInFrame = MAX_SYMBOLS_PER_FRAME // finish symbol loop for this frame
+                        } else {
+                            // Non-blank token: emit and advance decoder/predictor state
+                            state.tokens.add(bestToken)
+                            stream.prevToken = bestToken
+                            newTokensCount++
+                            Log.d("SW_SRAVAANI", "EMIT_TOKEN: $bestToken (logit=$maxLogit, frame=$t, dur=$bestDur)")
+
+                            val nextH = (sr.get(2) as OnnxTensor).floatBuffer
+                            val nextC = (sr.get(3) as OnnxTensor).floatBuffer
+                            nextH.rewind()
+                            nextC.rewind()
+                            stream.hBuf.clear()
+                            stream.hBuf.put(nextH)
+                            stream.hBuf.rewind()
+                            stream.cBuf.clear()
+                            stream.cBuf.put(nextC)
+                            stream.cBuf.rewind()
+
+                            symbolsInFrame++
+                            if (bestDur > 0) {
+                                advanceFrames = bestDur
+                                symbolsInFrame = MAX_SYMBOLS_PER_FRAME // finish symbol loop for this frame
+                            } else {
+                                advanceFrames = 0 // stay on same frame to emit next token
+                            }
                         }
                     }
-                    ids[t] = best
-                }
-                stream.decoder.acceptFrameIds(ids, state.tokens)
-            }
 
-            // ---- adopt next-caches BY COPY (outputs die with this result) ----
-            val nextCh = (r.get(2) as OnnxTensor).floatBuffer
-            val nextTc = (r.get(3) as OnnxTensor).floatBuffer
-            val nextLen = (r.get(4) as OnnxTensor).longBuffer
-            require(nextCh.remaining() == CACHE_CH_ELEMS) {
-                "cache_next_channel has ${nextCh.remaining()} elems, expected $CACHE_CH_ELEMS"
+                    if (advanceFrames > 0) {
+                        t += advanceFrames
+                        break
+                    }
+                }
+                if (symbolsInFrame == 0 || advanceFrames == 0) {
+                    t++
+                }
             }
-            require(nextTc.remaining() == CACHE_TC_ELEMS) {
-                "cache_next_time has ${nextTc.remaining()} elems, expected $CACHE_TC_ELEMS"
-            }
-            nextCh.rewind()
-            nextTc.rewind()
-            stream.chBuf.clear()
-            stream.chBuf.put(nextCh)
-            stream.chBuf.rewind() // ORT reads inputs from the buffer's current position
-            stream.tcBuf.clear()
-            stream.tcBuf.put(nextTc)
-            stream.tcBuf.rewind()
-            stream.lenBuf.put(0, nextLen.get(0))
+            Log.d("SW_SRAVAANI", "RUN_CHUNK_DONE (newTokens=$newTokensCount, totalTokens=${state.tokens.size})")
         }
         state.advanceChunk()
     }
@@ -539,18 +648,24 @@ class SravaaniEngine(
     }
 
     private fun requireGraphsPresent() {
+        Log.d("SW_SRAVAANI", "STT_MODEL_CHECK_START")
+        val extractDir = File(context.filesDir, EXTRACT_DIR)
         for (name in listOf(ENCODER_ASSET, CTC_ASSET)) {
-            try {
-                context.assets.open("$ASSET_DIR/$name").use { stream ->
-                    require(stream.read() >= 0) { "empty asset" }
-                }
-            } catch (e: Exception) {
+            // Accept the graph from either source: APK assets (fresh install) OR already
+            // extracted to app-private storage (post-first-use, sideloaded, or downloaded).
+            val inAssets = try {
+                context.assets.open("$ASSET_DIR/$name").use { it.read() >= 0 }
+            } catch (_: Exception) { false }
+            val inFilesDir = File(extractDir, name).isFile
+            if (!inAssets && !inFilesDir) {
+                Log.e("SW_SRAVAANI", "STT_MODEL_CHECK_FAILED ($name missing)")
                 throw SttException.ModelLoadError(
-                    "$ASSET_DIR/$name (graphs not packaged yet — see P7 packaging milestone)",
-                    e,
+                    "$ASSET_DIR/$name not found in APK assets or app-private storage " +
+                        "(${extractDir.absolutePath})",
                 )
             }
         }
+        Log.d("SW_SRAVAANI", "STT_MODEL_CHECK_SUCCESS")
     }
 
     /** Build (or reuse) the native sessions + tables. Heavy: first call maps ~1.8 GB. */
@@ -561,6 +676,7 @@ class SravaaniEngine(
             throw SttException.EngineNotReady("engine was released or never initialized")
         }
         internals?.let { return it }
+        Log.d("SW_SRAVAANI", "STT_ENGINE_CREATE_START")
         try {
             val dir = extractGraphs()
             val env = OrtEnvironment.getEnvironment()
@@ -588,13 +704,16 @@ class SravaaniEngine(
                 tables = tables,
                 tokenizer = SravaaniTokenizer(pieces),
             )
-            Log.i(TAG, "ORT sessions created (encoder + ctc), tables + tokenizer loaded")
+            Log.i("SW_SRAVAANI", "STT_ENGINE_CREATE_SUCCESS (ORT sessions created: encoder + ctc, tables + tokenizer loaded)")
             return internals!!
         } catch (e: SttException) {
+            Log.e("SW_SRAVAANI", "STT_ENGINE_CREATE_FAILED: ${e.message}", e)
             throw e
         } catch (e: OutOfMemoryError) {
+            Log.e("SW_SRAVAANI", "STT_ENGINE_CREATE_FAILED (OOM): ${e.message}", e)
             throw SttException.OutOfMemory(cause = e)
         } catch (e: Exception) {
+            Log.e("SW_SRAVAANI", "STT_ENGINE_CREATE_FAILED: ${e.message}", e)
             throw SttException.ModelLoadError(ASSET_DIR, e)
         }
     }
@@ -610,12 +729,31 @@ class SravaaniEngine(
     private fun extractGraphs(): File {
         val dir = File(context.filesDir, EXTRACT_DIR)
         val marker = File(dir, "graphs.meta")
+
+        // ── Fast path: already extracted and pinned by the version marker ──────────────────
         if (marker.exists() && marker.readText().trim() == GRAPHS_VERSION) {
             for (name in listOf(ENCODER_ASSET, CTC_ASSET)) {
                 SravaaniPackaging.verifyExtracted(dir, name)
             }
             return dir
         }
+
+        // ── Medium path: files already exist (sideloaded / from a previous install whose
+        //    marker was cleared) but marker is absent or stale. Verify in-place and pin. ──
+        val encoderExists = File(dir, ENCODER_ASSET).isFile
+        val ctcExists = File(dir, CTC_ASSET).isFile
+        if (encoderExists && ctcExists) {
+            Log.i(TAG, "Found pre-existing extracted graphs in ${dir.absolutePath} — verifying")
+            for (name in listOf(ENCODER_ASSET, CTC_ASSET)) {
+                SravaaniPackaging.verifyExtracted(dir, name)
+            }
+            // Pin so subsequent starts take the fast path (SHA-256 already done above).
+            marker.writeText(GRAPHS_VERSION)
+            Log.i(TAG, "Pre-existing graphs verified and pinned as $GRAPHS_VERSION")
+            return dir
+        }
+
+        // ── Slow path: extract from APK assets (first install or forced re-extract) ────────
         dir.mkdirs()
         for (name in listOf(ENCODER_ASSET, CTC_ASSET)) {
             val target = File(dir, name)
@@ -661,40 +799,33 @@ class SravaaniEngine(
         }
     }
 
-    /** One live stream: streaming state + per-stream CTC decoder + persistent cache tensors. */
+    /** One live stream: streaming state + RNN-T decoder states. */
     private inner class StreamNative {
         val state = SravaaniStreamingState(MEL_BINS).also {
             it.attach(SravaaniFeaturizer(internals!!.tables))
         }
 
-        /** Per-stream collapse state: prev id must NOT leak between utterances. */
-        val decoder = SravaaniCtcDecoder()
+        /** Frame acoustic buffer for decoder step (1 x 1024 x 1). */
+        val fBuf: java.nio.FloatBuffer = directFloatBuffer(ENC_D_MODEL.toInt())
 
-        /** Persistent cache tensors wrapping direct buffers (refilled in-place after runs). */
-        val cacheCh: OnnxTensor
-        val cacheTc: OnnxTensor
-        val cacheLen: OnnxTensor
-        // Accessed from the outer engine's chunk loop — Kotlin private-in-inner would hide them.
-        val chBuf: java.nio.FloatBuffer
-        val tcBuf: java.nio.FloatBuffer
-        val lenBuf: java.nio.LongBuffer
+        /** Predictor target token buffer (1 x 1). */
+        val tgtBuf: java.nio.IntBuffer = directIntBuffer(1)
+
+        /** Target length buffer (1). */
+        val tlenBuf: java.nio.IntBuffer = directIntBuffer(1)
+
+        /** Predictor LSTM hidden state buffer (1 x 1 x 640). */
+        val hBuf: java.nio.FloatBuffer = directFloatBuffer(RNNT_HIDDEN_DIM.toInt())
+
+        /** Predictor LSTM cell state buffer (1 x 1 x 640). */
+        val cBuf: java.nio.FloatBuffer = directFloatBuffer(RNNT_HIDDEN_DIM.toInt())
+
+        /** Last emitted token, initialized to blank (5000) on fresh stream. */
+        var prevToken: Int = BLANK_ID
 
         init {
-            val env = internals!!.env
-            chBuf = directFloatBuffer(CACHE_CH_ELEMS) // direct buffers are zero-initialized
-            tcBuf = directFloatBuffer(CACHE_TC_ELEMS)
-            lenBuf = ByteBuffer.allocateDirect(8).order(ByteOrder.nativeOrder()).asLongBuffer()
-            cacheCh = OnnxTensor.createTensor(
-                env,
-                chBuf,
-                longArrayOf(1, ENC_LAYERS, CACHE_CH_SIZE, ENC_D_MODEL),
-            )
-            cacheTc = OnnxTensor.createTensor(
-                env,
-                tcBuf,
-                longArrayOf(1, ENC_LAYERS, ENC_D_MODEL, CACHE_TC_SIZE),
-            )
-            cacheLen = OnnxTensor.createTensor(env, lenBuf, longArrayOf(1))
+            tgtBuf.put(0, prevToken)
+            tlenBuf.put(0, 1)
         }
 
         /** Push a slice of [pcm] (converted to f32) into the stream's featurizer. */
@@ -710,15 +841,12 @@ class SravaaniEngine(
 
         /** Idempotent: finish() and release() may both attempt the close. */
         fun close() {
-            if (!closed.compareAndSet(false, true)) return
-            runCatching { cacheCh.close() }
-            runCatching { cacheTc.close() }
-            runCatching { cacheLen.close() }
+            closed.set(true)
         }
     }
 
     private companion object {
-        const val TAG = "SravaaniEngine"
+        const val TAG = "SW_SRAVAANI"
 
         /** Asset dir for tables/tokens + graphs (P7 owns final packaging). */
         const val ASSET_DIR = "sravaani"
@@ -733,19 +861,17 @@ class SravaaniEngine(
         /** Re-extract graphs when this changes (runtime pin + model revision + artifact selection). */
         const val GRAPHS_VERSION = "ort-1.27.0-rev-29a15303-int8-prod"
 
-        /** Exact asset byte counts from the P9 production manifest (for SttModelInfo).
-         *  Production encoder = P9 weight-only INT8 (WER parity proven on FLEURS, 2.778× smaller). */
-        const val GRAPH_ENCODER_BYTES = 638_695_714L
-        const val GRAPH_CTC_BYTES = 20_504_707L
+        /** Exact asset byte counts from production manifest (for SttModelInfo). */
+        const val GRAPH_ENCODER_BYTES = 638_281_605L
+        const val GRAPH_CTC_BYTES = 43_033_419L
 
         const val MEL_BINS = 128
-        const val VOCAB_PLUS_BLANK = 5_001
-        const val ENC_LAYERS = 17L
+        const val BLANK_ID = 5000
+        const val VOCAB_WITH_BLANK = 5001
+        const val TOTAL_OUTPUT_DIM = 5006
         const val ENC_D_MODEL = 1024L
-        const val CACHE_CH_SIZE = 70L
-        const val CACHE_TC_SIZE = 8L
-        const val CACHE_CH_ELEMS = (1 * ENC_LAYERS * CACHE_CH_SIZE * ENC_D_MODEL).toInt()
-        const val CACHE_TC_ELEMS = (1 * ENC_LAYERS * ENC_D_MODEL * CACHE_TC_SIZE).toInt()
+        const val RNNT_HIDDEN_DIM = 640L
+        const val MAX_SYMBOLS_PER_FRAME = 10
 
         /**
          * PCM push granularity: bounded so the featurizer ring (32768 samples) always covers
@@ -765,6 +891,9 @@ class SravaaniEngine(
 
         private fun directFloatBuffer(elems: Int): java.nio.FloatBuffer =
             ByteBuffer.allocateDirect(elems * 4).order(ByteOrder.nativeOrder()).asFloatBuffer()
+
+        private fun directIntBuffer(elems: Int): java.nio.IntBuffer =
+            ByteBuffer.allocateDirect(elems * 4).order(ByteOrder.nativeOrder()).asIntBuffer()
 
         private fun directLongBuffer(values: LongArray): java.nio.LongBuffer {
             val buf = ByteBuffer.allocateDirect(values.size * 8).order(ByteOrder.nativeOrder()).asLongBuffer()

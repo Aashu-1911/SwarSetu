@@ -80,7 +80,11 @@ class PcmCapture(
      * @return true if capture started successfully, false if the microphone couldn't be opened.
      */
     override fun start(): Boolean {
-        if (!canCapture()) return false
+        Log.d("SW_AUDIO", "AUDIO_CAPTURE_START")
+        if (!canCapture()) {
+            Log.w("SW_AUDIO", "AUDIO_CAPTURE_FAILED: canCapture returned false")
+            return false
+        }
 
         val bufferSize =
             AudioRecord.getMinBufferSize(
@@ -89,7 +93,7 @@ class PcmCapture(
                 AUDIO_FORMAT,
             )
         if (bufferSize == AudioRecord.ERROR || bufferSize == AudioRecord.ERROR_BAD_VALUE) {
-            Log.e(TAG, "Invalid buffer size: $bufferSize")
+            Log.e("SW_AUDIO", "Invalid buffer size: $bufferSize")
             return false
         }
 
@@ -110,15 +114,15 @@ class PcmCapture(
                     actualBufferSize,
                 )
         } catch (e: SecurityException) {
-            Log.e(TAG, "Microphone permission denied: ${e.message}")
+            Log.e("SW_AUDIO", "Microphone permission denied: ${e.message}")
             return false
         } catch (e: IllegalArgumentException) {
-            Log.e(TAG, "Invalid AudioRecord parameters: ${e.message}")
+            Log.e("SW_AUDIO", "Invalid AudioRecord parameters: ${e.message}")
             return false
         }
 
         if (recorder?.state != AudioRecord.STATE_INITIALIZED) {
-            Log.e(TAG, "AudioRecord failed to initialize")
+            Log.e("SW_AUDIO", "AudioRecord failed to initialize")
             runCatching { recorder?.release() }
             recorder = null
             return false
@@ -127,8 +131,7 @@ class PcmCapture(
         recorder?.startRecording()
         _state.value = State.CAPTURING
         capturedSamples = 0
-        Log.d(TAG, "PCM_STARTED")
-        Log.d(TAG, "Capture started: ${SAMPLE_RATE}Hz, buffer=${actualBufferSize}B")
+        Log.d("SW_AUDIO", "AUDIO_CAPTURE_STARTED (sampleRate=${SAMPLE_RATE}Hz, buffer=${actualBufferSize}B)")
         return true
     }
 
@@ -146,11 +149,12 @@ class PcmCapture(
             val buffer = ShortArray(maxSamples)
             val read = rec.read(buffer, 0, maxSamples)
             if (read <= 0) {
-                Log.w(TAG, "AudioRecord read returned $read")
+                Log.w("SW_AUDIO", "AudioRecord read returned $read")
                 return@withContext null
             }
 
             capturedSamples += read
+            Log.v("SW_AUDIO", "AUDIO_FRAME_RECEIVED (size=$read, total=$capturedSamples)")
             if (read == maxSamples) buffer else buffer.copyOf(read)
         }
 
@@ -228,34 +232,30 @@ class PcmCapture(
      * Stop capturing and release the microphone. Idempotent.
      */
     override fun stop() {
-        Log.d(TAG, "PCM_STOP_REQUESTED")
+        Log.d("SW_AUDIO", "AUDIO_CAPTURE_STOP (AUDIO_FRAME_COUNT=$capturedSamples)")
         if (_state.value != State.CAPTURING) return
         _state.value = State.IDLE
         runCatching {
             recorder?.stop()
-            Log.d(TAG, "AUDIO_RECORD_STOPPED")
         }
         runCatching {
             recorder?.release()
-            Log.d(TAG, "AUDIO_RECORD_RELEASED")
         }
         recorder = null
-        Log.d(TAG, "Capture stopped: $capturedSamples samples (${capturedDurationMs}ms)")
+        Log.d("SW_AUDIO", "Capture stopped: $capturedSamples samples (${capturedDurationMs}ms)")
     }
 
     /**
      * Cancel an in-progress capture and discard all captured audio.
      */
     override fun cancel() {
-        Log.d(TAG, "PCM_STOP_REQUESTED (Cancel)")
+        Log.d("SW_AUDIO", "AUDIO_CAPTURE_STOP (Cancelled, AUDIO_FRAME_COUNT=$capturedSamples)")
         _state.value = State.IDLE
         runCatching {
             recorder?.stop()
-            Log.d(TAG, "AUDIO_RECORD_STOPPED")
         }
         runCatching {
             recorder?.release()
-            Log.d(TAG, "AUDIO_RECORD_RELEASED")
         }
         recorder = null
         capturedSamples = 0

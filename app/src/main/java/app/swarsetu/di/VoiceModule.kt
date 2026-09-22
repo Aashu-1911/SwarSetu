@@ -42,6 +42,7 @@ val voiceModule =
                 voiceController = get(),
                 translatorEngine = get(),
                 peers = get(),
+                groups = get(),
             )
         }
     }

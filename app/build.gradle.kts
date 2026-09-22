@@ -436,8 +436,8 @@ val checkSravaaniModel =
         description = "Fails the build if packaged SraVaani ONNX graphs are missing/corrupt (size+sha256)."
         val graphs =
             listOf(
-                Triple("sravaani_encoder.onnx", 638695714L, "e074e56a91e71c534b7be72bb75c023c823e0475c9a165cf3551dc461eb5c515"),
-                Triple("sravaani_ctc.onnx", 20504707L, "6001671902c431b533452c78cedc3bafdccbeb8ae4f6ed1c23c0612466e1bb31"),
+                Triple("sravaani_encoder.onnx", 638281605L, "4a880933bb7fa51c5d0adde1c85925c4ff42fdd4ca304ccad2e83909cba95dd8"),
+                Triple("sravaani_ctc.onnx", 43033419L, "f59a9ddf8a8f23fac860043eadebe32724078c6d3b48f0ca9e37cf138096ab63"),
             ).map { (name, size, sha) ->
                 Triple(layout.projectDirectory.file("src/main/assets/sravaani/$name").asFile, size, sha)
             }

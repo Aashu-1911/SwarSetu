@@ -5,6 +5,7 @@ import android.media.AudioAttributes
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.util.Log
 import app.swarsetu.tts.TtsEngine
 import app.swarsetu.tts.TtsLanguage
 import app.swarsetu.tts.TtsLanguageCapability
@@ -35,6 +36,7 @@ class AndroidTtsEngine(
                 return@withContext existing.await()
             }
 
+            Log.d("SW_TTS", "TTS_START")
             val deferred = CompletableDeferred<Boolean>()
             initDeferred = deferred
 
@@ -58,6 +60,7 @@ class AndroidTtsEngine(
                 }
                 deferred.await()
             } catch (e: Exception) {
+                Log.e("SW_TTS", "TTS_ERROR: ${e.message}", e)
                 isReady = false
                 initDeferred?.complete(false)
                 initDeferred = null
@@ -69,9 +72,11 @@ class AndroidTtsEngine(
         if (status == TextToSpeech.SUCCESS) {
             isReady = true
             setupListeners()
+            Log.d("SW_TTS", "TTS_INIT_SUCCESS")
             initDeferred?.complete(true)
         } else {
             isReady = false
+            Log.e("SW_TTS", "TTS_ERROR: onInit returned status $status")
             initDeferred?.complete(false)
         }
         initDeferred = null
@@ -85,6 +90,7 @@ class AndroidTtsEngine(
                 }
 
                 override fun onDone(utteranceId: String?) {
+                    Log.d("SW_TTS", "TTS_DONE (id=$utteranceId)")
                     utteranceId?.let { 
                         restoreAlarmVolumeIfNeeded(it)
                         metricsCollector.onCompleted(it) 
@@ -93,6 +99,7 @@ class AndroidTtsEngine(
 
                 @Deprecated("Deprecated in Java", ReplaceWith("onError(utteranceId, TextToSpeech.ERROR)"))
                 override fun onError(utteranceId: String?) {
+                    Log.e("SW_TTS", "TTS_ERROR (id=$utteranceId, Unknown error)")
                     utteranceId?.let { 
                         restoreAlarmVolumeIfNeeded(it)
                         metricsCollector.onError(it, "Unknown TTS Error") 
@@ -103,6 +110,7 @@ class AndroidTtsEngine(
                     utteranceId: String?,
                     errorCode: Int,
                 ) {
+                    Log.e("SW_TTS", "TTS_ERROR (id=$utteranceId, code=$errorCode)")
                     utteranceId?.let { 
                         restoreAlarmVolumeIfNeeded(it)
                         metricsCollector.onError(it, "TTS Error code: $errorCode") 
@@ -321,12 +329,13 @@ class AndroidTtsEngine(
 
             metricsCollector.onSynthesisBegin(utteranceId, request.language, voiceName, request.text.length)
 
+            Log.d("SW_TTS", "TTS_SPEAK (id=$utteranceId, lang=${request.language.locale}, len=${request.text.length})")
             val bundle = Bundle()
             val result =
                 try {
                     tts?.speak(request.text, TextToSpeech.QUEUE_FLUSH, bundle, utteranceId)
                 } catch (e: Exception) {
-                    android.util.Log.e("AndroidTtsEngine", "Exception during tts.speak: ${e.message}", e)
+                    Log.e("SW_TTS", "TTS_ERROR (speak exception: ${e.message})", e)
                     TextToSpeech.ERROR
                 }
 

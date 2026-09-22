@@ -2,7 +2,6 @@ package app.swarsetu.ui.diagnostics
 
 import app.swarsetu.crash.CrashReportRef
 import app.swarsetu.crash.CrashReports
-import app.swarsetu.data.relay.RelayStatusRepository
 import app.swarsetu.data.settings.SettingsStore
 import app.swarsetu.mesh.FakeMeshController
 import app.swarsetu.mesh.MeshController
@@ -53,7 +52,6 @@ class DiagnosticsViewModelTest {
                     identity = mockk(relaxed = true),
                     settings = settings,
                     metrics = MeshMetrics(),
-                    relayStatus = RelayStatusRepository(settings, controller),
                     crashes = mockk(relaxed = true),
                 )
 
@@ -89,7 +87,6 @@ class DiagnosticsViewModelTest {
                     identity = mockk(relaxed = true),
                     settings = settings,
                     metrics = MeshMetrics(),
-                    relayStatus = RelayStatusRepository(settings, controller),
                     crashes = crashes,
                 )
 

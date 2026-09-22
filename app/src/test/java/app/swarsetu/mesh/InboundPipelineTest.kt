@@ -60,7 +60,6 @@ import app.swarsetu.mesh.protocol.RelayEnvelope
 import app.swarsetu.mesh.protocol.TypingContent
 import app.swarsetu.mesh.protocol.WireCodec
 import app.swarsetu.mesh.protocol.WireEnvelope
-import app.swarsetu.mesh.spool.ScopeSync
 import app.swarsetu.moderation.ImageScreeningService
 import app.swarsetu.notifications.Notifier
 import com.google.crypto.tink.InsecureSecretKeyAccess
@@ -877,39 +876,7 @@ class InboundPipelineTest {
             coVerify { rig.messages.markReceived("m1", DeliveryPlane.Nearby) }
         }
 
-    @Test
-    fun receiptPulledOffASpoolMarksTheTickInternetDelivered() =
-        runTest {
-            val rig = Rig(backgroundScope)
-            val alice = party()
-            rig.pin(alice)
-            rig.msgMap["m1"] = MessageEntity(id = "m1", senderId = rig.self.nodeId, recipientId = alice.nodeId, body = "", sentAt = 1L)
-            val env = rig.receipt(alice, ackId = "m1")
 
-            // The same receipt, bridged in by ScopeSync instead of a radio: same delivery, different plane.
-            rig.deliver(alice, env, from = ScopeSync.SPOOL_SOURCE_PREFIX + "spool.example")
-
-            coVerify { rig.messages.markReceived("m1", DeliveryPlane.Internet) }
-        }
-
-    @Test
-    fun anIncomingDmRecordsThePlaneItArrivedOn() =
-        runTest {
-            val rig = Rig(backgroundScope)
-            val alice = party()
-            rig.pin(alice)
-
-            // An inbound message needs no receipt to know how it travelled — the frame IS the evidence.
-            rig.deliver(
-                alice,
-                rig.dmChat(alice, rig.self, id = "in-relay", body = "from far away"),
-                from = ScopeSync.SPOOL_SOURCE_PREFIX + "spool.example",
-            )
-            rig.deliver(alice, rig.dmChat(alice, rig.self, id = "in-radio", body = "from next door"))
-
-            assertEquals(DeliveryPlane.Internet, rig.msgMap["in-relay"]?.receivedPlane)
-            assertEquals(DeliveryPlane.Nearby, rig.msgMap["in-radio"]?.receivedPlane)
-        }
 
     @Test
     fun forgedReceiptFromANonRecipientDoesNotMarkReceived() =
@@ -3095,7 +3062,6 @@ class InboundPipelineTest {
             rig.deliver(
                 alice,
                 author.dm("ctl-p5", "", ctl = MessageContent.CTL_RECEIPT, ack = "gm-3"),
-                from = ScopeSync.SPOOL_SOURCE_PREFIX + "spool.example",
             )
 
             // First evidence wins on BOTH columns, the markReceived rule one table over: the row says when
@@ -3117,26 +3083,6 @@ class InboundPipelineTest {
             rig.pipeline.onDeliver(alice.sign(env), env, alice.nodeId)
 
             assertTrue(rig.receiptMap.isEmpty())
-        }
-
-    @Test
-    fun aSealedDmReceiptPulledOffASpoolMarksTheTickInternetDelivered() =
-        runTest {
-            val rig = Rig(backgroundScope)
-            val alice = party()
-            rig.pin(alice)
-            rig.msgMap["dm-out"] =
-                MessageEntity(id = "dm-out", senderId = rig.self.nodeId, recipientId = alice.nodeId, body = "", sentAt = 1L)
-
-            // The sealed receipt is the DM path's tick, so this is the case that normally paints the globe:
-            // alice was nowhere near a radio and answered us across the spool.
-            rig.deliver(
-                alice,
-                V2Author(alice, rig).dm("ctl-r4", "", ctl = MessageContent.CTL_RECEIPT, ack = "dm-out"),
-                from = ScopeSync.SPOOL_SOURCE_PREFIX + "spool.example",
-            )
-
-            coVerify(exactly = 1) { rig.messages.markReceived("dm-out", DeliveryPlane.Internet) }
         }
 
     @Test

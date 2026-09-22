@@ -66,10 +66,6 @@ class FakeMeshController : MeshController {
         healCount++
     }
 
-    override fun mintGroupRoots() {
-        mintGroupRootsCount++
-    }
-
     override fun restart() {
         restartCount++
     }
@@ -88,6 +84,7 @@ class FakeMeshController : MeshController {
         translatedText: String?,
         isAlert: Boolean,
         messageId: String?,
+        location: app.swarsetu.mesh.protocol.LocationPayload?,
     ): Boolean {
         sentChats += SentChat(
             text = text,

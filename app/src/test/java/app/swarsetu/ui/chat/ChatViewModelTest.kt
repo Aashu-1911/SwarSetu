@@ -19,7 +19,6 @@ import app.swarsetu.data.message.Conversations
 import app.swarsetu.data.message.MessageEntity
 import app.swarsetu.data.peer.PeerEntity
 import app.swarsetu.data.reaction.ReactionEntity
-import app.swarsetu.data.relay.RelayFacts
 import app.swarsetu.data.settings.SettingsStore
 import app.swarsetu.identity.Identity
 import app.swarsetu.mesh.FakeMeshController
@@ -94,7 +93,6 @@ class ChatViewModelTest {
     private val nameFlow = MutableStateFlow("Alice")
     private val spoolEnabledFlow = MutableStateFlow(false)
     private val spoolUrlsFlow = MutableStateFlow(emptySet<String>())
-    private val relayFactsFlow = MutableStateFlow(RelayFacts())
     private val deliveredCountsFlow = MutableStateFlow(emptyMap<String, Int>())
 
     @Before
@@ -153,10 +151,6 @@ class ChatViewModelTest {
             imageScreening,
             gallerySaver,
             voicePlayer,
-            // A finite flow, not the production poller: RelayStatusRepository emits on an infinite
-            // `while(true) { emit; delay }`, and under runTest's virtual clock that delay is instant, so
-            // `advanceUntilIdle()` below would never reach idle.
-            relayFactsFlow,
             context,
             ttsManager,
             voiceMessageAdapter,

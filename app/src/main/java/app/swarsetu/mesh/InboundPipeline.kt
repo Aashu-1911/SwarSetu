@@ -1735,6 +1735,7 @@ class InboundPipeline(
         persist(entity)
 
         if (entity.senderId != identity.nodeId()) {
+            android.util.Log.d("SW_RECEIVER", "VOICE_MESSAGE_RECEIVED (id=${entity.id}, type=${entity.messageType}, sender=${entity.senderId})")
             voiceMessageReceiver?.onVoiceMessageReceived(entity)
         }
         // Start pulling the referenced blob unless we already hold it (the UI observes the blobs table

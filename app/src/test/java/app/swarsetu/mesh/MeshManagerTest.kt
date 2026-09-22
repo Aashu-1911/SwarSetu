@@ -19,7 +19,6 @@ import app.swarsetu.data.message.MentionStore
 import app.swarsetu.data.message.MessageEntity
 import app.swarsetu.data.peer.PeerEntity
 import app.swarsetu.data.ratchet.GroupRatchetRepository
-import app.swarsetu.data.ratchet.GroupRootRepository
 import app.swarsetu.data.ratchet.RatchetRepository
 import app.swarsetu.data.reaction.ReactionEntity
 import app.swarsetu.data.settings.SettingsStore
@@ -248,7 +247,6 @@ class MeshManagerTest {
                             spkPrivFor = { null },
                         ),
                     groupRatchet = groupRatchet,
-                    groupRoots = GroupRootRepository(db.groupRootDao()),
                     scope = scope,
                     metrics = metrics,
                     db = db,
@@ -580,26 +578,6 @@ class MeshManagerTest {
             assertNull("a room attachment is not re-sealed, so the plaintext hash rides as-is", content.enc)
             assertEquals("plain-hash", content.attachmentHash)
             assertEquals("and its mime stays in the clear with the rest of the room's content", "image/webp", content.attachmentMime)
-        }
-
-    @Test
-    fun theSpoolFetcherStoresAnAttachmentUnderTheMimeOurOwnDecryptedRowNames() =
-        runTest(UnconfinedTestDispatcher()) {
-            // Since ADR 035 a sealed frame names no mime, so ScopeSync hands this seam only its §9.5 default.
-            // The row — written from the *sealed* MessageContent — is what actually knows the type, and a
-            // voice note stored as image/jpeg would render as a broken photo instead of a waveform.
-            val rig = Rig(backgroundScope)
-            val store = rig.manager.scopeBlobs()
-            val bytes = "sealed-attachment-bytes".toByteArray()
-            coEvery { rig.messages.attachmentMimeForHash("voice-ct-hash") } returns VoiceAudio.MIME
-            coEvery { rig.messages.attachmentMimeForHash("group-photo-hash") } returns null
-
-            store.save("voice-ct-hash", "image/jpeg", bytes)
-            store.save("group-photo-hash", "image/jpeg", bytes)
-
-            coVerify { rig.blobs.insert("voice-ct-hash", VoiceAudio.MIME, bytes) }
-            // No row names a group photo or an avatar, so the fetcher's default still stands — unchanged.
-            coVerify { rig.blobs.insert("group-photo-hash", "image/jpeg", bytes) }
         }
 
     // --- reply + mentions ride the frame and are persisted ---

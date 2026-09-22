@@ -10,14 +10,14 @@ class PowerPolicyTest {
     fun interactiveScansAggressively() {
         val duty = PowerPolicy.dutyCycle(PowerState(interactive = true))
         assertEquals(12_000L, duty.scanWindowMs)
-        assertEquals(30_000L, duty.baseIntervalMs)
+        assertEquals(12_000L, duty.baseIntervalMs)
     }
 
     @Test
     fun chargingScansAggressivelyEvenWhenScreenOff() {
         val duty = PowerPolicy.dutyCycle(PowerState(interactive = false, charging = true))
         assertEquals(12_000L, duty.scanWindowMs)
-        assertEquals(30_000L, duty.baseIntervalMs)
+        assertEquals(12_000L, duty.baseIntervalMs)
     }
 
     @Test
@@ -40,7 +40,7 @@ class PowerPolicyTest {
     @Test
     fun interactiveOverridesBatteryLow() {
         val duty = PowerPolicy.dutyCycle(PowerState(interactive = true, batteryLow = true))
-        assertEquals(30_000L, duty.baseIntervalMs)
+        assertEquals(12_000L, duty.baseIntervalMs)
     }
 
     @Test
@@ -49,16 +49,16 @@ class PowerPolicyTest {
             PowerPolicy.dutyCycle(
                 PowerState(interactive = false, charging = true, batteryLow = true),
             )
-        assertEquals(30_000L, duty.baseIntervalMs)
+        assertEquals(12_000L, duty.baseIntervalMs)
     }
 
     // --- idleAfterScan: a connected mesh backs off, an isolated node scans aggressively ---
 
     @Test
     fun connectedMeshIdleBacksOffByNeighborCount() {
-        // baseIntervalMs * (1 + neighborCount); interactive base = 30_000.
-        assertEquals(60_000L, PowerPolicy.idleAfterScan(PowerState(interactive = true), neighborCount = 1, lonelyForMs = 0L))
-        assertEquals(90_000L, PowerPolicy.idleAfterScan(PowerState(interactive = true), neighborCount = 2, lonelyForMs = 0L))
+        // baseIntervalMs * (1 + neighborCount); interactive base = 12_000.
+        assertEquals(24_000L, PowerPolicy.idleAfterScan(PowerState(interactive = true), neighborCount = 1, lonelyForMs = 0L))
+        assertEquals(36_000L, PowerPolicy.idleAfterScan(PowerState(interactive = true), neighborCount = 2, lonelyForMs = 0L))
         // Screen-off-on-battery base = 120_000.
         assertEquals(
             240_000L,

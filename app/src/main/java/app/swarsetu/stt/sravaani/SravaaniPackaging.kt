@@ -21,16 +21,16 @@ import java.security.MessageDigest
  */
 object SravaaniPackaging {
     /** Expected SHA-256 of `assets/sravaani/sravaani_encoder.onnx` (P9 int8 production graph). */
-    const val ENCODER_SHA256 = "e074e56a91e71c534b7be72bb75c023c823e0475c9a165cf3551dc461eb5c515"
+    const val ENCODER_SHA256 = "4a880933bb7fa51c5d0adde1c85925c4ff42fdd4ca304ccad2e83909cba95dd8"
 
-    /** Expected byte count of the encoder graph (int8_meta.json). */
-    const val ENCODER_BYTES = 638_695_714L
+    /** Expected byte count of the encoder graph. */
+    const val ENCODER_BYTES = 638_281_605L
 
-    /** Expected SHA-256 of `assets/sravaani/sravaani_ctc.onnx` (P3 export manifest). */
-    const val CTC_SHA256 = "6001671902c431b533452c78cedc3bafdccbeb8ae4f6ed1c23c0612466e1bb31"
+    /** Expected SHA-256 of `assets/sravaani/sravaani_ctc.onnx`. */
+    const val CTC_SHA256 = "f59a9ddf8a8f23fac860043eadebe32724078c6d3b48f0ca9e37cf138096ab63"
 
-    /** Expected byte count of the CTC graph (export manifest). */
-    const val CTC_BYTES = 20_504_707L
+    /** Expected byte count of the CTC graph. */
+    const val CTC_BYTES = 43_033_419L
 
     private fun expectedSha256(name: String): String? =
         when (name) {

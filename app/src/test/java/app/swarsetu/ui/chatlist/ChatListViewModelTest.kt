@@ -12,7 +12,6 @@ import app.swarsetu.data.message.Conversations
 import app.swarsetu.data.message.DeliveryPlane
 import app.swarsetu.data.message.MessageEntity
 import app.swarsetu.data.peer.PeerEntity
-import app.swarsetu.data.relay.RelayFacts
 import app.swarsetu.data.settings.SettingsStore
 import app.swarsetu.identity.Identity
 import app.swarsetu.mesh.FakeMeshController
@@ -61,9 +60,6 @@ class ChatListViewModelTest {
     private val lastReadFlow = MutableStateFlow(emptyMap<String, Long>())
     private val acceptedFlow = MutableStateFlow(emptySet<String>())
 
-    // A finite stand-in for the production poller, which never idles under a virtual clock.
-    private val relayFlow = MutableStateFlow(RelayFacts())
-
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
@@ -81,7 +77,7 @@ class ChatListViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun vm() = ChatListViewModel(messages, peers, settings, identity, mesh, groups, relayFlow, context)
+    private fun vm() = ChatListViewModel(messages, peers, settings, identity, mesh, groups, context)
 
     @Test
     fun nearbyRoomIsAlwaysPresentEvenWithNoMessages() =
