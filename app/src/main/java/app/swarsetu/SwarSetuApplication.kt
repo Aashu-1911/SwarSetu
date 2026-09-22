@@ -26,6 +26,7 @@ import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import coil3.gif.AnimatedImageDecoder
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 import org.koin.android.ext.koin.androidContext
@@ -65,14 +66,12 @@ class SwarSetuApplication :
             koinApp.koin.get<MlTextModerator>().warmUp()
         }
 
-        // Pre-warm the SraVaani STT engine off the PTT hot-path. On first use this builds the
-        // ORT sessions (5–15 s: 680 MB SHA-256 verify + mmap), blocking the first PTT press
-        // completely. Fire-and-forget here so users open a chat and press PTT immediately without
-        // waiting. The language used here is the default; SttPipeline re-initializes for the
-        // active language when startCapture() is called and the engine is multilingual (no swap
-        // cost). prewarm() is idempotent — no-op if sessions are already live.
+        // Pre-warm the SraVaani STT engine off the PTT hot-path with the user's preferred language.
         koinApp.koin.get<CoroutineScope>().launch {
-            koinApp.koin.get<SttPipeline>().prewarm(SttLanguage.HINDI)
+            val settings = koinApp.koin.get<SettingsStore>()
+            val langCode = runCatching { settings.sttLanguageCode.first() }.getOrDefault("en")
+            val targetLang = SttLanguage.fromCode(langCode) ?: SttLanguage.ENGLISH
+            koinApp.koin.get<SttPipeline>().prewarm(targetLang)
         }
 
         // Seed the shipped default spools once (res/values/spools.xml). Opens no socket by itself — the

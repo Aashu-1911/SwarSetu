@@ -1,5 +1,6 @@
 package app.swarsetu.stt.sravaani
 
+import app.swarsetu.stt.SttLanguage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -144,5 +145,52 @@ class SravaaniLanguageCoverageTest {
         // this is language coverage through one model, NOT model aliasing (there is no second
         // model to alias to).
         assertTrue("Devanagari coverage must serve hi+mr (got $devanagari)", devanagari >= 500)
+    }
+
+    @Test
+    fun `script mask covers all ten languages and prevents cross-script bleeding`() {
+        val pieces = loadPieces()
+        val tokenizer = SravaaniTokenizer(pieces)
+
+        val nativeRanges = mapOf(
+            SttLanguage.ENGLISH to (0x0041..0x024F),
+            SttLanguage.HINDI to (0x0900..0x097F),
+            SttLanguage.MARATHI to (0x0900..0x097F),
+            SttLanguage.BENGALI to (0x0980..0x09FF),
+            SttLanguage.GUJARATI to (0x0A80..0x0AFF),
+            SttLanguage.ODIA to (0x0B00..0x0B7F),
+            SttLanguage.TAMIL to (0x0B80..0x0BFF),
+            SttLanguage.TELUGU to (0x0C00..0x0C7F),
+            SttLanguage.KANNADA to (0x0C80..0x0CFF),
+            SttLanguage.MALAYALAM to (0x0D00..0x0D7F),
+        )
+
+        for (lang in SttLanguage.entries) {
+            val mask = tokenizer.getAllowedMask(lang)
+            org.junit.Assert.assertNotNull("Mask must exist for ${lang.code}", mask)
+            assertTrue("BLANK_ID (5000) must be allowed for ${lang.code}", mask!![SravaaniTokenizer.BLANK_ID])
+
+            val targetRange = nativeRanges.getValue(lang)
+            for (i in pieces.indices) {
+                val core = pieces[i].replace("\u2581", "").trim()
+                if (core.isNotEmpty()) {
+                    val cp = core[0].code
+                    // Native script tokens must be allowed
+                    if (cp in targetRange) {
+                        assertTrue("Native piece '${pieces[i]}' must be allowed for ${lang.code}", mask[i])
+                    }
+                    // Non-native Indic scripts must NOT be allowed
+                    val isOtherIndic = nativeRanges.entries.any { (otherLang, range) ->
+                        otherLang != lang && otherLang != SttLanguage.ENGLISH &&
+                            (lang != SttLanguage.HINDI || otherLang != SttLanguage.MARATHI) &&
+                            (lang != SttLanguage.MARATHI || otherLang != SttLanguage.HINDI) &&
+                            cp in range
+                    }
+                    if (isOtherIndic) {
+                        assertEquals("Foreign piece '${pieces[i]}' must be masked out for ${lang.code}", false, mask[i])
+                    }
+                }
+            }
+        }
     }
 }

@@ -220,7 +220,7 @@ class SravaaniEngine(
                 if (pcm.isEmpty()) return@withLock SttResult.empty(language)
                 validateDuration(pcm.size)
                 val internal = lazyInternals()
-                val stream = internal.newStream()
+                val stream = internal.newStream(language)
                 try {
                     feedAndDrain(internal, stream, pcm, emitPartial = null)
                     val text = internal.tokenizer.decode(stream.state.tokens)
@@ -255,7 +255,7 @@ class SravaaniEngine(
                 }
                 validateDuration(pcm.size)
                 val internal = lazyInternals()
-                val stream = internal.newStream()
+                val stream = internal.newStream(language)
                 try {
                     // True streaming: emit a partial after every processed chunk whose text
                     // changed (official semantics: cumulative text), final after the drain.
@@ -320,7 +320,7 @@ class SravaaniEngine(
             check(!released && _config != null) {
                 throw SttException.EngineNotReady("engine was released or never initialized")
             }
-            return internals?.newStream().also { opened = it }
+            return internals?.newStream(language).also { opened = it }
                 ?: throw SttException.EngineNotReady("engine internals not built")
         }
 
@@ -557,12 +557,14 @@ class SravaaniEngine(
                         val totalLogits = logitsBuf.remaining()
 
                         // 1. Vocabulary logits: 0 until minOf(totalLogits, VOCAB_WITH_BLANK = 5001)
-                        var bestToken = 0
+                        var bestToken = BLANK_ID
                         var maxLogit = Float.NEGATIVE_INFINITY
-                        var secondToken = 0
+                        var secondToken = BLANK_ID
                         var secondLogit = Float.NEGATIVE_INFINITY
                         val vocabLimit = minOf(totalLogits, VOCAB_WITH_BLANK)
+                        val mask = stream.allowedMask
                         for (v in 0 until vocabLimit) {
+                            if (mask != null && v < mask.size && !mask[v]) continue
                             val l = logitsBuf.get(v)
                             if (l > maxLogit) {
                                 secondLogit = maxLogit
@@ -791,7 +793,7 @@ class SravaaniEngine(
         /** Copy of [assembled] backed into a direct buffer for ORT. */
         val scratch = FloatArray(SravaaniStreamingState.CHUNK_FRAMES * MEL_BINS)
 
-        fun newStream(): StreamNative = StreamNative()
+        fun newStream(language: SttLanguage? = null): StreamNative = StreamNative(language)
 
         fun close() {
             runCatching { encoderSession.close() }
@@ -800,10 +802,13 @@ class SravaaniEngine(
     }
 
     /** One live stream: streaming state + RNN-T decoder states. */
-    private inner class StreamNative {
+    private inner class StreamNative(val language: SttLanguage? = null) {
         val state = SravaaniStreamingState(MEL_BINS).also {
             it.attach(SravaaniFeaturizer(internals!!.tables))
         }
+
+        /** Precomputed language mask for constraining vocabulary argmax. */
+        val allowedMask: BooleanArray? = internals?.tokenizer?.getAllowedMask(language)
 
         /** Frame acoustic buffer for decoder step (1 x 1024 x 1). */
         val fBuf: java.nio.FloatBuffer = directFloatBuffer(ENC_D_MODEL.toInt())
