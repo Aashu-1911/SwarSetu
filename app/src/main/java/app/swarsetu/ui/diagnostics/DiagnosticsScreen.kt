@@ -3,6 +3,7 @@ package app.swarsetu.ui.diagnostics
 import android.text.format.Formatter
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -25,6 +26,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -75,6 +77,7 @@ fun DiagnosticsScreen(
     onBack: () -> Unit,
     onOpenCrashLog: () -> Unit,
     onOpenTtsTest: () -> Unit,
+    onOpenTranslationTest: () -> Unit = {},
     onOpenLanguageInit: () -> Unit = {},
     viewModel: DiagnosticsViewModel = koinViewModel(),
 ) {
@@ -115,6 +118,7 @@ fun DiagnosticsScreen(
         onScan = viewModel::rescan,
         onOpenCrashLog = onOpenCrashLog,
         onOpenTtsTest = onOpenTtsTest,
+        onOpenTranslationTest = onOpenTranslationTest,
         onOpenLanguageInit = onOpenLanguageInit,
     )
 }
@@ -132,6 +136,7 @@ internal fun DiagnosticsScreenContent(
     onScan: () -> Unit,
     onOpenCrashLog: () -> Unit,
     onOpenTtsTest: () -> Unit,
+    onOpenTranslationTest: () -> Unit = {},
     onOpenLanguageInit: () -> Unit = {},
 ) {
     Scaffold(
@@ -176,21 +181,32 @@ internal fun DiagnosticsScreenContent(
             }
 
             item {
-                Row(
+                Column(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Button(
-                        onClick = onOpenTtsTest,
-                        modifier = Modifier.weight(1f),
+                        onClick = onOpenTranslationTest,
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text("TTS Developer Test")
+                        Icon(Icons.Default.Translate, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("IndicTrans2 Translation Test")
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(
-                        onClick = onOpenLanguageInit,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Text("Language Packs")
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = onOpenTtsTest,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("TTS Developer Test")
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(
+                            onClick = onOpenLanguageInit,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("Language Packs")
+                        }
                     }
                 }
             }

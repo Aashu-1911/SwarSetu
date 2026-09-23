@@ -59,7 +59,7 @@ fun LanguageInitScreen(
         errorMessage = ""
         scope.launch {
             try {
-                val translationCount = 8
+                val translationCount = 3
                 totalModels = translationCount
 
                 // Speech models are NOT downloaded: SraVaani 0.5 is packaged in the APK
