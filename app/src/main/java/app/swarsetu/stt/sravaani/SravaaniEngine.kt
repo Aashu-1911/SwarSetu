@@ -559,25 +559,51 @@ class SravaaniEngine(
                         logitsBuf.rewind()
                         val totalLogits = logitsBuf.remaining()
 
-                        // 1. Vocabulary logits: 0 until minOf(totalLogits, VOCAB_WITH_BLANK = 5001)
+                        // 1. Vocabulary logits: determine if frame contains speech (global argmax < BLANK_ID)
+                        val vocabLimit = minOf(totalLogits, VOCAB_WITH_BLANK)
+                        var globalBest = BLANK_ID
+                        var globalMaxLogit = Float.NEGATIVE_INFINITY
+                        for (v in 0 until vocabLimit) {
+                            val l = logitsBuf.get(v)
+                            if (l > globalMaxLogit) {
+                                globalMaxLogit = l
+                                globalBest = v
+                            }
+                        }
+
                         var bestToken = BLANK_ID
                         var maxLogit = Float.NEGATIVE_INFINITY
                         var secondToken = BLANK_ID
                         var secondLogit = Float.NEGATIVE_INFINITY
-                        val vocabLimit = minOf(totalLogits, VOCAB_WITH_BLANK)
-                        val mask = stream.allowedMask
-                        for (v in 0 until vocabLimit) {
-                            if (mask != null && v < mask.size && !mask[v]) continue
-                            val l = logitsBuf.get(v)
-                            if (l > maxLogit) {
-                                secondLogit = maxLogit
-                                secondToken = bestToken
-                                maxLogit = l
-                                bestToken = v
-                            } else if (l > secondLogit) {
-                                secondLogit = l
-                                secondToken = v
+
+                        if (globalBest < BLANK_ID) {
+                            // Speech detected: select best non-blank token for target language
+                            val mask = stream.allowedMask
+                            if (mask != null) {
+                                for (v in 0 until minOf(vocabLimit, BLANK_ID)) {
+                                    if (v < mask.size && !mask[v]) continue
+                                    val l = logitsBuf.get(v)
+                                    if (l > maxLogit) {
+                                        secondLogit = maxLogit
+                                        secondToken = bestToken
+                                        maxLogit = l
+                                        bestToken = v
+                                    } else if (l > secondLogit) {
+                                        secondLogit = l
+                                        secondToken = v
+                                    }
+                                }
+                                if (bestToken >= BLANK_ID) {
+                                    bestToken = BLANK_ID
+                                    maxLogit = globalMaxLogit
+                                }
+                            } else {
+                                bestToken = globalBest
+                                maxLogit = globalMaxLogit
                             }
+                        } else {
+                            bestToken = BLANK_ID
+                            maxLogit = globalMaxLogit
                         }
 
                         // 2. Duration logits: VOCAB_WITH_BLANK until totalLogits (indices 5001..5005 -> durations 0..4)
