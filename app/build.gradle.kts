@@ -610,7 +610,6 @@ dependencies {
     // (ui/scan/QrDecoder.kt). CameraX drives the camera; we own the analyze loop so a malformed frame can
     // never throw off the main thread. See ADR 015 and the cameraX pin in the version catalog for why
     // zxing-android-embedded was dropped.
-    implementation("com.google.mlkit:translate:17.0.2")
     implementation(libs.zxing.core)
     implementation(libs.androidx.camera.core)
     implementation(libs.androidx.camera.camera2)

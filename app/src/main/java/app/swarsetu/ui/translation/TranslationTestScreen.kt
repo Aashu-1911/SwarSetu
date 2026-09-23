@@ -1,0 +1,525 @@
+package app.swarsetu.ui.translation
+
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import app.swarsetu.translation.indictrans.IndicLanguage
+import app.swarsetu.translation.indictrans.IndicTransModelBundle
+import org.koin.androidx.compose.koinViewModel
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TranslationTestScreen(
+    onBack: () -> Unit,
+    viewModel: TranslationTestViewModel = koinViewModel(),
+) {
+    val state by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+
+    var srcExpanded by remember { mutableStateOf(false) }
+    var tgtExpanded by remember { mutableStateOf(false) }
+
+    val samplePhrases = listOf(
+        "नमस्ते, आप कैसे हैं?" to IndicLanguage.HINDI,
+        "Hello, how can I help you today?" to IndicLanguage.ENGLISH,
+        "आणीबाणी जाहीर करण्यात आली आहे." to IndicLanguage.MARATHI,
+        "બચાવ ટીમ આવી રહી છે." to IndicLanguage.GUJARATI,
+        "உடனடி உதவி தேவைப்படுகிறது." to IndicLanguage.TAMIL,
+        "త్వరగా సురక్షిత ప్రాంతానికి చేరుకోండి." to IndicLanguage.TELUGU,
+    )
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("IndicTrans2 Translation Test") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+            )
+        },
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            // ── Model Selection & Download Card ──────────────────────────────
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                ),
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text(
+                        text = "Neural Translation Models (IndicTrans2)",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+
+                    Text(
+                        text = "Tap a model below to manage, or change languages to auto-select the required model.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+
+                    // 3 Selectable Model Cards ensuring ALL 3 are always fully visible
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        IndicTransModelBundle.entries.forEach { bundle ->
+                            val isSelected = bundle == state.selectedBundle
+                            val isDownloaded = state.downloadedBundles.contains(bundle)
+                            val isRecommended = bundle == state.autoSelectedBundle
+
+                            Surface(
+                                onClick = { viewModel.selectBundle(bundle) },
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (isSelected) {
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                                } else {
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
+                                },
+                                border = BorderStroke(
+                                    width = if (isSelected) 2.dp else 1.dp,
+                                    color = if (isSelected) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                    },
+                                ),
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        ) {
+                                            Text(
+                                                text = bundle.displayName,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                                                color = if (isSelected) {
+                                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                                } else {
+                                                    MaterialTheme.colorScheme.onSurface
+                                                },
+                                            )
+                                            if (isRecommended) {
+                                                Surface(
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                ) {
+                                                    Text(
+                                                        text = "Auto-Pair",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onPrimary,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        Text(
+                                            text = "${bundle.description} (~${bundle.approxSizeMb} MB)",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.width(8.dp))
+
+                                    if (isDownloaded) {
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                        ) {
+                                            Text(
+                                                text = "✓ Ready",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            )
+                                        }
+                                    } else {
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = MaterialTheme.colorScheme.error.copy(alpha = 0.12f),
+                                        ) {
+                                            Text(
+                                                text = "Download",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.error,
+                                                fontWeight = FontWeight.SemiBold,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                    // Selected Model Status & Controls
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            if (state.isModelDownloaded) {
+                                Icon(
+                                    Icons.Default.CheckCircle,
+                                    contentDescription = "Ready",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                                Text(
+                                    text = "${state.selectedBundle.displayName}: Ready (${state.downloadedBytes / (1024 * 1024)} MB)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            } else if (state.isDownloading) {
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                Text(
+                                    text = "Downloading ${state.selectedBundle.displayName} (${state.downloadPercent}%)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            } else {
+                                Icon(
+                                    Icons.Default.Warning,
+                                    contentDescription = "Not Downloaded",
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                                Text(
+                                    text = "Selected: ${state.selectedBundle.displayName} (~${state.selectedBundle.approxSizeMb} MB)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            }
+                        }
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (!state.isModelDownloaded) {
+                                Button(
+                                    onClick = { viewModel.downloadSelectedModel() },
+                                    enabled = !state.isDownloading,
+                                ) {
+                                    Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(if (state.isDownloading) "Downloading..." else "Download Model")
+                                }
+                            } else {
+                                OutlinedButton(
+                                    onClick = { viewModel.deleteSelectedModel() },
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = MaterialTheme.colorScheme.error,
+                                    ),
+                                ) {
+                                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Delete")
+                                }
+                            }
+                        }
+                    }
+
+                    if (state.isDownloading) {
+                        LinearProgressIndicator(
+                            progress = { state.downloadPercent / 100f },
+                            modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+                        )
+                        Text(
+                            text = "Fetching ${state.currentDownloadFile} • ${state.downloadedBytes / (1024 * 1024)} MB / ${state.totalBytes / (1024 * 1024)} MB",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+
+            // ── Language Pair Dropdowns ──────────────────────────────────────
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                // Source Language
+                ExposedDropdownMenuBox(
+                    expanded = srcExpanded,
+                    onExpandedChange = { srcExpanded = !srcExpanded },
+                    modifier = Modifier.weight(1f),
+                ) {
+                    OutlinedTextField(
+                        value = "${state.sourceLanguage.displayName} (${state.sourceLanguage.nativeName})",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("From") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = srcExpanded) },
+                        modifier = Modifier.menuAnchor().fillMaxWidth(),
+                    )
+                    ExposedDropdownMenu(
+                        expanded = srcExpanded,
+                        onDismissRequest = { srcExpanded = false },
+                    ) {
+                        IndicLanguage.entries.forEach { lang ->
+                            DropdownMenuItem(
+                                text = { Text("${lang.displayName} • ${lang.nativeName}") },
+                                onClick = {
+                                    viewModel.setSourceLanguage(lang)
+                                    srcExpanded = false
+                                },
+                            )
+                        }
+                    }
+                }
+
+                IconButton(
+                    onClick = { viewModel.swapLanguages() },
+                    modifier = Modifier.padding(top = 8.dp),
+                ) {
+                    Icon(Icons.Default.SwapHoriz, contentDescription = "Swap Languages")
+                }
+
+                // Target Language
+                ExposedDropdownMenuBox(
+                    expanded = tgtExpanded,
+                    onExpandedChange = { tgtExpanded = !tgtExpanded },
+                    modifier = Modifier.weight(1f),
+                ) {
+                    OutlinedTextField(
+                        value = "${state.targetLanguage.displayName} (${state.targetLanguage.nativeName})",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("To") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = tgtExpanded) },
+                        modifier = Modifier.menuAnchor().fillMaxWidth(),
+                    )
+                    ExposedDropdownMenu(
+                        expanded = tgtExpanded,
+                        onDismissRequest = { tgtExpanded = false },
+                    ) {
+                        IndicLanguage.entries.forEach { lang ->
+                            DropdownMenuItem(
+                                text = { Text("${lang.displayName} • ${lang.nativeName}") },
+                                onClick = {
+                                    viewModel.setTargetLanguage(lang)
+                                    tgtExpanded = false
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+
+            // ── Quick sample chips ───────────────────────────────────────────
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = "Quick Sample Inputs:",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    samplePhrases.take(3).forEach { (phrase, lang) ->
+                        OutlinedButton(
+                            onClick = {
+                                viewModel.setSourceLanguage(lang)
+                                viewModel.setInputText(phrase)
+                            },
+                            contentPadding = ButtonDefaults.TextButtonContentPadding,
+                        ) {
+                            Text(
+                                text = phrase,
+                                maxLines = 1,
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
+                    }
+                }
+            }
+
+            // ── Input Text Box ───────────────────────────────────────────────
+            OutlinedTextField(
+                value = state.inputText,
+                onValueChange = { viewModel.setInputText(it) },
+                label = { Text("Input Text (${state.sourceLanguage.displayName})") },
+                placeholder = { Text("Enter text to translate...") },
+                modifier = Modifier.fillMaxWidth().height(130.dp),
+                maxLines = 5,
+            )
+
+            // ── Translate Button ─────────────────────────────────────────────
+            Button(
+                onClick = { viewModel.translate() },
+                enabled = !state.isTranslating && state.inputText.isNotBlank(),
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+            ) {
+                if (state.isTranslating) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Translating via ONNX Runtime...")
+                } else {
+                    Icon(Icons.Default.Translate, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Translate (${state.sourceLanguage.displayName} → ${state.targetLanguage.displayName})")
+                }
+            }
+
+            // ── Error Message Banner ─────────────────────────────────────────
+            state.errorMessage?.let { error ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                ) {
+                    Text(
+                        text = error,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(12.dp),
+                    )
+                }
+            }
+
+            // ── Output Text Box ──────────────────────────────────────────────
+            OutlinedTextField(
+                value = state.outputText,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Translated Output (${state.targetLanguage.displayName})") },
+                placeholder = { Text("Translated text will appear here...") },
+                modifier = Modifier.fillMaxWidth().height(140.dp),
+                maxLines = 6,
+                trailingIcon = {
+                    if (state.outputText.isNotBlank()) {
+                        IconButton(
+                            onClick = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                clipboard.setPrimaryClip(ClipData.newPlainText("Translation", state.outputText))
+                                Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+                            },
+                        ) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = "Copy")
+                        }
+                    }
+                },
+            )
+
+            // ── Latency & Metrics Footer ─────────────────────────────────────
+            if (state.latencyMs != null) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            text = "⚡ Latency: ${state.latencyMs} ms",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            text = "Tokens: ${state.tokensGenerated ?: 0}",
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                        Text(
+                            text = "Engine: IndicTrans2 ONNX INT8",
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}

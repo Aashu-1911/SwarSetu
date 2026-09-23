@@ -1,6 +1,5 @@
 package app.swarsetu.translation
 
-import com.google.mlkit.nl.translate.TranslateLanguage
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -18,29 +17,29 @@ class TranslatorEngineTest {
 
     @Test
     fun `detectLanguageFromScript detects scripts across all Indian language families`() {
-        assertEquals(TranslateLanguage.HINDI, engine.detectLanguageFromScript("नमस्ते भारत"))
-        assertEquals(TranslateLanguage.GUJARATI, engine.detectLanguageFromScript("કેમ છો અમદાવાદ"))
-        assertEquals(TranslateLanguage.BENGALI, engine.detectLanguageFromScript("নমস্কার কলকাতা"))
-        assertEquals(TranslateLanguage.TAMIL, engine.detectLanguageFromScript("வணக்கம் சென்னை"))
-        assertEquals(TranslateLanguage.TELUGU, engine.detectLanguageFromScript("నమస్కారం హైదరాబాద్"))
-        assertEquals(TranslateLanguage.KANNADA, engine.detectLanguageFromScript("ನಮಸ್ಕಾರ ಬೆಂಗಳೂರು"))
-        assertEquals(TranslateLanguage.ENGLISH, engine.detectLanguageFromScript("Hello New Delhi"))
+        assertEquals("hi", engine.detectLanguageFromScript("नमस्ते भारत"))
+        assertEquals("gu", engine.detectLanguageFromScript("કેમ છો અમદાવાદ"))
+        assertEquals("bn", engine.detectLanguageFromScript("নমস্কার কলকাতা"))
+        assertEquals("ta", engine.detectLanguageFromScript("வணக்கம் சென்னை"))
+        assertEquals("te", engine.detectLanguageFromScript("నమస్కారం హైదరాబాద్"))
+        assertEquals("kn", engine.detectLanguageFromScript("ನಮಸ್ಕಾರ ಬೆಂಗಳೂರು"))
+        assertEquals("en", engine.detectLanguageFromScript("Hello New Delhi"))
     }
 
     @Test
-    fun `normalizeToLanguageTag normalizes all 10 target languages correctly`() {
-        assertEquals(TranslateLanguage.ENGLISH, engine.normalizeToLanguageTag("en"))
-        assertEquals(TranslateLanguage.ENGLISH, engine.normalizeToLanguageTag("english"))
-        assertEquals(TranslateLanguage.HINDI, engine.normalizeToLanguageTag("hi"))
-        assertEquals(TranslateLanguage.HINDI, engine.normalizeToLanguageTag("hindi"))
-        assertEquals(TranslateLanguage.GUJARATI, engine.normalizeToLanguageTag("gu"))
-        assertEquals(TranslateLanguage.MARATHI, engine.normalizeToLanguageTag("mr"))
-        assertEquals(TranslateLanguage.TAMIL, engine.normalizeToLanguageTag("ta"))
-        assertEquals(TranslateLanguage.TELUGU, engine.normalizeToLanguageTag("te"))
-        assertEquals(TranslateLanguage.BENGALI, engine.normalizeToLanguageTag("bn"))
-        assertEquals(TranslateLanguage.KANNADA, engine.normalizeToLanguageTag("kn"))
-        assertEquals(TranslateLanguage.HINDI, engine.normalizeToLanguageTag("ml"))
-        assertEquals(TranslateLanguage.HINDI, engine.normalizeToLanguageTag("or"))
+    fun `normalizeToLanguageTag normalizes all target languages correctly`() {
+        assertEquals("en", engine.normalizeToLanguageTag("en"))
+        assertEquals("en", engine.normalizeToLanguageTag("english"))
+        assertEquals("hi", engine.normalizeToLanguageTag("hi"))
+        assertEquals("hi", engine.normalizeToLanguageTag("hindi"))
+        assertEquals("gu", engine.normalizeToLanguageTag("gu"))
+        assertEquals("mr", engine.normalizeToLanguageTag("mr"))
+        assertEquals("ta", engine.normalizeToLanguageTag("ta"))
+        assertEquals("te", engine.normalizeToLanguageTag("te"))
+        assertEquals("bn", engine.normalizeToLanguageTag("bn"))
+        assertEquals("kn", engine.normalizeToLanguageTag("kn"))
+        assertEquals("ml", engine.normalizeToLanguageTag("ml"))
+        assertEquals("or", engine.normalizeToLanguageTag("or"))
     }
 
     @Test
@@ -53,7 +52,6 @@ class TranslatorEngineTest {
 
     @Test
     fun `maskEntities shields multi-word names and introduction patterns`() {
-        // Reflection test on private maskEntities via full translate fallback or direct reflection
         val method = TranslatorEngine::class.java.getDeclaredMethod("maskEntities", String::class.java, List::class.java)
         method.isAccessible = true
 
@@ -136,7 +134,7 @@ class TranslatorEngineTest {
         assertTrue("Should extract aashu from intro pattern", replacements.values.any { it.equals("aashu", ignoreCase = true) })
         assertTrue("Should extract delhi from critical entities", replacements.values.any { it.equals("delhi", ignoreCase = true) })
         assertTrue("Should extract rajiv chowk from locations", replacements.values.any { it.equals("rajiv chowk", ignoreCase = true) })
-        
+
         // Ensure conjunctions and prepositions are preserved in maskedText
         assertTrue("Conjunction 'and' must be preserved in maskedText", maskedText.contains(" and "))
         assertTrue("Pronoun 'i am' must be preserved in maskedText", maskedText.contains(" i am ") || maskedText.contains(" I am "))

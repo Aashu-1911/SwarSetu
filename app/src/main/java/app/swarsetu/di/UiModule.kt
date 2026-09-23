@@ -13,6 +13,7 @@ import app.swarsetu.ui.profile.ProfileDetailsViewModel
 import app.swarsetu.ui.profile.ProfileViewModel
 
 import app.swarsetu.ui.requests.MessageRequestsViewModel
+import app.swarsetu.ui.translation.TranslationTestViewModel
 import app.swarsetu.ui.verify.VerifyContactViewModel
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
@@ -66,5 +67,5 @@ val uiModule =
         viewModel { BlockedUsersViewModel(get(), get()) }
         viewModel { MessageRequestsViewModel(get(), get(), get(), get(), get(), androidContext()) }
         viewModel { VerifyContactViewModel(get(), get()) }
-
+        viewModel { TranslationTestViewModel(get(), get()) }
     }

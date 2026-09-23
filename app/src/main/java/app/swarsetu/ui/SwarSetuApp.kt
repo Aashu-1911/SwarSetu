@@ -46,6 +46,7 @@ import app.swarsetu.ui.review.RateReviewDialog
 import app.swarsetu.ui.review.ReviewPromptInbox
 import app.swarsetu.ui.share.ShareInbox
 import app.swarsetu.ui.share.ShareTargetScreen
+import app.swarsetu.ui.translation.TranslationTestScreen
 import app.swarsetu.ui.verify.VerifyContactScreen
 import org.koin.compose.koinInject
 
@@ -64,6 +65,7 @@ private object Routes {
     const val VERIFY = "verify"
     const val SHARE = "share"
     const val TTS_TEST = "tts_test"
+    const val TRANSLATION_TEST = "translation_test"
     const val CHAT = "chat/{conversationId}"
 
     fun chat(conversationId: String) = "chat/$conversationId"
@@ -326,6 +328,7 @@ fun SwarSetuApp(startRoute: String? = null) {
                 onBack = { navController.popBackStack() },
                 onOpenCrashLog = { navController.navigate(Routes.CRASH_LOG) },
                 onOpenTtsTest = { navController.navigate(Routes.TTS_TEST) },
+                onOpenTranslationTest = { navController.navigate(Routes.TRANSLATION_TEST) },
                 onOpenLanguageInit = { navController.navigate(Routes.LANGUAGE_INIT) },
             )
         }
@@ -334,6 +337,9 @@ fun SwarSetuApp(startRoute: String? = null) {
         }
         composable(Routes.TTS_TEST) {
             TtsTestScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Routes.TRANSLATION_TEST) {
+            TranslationTestScreen(onBack = { navController.popBackStack() })
         }
         composable(Routes.BLOCKED_USERS) {
             BlockedUsersScreen(onBack = { navController.popBackStack() })
