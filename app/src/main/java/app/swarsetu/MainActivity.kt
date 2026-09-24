@@ -8,7 +8,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.content.IntentCompat
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.swarsetu.data.settings.SettingsStore
 import app.swarsetu.ui.RouteInbox
@@ -52,15 +54,21 @@ class MainActivity : ComponentActivity() {
 
             val langCode by settingsStore.sttLanguageCode.collectAsStateWithLifecycle(initialValue = "en")
             val context = androidx.compose.ui.platform.LocalContext.current
-            val locale = java.util.Locale(langCode)
-            java.util.Locale.setDefault(locale)
-            val configuration = android.content.res.Configuration(context.resources.configuration)
-            configuration.setLocale(locale)
-            val localizedContext = context.createConfigurationContext(configuration)
+            
+            val locale = remember(langCode) { java.util.Locale(langCode) }
+            val localizedContext = remember(locale, context) {
+                val configuration = android.content.res.Configuration(context.resources.configuration)
+                configuration.setLocale(locale)
+                context.createConfigurationContext(configuration)
+            }
+
+            LaunchedEffect(locale) {
+                java.util.Locale.setDefault(locale)
+            }
 
             androidx.compose.runtime.CompositionLocalProvider(
                 androidx.compose.ui.platform.LocalContext provides localizedContext,
-                androidx.compose.ui.platform.LocalConfiguration provides configuration
+                androidx.compose.ui.platform.LocalConfiguration provides localizedContext.resources.configuration
             ) {
                 SwarSetuTheme(darkTheme = isDark) {
                     SwarSetuApp(startRoute = startRoute)
