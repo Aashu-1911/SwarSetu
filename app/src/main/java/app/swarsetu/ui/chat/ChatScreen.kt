@@ -89,6 +89,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
@@ -227,6 +228,7 @@ fun ChatScreen(
     onOpenProfile: (nodeId: String) -> Unit,
     onOpenGroupDetails: (conversationId: String) -> Unit,
     onOpenMessageDetails: (messageId: String) -> Unit,
+    onCall: (String) -> Unit = {},
     viewModel: ChatViewModel = koinViewModel { parametersOf(conversationId) },
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -381,6 +383,7 @@ fun ChatScreen(
         onOpenProfile = onOpenProfile,
         onOpenGroupDetails = onOpenGroupDetails,
         onOpenMessageDetails = onOpenMessageDetails,
+        onCall = { onCall(conversationId) },
         onSend = {
             val text = inputState.text.toString()
             val applied = pendingMentions.filter { text.contains("@${it.name}") }
@@ -467,6 +470,7 @@ internal fun ChatScreenContent(
     // Opens a message's details screen from its long-press menu. Defaulted so previews and the
     // content-level tests can leave it out.
     onOpenMessageDetails: (messageId: String) -> Unit = {},
+    onCall: () -> Unit = {},
     onSend: () -> Unit,
     onAttachClick: () -> Unit,
     // Long-pressing the attach affordance; opens the in-app camera. Defaulted so previews and the
@@ -668,6 +672,15 @@ internal fun ChatScreenContent(
                                 contentDescription = "Send Emergency Alert",
                                 tint = MaterialTheme.colorScheme.error,
                             )
+                        }
+                        if (!state.isRoom && !state.isGroup) {
+                            IconButton(onClick = onCall) {
+                                Icon(
+                                    Icons.Default.Call,
+                                    contentDescription = "Walkie-Talkie Call",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                            }
                         }
                     }
 

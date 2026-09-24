@@ -137,6 +137,7 @@ class InboundPipeline(
     // arrived (MeshManager.replayCustodiedGroupFrames) — the local half of the re-serve heal; a frame
     // WE custodied before its seed is never re-served by a peer (no digest divergence to cue it).
     private val replayGroupCustody: suspend (String?, String?) -> Unit = { _, _ -> },
+    private val onCallFrame: (app.swarsetu.mesh.protocol.CallContent) -> Unit = {},
 ) {
     // nodeId -> avatar hash a non-direct peer advertised but whose bytes we're still pulling, so a blob
     // arriving via the multi-hop BlobExchange can be attributed back to the peer that advertised it.
@@ -255,6 +256,10 @@ class InboundPipeline(
 
             FrameType.TYPING -> {
                 handleTyping(env)
+            }
+
+            FrameType.CALL -> {
+                WireCodec.decodePayload<app.swarsetu.mesh.protocol.CallContent>(env.payload)?.let { onCallFrame(it) }
             }
 
             else -> {

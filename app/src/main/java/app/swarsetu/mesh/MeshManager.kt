@@ -118,6 +118,8 @@ class MeshManager(
     // module) is unchanged; mirrors the house convention — ForwardSync(clock = …), AckSync, KeyExchange.
     private val clock: () -> Long = { System.currentTimeMillis() },
 ) : MeshController {
+    private val _callFrames = kotlinx.coroutines.flow.MutableSharedFlow<app.swarsetu.mesh.protocol.CallContent>(extraBufferCapacity = 64)
+    override val callFrames = kotlinx.coroutines.flow.asSharedFlow(_callFrames)
     // Per-session scope for the collectors + metrics loop + router; cancelled in stop() so they don't
     // accumulate across start/stop cycles (e.g. a Diagnostics-triggered restart()).
     private var sessionScope: CoroutineScope? = null
@@ -234,7 +236,7 @@ class MeshManager(
             redistributeGroupKey = ::redistributeGroupKey,
             flushGroupKeys = ::flushPendingGroupKeysFor,
             replayGroupCustody = ::replayCustodiedGroupFrames,
-
+            onCallFrame = { frame -> _callFrames.tryEmit(frame) }
         )
 
     // Reconstructed per session so its inbound collector + relay jobs live on the session scope and are
@@ -606,6 +608,21 @@ class MeshManager(
         )
         Log.d("SW_MESH", "MESH_SEND_SUCCESS (id=$id)")
         return true
+    }
+
+    override suspend fun sendCallFrame(content: app.swarsetu.mesh.protocol.CallContent, recipientId: String?) {
+        val me = identity.nodeId()
+        val id = FrameId.new()
+        originateSigned(
+            RelayEnvelope(
+                type = FrameType.CALL,
+                id = id,
+                senderId = me,
+                sentAt = clock(),
+                recipientId = recipientId,
+                payload = WireCodec.encodePayload(content)
+            )
+        )
     }
 
     /** Builds a [FrameType.CHAT] routing envelope wrapping the given [content] payload. */

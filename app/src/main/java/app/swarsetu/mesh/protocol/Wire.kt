@@ -41,6 +41,7 @@ object FrameType {
     const val BLOB_REQ = "blobreq"
     const val KEY_REQ = "keyreq"
     const val TYPING = "typing"
+    const val CALL = "call"
 
     /**
      * Whether a frame of [type] is worth parking for replay when it's dropped for a missing sender key
@@ -254,6 +255,20 @@ data class KeyReqContent(
 @Serializable
 data class TypingContent(
     val groupId: String? = null,
+)
+
+/**
+ * Content of a [FrameType.CALL] frame: live voice calling text chunk.
+ * Unlike chat, this is transmitted ephemerally during a live voice call.
+ */
+@Serializable
+data class CallContent(
+    val sessionId: String,
+    val sequenceNumber: Int,
+    val sourceLanguage: String,
+    val targetLanguage: String,
+    val sourceText: String,
+    val isFinal: Boolean = false,
 )
 
 /**

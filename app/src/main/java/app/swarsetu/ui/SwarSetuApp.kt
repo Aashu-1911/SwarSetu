@@ -40,6 +40,7 @@ import app.swarsetu.ui.onboarding.OnboardingScreen
 import app.swarsetu.ui.onboarding.ProfileSetupScreen
 import app.swarsetu.ui.profile.ProfileDetailsScreen
 import app.swarsetu.ui.profile.ProfileScreen
+import app.swarsetu.ui.calling.CallScreen
 
 import app.swarsetu.ui.requests.MessageRequestsScreen
 import app.swarsetu.ui.review.RateReviewDialog
@@ -69,6 +70,9 @@ private object Routes {
     const val CHAT = "chat/{conversationId}"
 
     fun chat(conversationId: String) = "chat/$conversationId"
+    
+    const val CALL = "call/{peerId}"
+    fun call(peerId: String) = "call/$peerId"
 
     const val PROFILE_DETAILS = "profileDetails/{nodeId}"
 
@@ -263,6 +267,17 @@ fun SwarSetuApp(startRoute: String? = null) {
                 onOpenProfile = { id -> navController.navigate(Routes.profileDetails(id)) },
                 onOpenGroupDetails = { id -> navController.navigate(Routes.groupDetails(id)) },
                 onOpenMessageDetails = { id -> navController.navigate(Routes.messageDetails(id)) },
+                onCall = { id -> navController.navigate(Routes.call(id)) }
+            )
+        }
+        composable(
+            route = Routes.CALL,
+            arguments = listOf(navArgument("peerId") { type = NavType.StringType }),
+        ) { backStackEntry ->
+            val peerId = backStackEntry.arguments?.getString("peerId") ?: return@composable
+            CallScreen(
+                peerId = peerId,
+                onNavigateBack = { navController.popBackStack() }
             )
         }
         composable(

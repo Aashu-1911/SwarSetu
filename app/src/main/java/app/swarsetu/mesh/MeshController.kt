@@ -37,6 +37,9 @@ interface MeshController {
     /** conversationId → the set of peers currently shown as "typing" there, for the chat UI. */
     val typing: StateFlow<Map<String, Set<String>>>
 
+    /** Incoming live call frames (voice subtitles). */
+    val callFrames: kotlinx.coroutines.flow.SharedFlow<app.swarsetu.mesh.protocol.CallContent>
+
     /** Starts the mesh engine (called by the foreground [MeshService]). */
     fun start()
 
@@ -127,6 +130,9 @@ interface MeshController {
 
     /** Broadcasts a best-effort "now typing" cue for [conversationId] to nearby peers. */
     suspend fun sendTyping(conversationId: String)
+
+    /** Sends a live call text chunk over the mesh to a specific recipient. */
+    suspend fun sendCallFrame(content: app.swarsetu.mesh.protocol.CallContent, recipientId: String?)
 }
 
 /**
