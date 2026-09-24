@@ -264,6 +264,7 @@ data class TypingContent(
 @Serializable
 data class CallContent(
     val sessionId: String,
+    val callerId: String,
     val sequenceNumber: Int,
     val sourceLanguage: String,
     val targetLanguage: String,

@@ -620,7 +620,7 @@ class MeshManager(
                 senderId = me,
                 sentAt = clock(),
                 recipientId = recipientId,
-                payload = WireCodec.encodePayload(content)
+                payload = WireCodec.encodePayload(content.copy(callerId = me))
             )
         )
     }

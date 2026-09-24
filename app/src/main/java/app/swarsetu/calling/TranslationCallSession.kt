@@ -53,7 +53,7 @@ class TranslationCallSession(
     init {
         receiveJob = coroutineScope.launch {
             meshController.callFrames.collectLatest { frame ->
-                if (frame.sessionId == _state.value.activePeerId) {
+                if (frame.callerId == _state.value.activePeerId) {
                     handleIncomingFrame(frame)
                 }
             }
@@ -116,6 +116,7 @@ class TranslationCallSession(
             meshController.sendCallFrame(
                 CallContent(
                     sessionId = peerId,
+                    callerId = "",
                     sequenceNumber = sequenceNumber++,
                     sourceLanguage = _state.value.sourceLanguage,
                     targetLanguage = _state.value.targetLanguage,
