@@ -2,10 +2,16 @@ package app.swarsetu.ui.translation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.swarsetu.stt.SttLanguage
+import app.swarsetu.stt.SttPipeline
 import app.swarsetu.translation.TranslatorEngine
 import app.swarsetu.translation.indictrans.IndicLanguage
 import app.swarsetu.translation.indictrans.IndicTransModelBundle
 import app.swarsetu.translation.indictrans.IndicTransModelManager
+import app.swarsetu.tts.TtsLanguage
+import app.swarsetu.tts.TtsManager
+import app.swarsetu.tts.TtsPriority
+import app.swarsetu.tts.TtsRequest
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,11 +37,16 @@ data class TranslationTestUiState(
     val latencyMs: Long? = null,
     val tokensGenerated: Int? = null,
     val errorMessage: String? = null,
+    val isRecording: Boolean = false,
+    val sttLivePreview: String = "",
+    val isPlayingTts: Boolean = false,
 )
 
 class TranslationTestViewModel(
     private val modelManager: IndicTransModelManager,
     private val translatorEngine: TranslatorEngine,
+    private val sttPipeline: SttPipeline,
+    private val ttsManager: TtsManager,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TranslationTestUiState())
@@ -46,6 +57,29 @@ class TranslationTestViewModel(
     init {
         updateAutoSelectedBundle()
         refreshModelStatus()
+
+        viewModelScope.launch {
+            sttPipeline.partialText.collect { partial ->
+                if (_uiState.value.isRecording && partial.isNotBlank()) {
+                    _uiState.update { it.copy(sttLivePreview = partial) }
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            sttPipeline.latestResult.collect { result ->
+                if (result != null && result.text.isNotBlank() && _uiState.value.isRecording) {
+                    _uiState.update {
+                        it.copy(
+                            isRecording = false,
+                            sttLivePreview = "",
+                            inputText = result.text,
+                        )
+                    }
+                    translate()
+                }
+            }
+        }
     }
 
     private fun updateAutoSelectedBundle() {
@@ -131,6 +165,63 @@ class TranslationTestViewModel(
 
     fun setInputText(text: String) {
         _uiState.update { it.copy(inputText = text, errorMessage = null) }
+    }
+
+    fun toggleVoiceRecording() {
+        if (_uiState.value.isRecording) {
+            _uiState.update { it.copy(isRecording = false) }
+            sttPipeline.stopCapture()
+        } else {
+            val src = _uiState.value.sourceLanguage
+            val sttLang = SttLanguage.fromCode(src.code) ?: SttLanguage.HINDI
+            _uiState.update {
+                it.copy(
+                    isRecording = true,
+                    sttLivePreview = "Listening in ${sttLang.displayName} (${sttLang.englishName})...",
+                    errorMessage = null,
+                )
+            }
+            if (sttPipeline.canCapture) {
+                sttPipeline.startCapture(sttLang, silenceTimeoutMs = 2500L)
+            } else {
+                _uiState.update {
+                    it.copy(
+                        isRecording = false,
+                        errorMessage = "Microphone permission required for voice input.",
+                    )
+                }
+            }
+        }
+    }
+
+    fun cancelVoiceRecording() {
+        _uiState.update { it.copy(isRecording = false, sttLivePreview = "") }
+        sttPipeline.cancelCapture()
+    }
+
+    fun speakOutput() {
+        val state = _uiState.value
+        val text = state.outputText.trim()
+        if (text.isEmpty()) return
+
+        val ttsLang = TtsLanguage.fromLanguageCode(state.targetLanguage.code, text) ?: TtsLanguage.HINDI
+        viewModelScope.launch {
+            _uiState.update { it.copy(isPlayingTts = true) }
+            ttsManager.speak(
+                TtsRequest(
+                    requestId = java.util.UUID.randomUUID().toString(),
+                    text = text,
+                    language = ttsLang,
+                    priority = TtsPriority.NORMAL,
+                )
+            )
+            _uiState.update { it.copy(isPlayingTts = false) }
+        }
+    }
+
+    fun stopTts() {
+        ttsManager.stopAll()
+        _uiState.update { it.copy(isPlayingTts = false) }
     }
 
     fun downloadSelectedModel() {
@@ -239,5 +330,7 @@ class TranslationTestViewModel(
     override fun onCleared() {
         super.onCleared()
         downloadJob?.cancel()
+        sttPipeline.cancelCapture()
+        ttsManager.stopAll()
     }
 }

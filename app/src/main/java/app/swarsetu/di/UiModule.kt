@@ -67,5 +67,5 @@ val uiModule =
         viewModel { BlockedUsersViewModel(get(), get()) }
         viewModel { MessageRequestsViewModel(get(), get(), get(), get(), get(), androidContext()) }
         viewModel { VerifyContactViewModel(get(), get()) }
-        viewModel { TranslationTestViewModel(get(), get()) }
+        viewModel { TranslationTestViewModel(get(), get(), get(), get()) }
     }

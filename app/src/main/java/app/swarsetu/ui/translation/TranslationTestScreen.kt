@@ -26,8 +26,13 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -38,7 +43,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -59,6 +63,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -90,7 +95,7 @@ fun TranslationTestScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("IndicTrans2 Translation Test") },
+                title = { Text("STT + IndicTrans2 Pipeline Test") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -153,7 +158,7 @@ fun TranslationTestScreen(
                                     color = if (isSelected) {
                                         MaterialTheme.colorScheme.primary
                                     } else {
-                                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                        MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
                                     },
                                 ),
                                 modifier = Modifier.fillMaxWidth(),
@@ -173,30 +178,26 @@ fun TranslationTestScreen(
                                             Text(
                                                 text = bundle.displayName,
                                                 style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
-                                                color = if (isSelected) {
-                                                    MaterialTheme.colorScheme.onPrimaryContainer
-                                                } else {
-                                                    MaterialTheme.colorScheme.onSurface
-                                                },
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                             )
                                             if (isRecommended) {
                                                 Surface(
                                                     shape = RoundedCornerShape(4.dp),
-                                                    color = MaterialTheme.colorScheme.primary,
+                                                    color = MaterialTheme.colorScheme.tertiaryContainer,
                                                 ) {
                                                     Text(
-                                                        text = "Auto-Pair",
+                                                        text = "Auto",
                                                         style = MaterialTheme.typography.labelSmall,
-                                                        color = MaterialTheme.colorScheme.onPrimary,
-                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                                        fontWeight = FontWeight.Bold,
+                                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
                                                     )
                                                 }
                                             }
                                         }
                                         Text(
-                                            text = "${bundle.description} (~${bundle.approxSizeMb} MB)",
-                                            style = MaterialTheme.typography.labelSmall,
+                                            text = bundle.description,
+                                            style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
                                     }
@@ -321,25 +322,26 @@ fun TranslationTestScreen(
                 }
             }
 
-            // ── Language Pair Dropdowns ──────────────────────────────────────
+            // ── Language Selector Row ─────────────────────────────────────────
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                // Source Language
+                // Source Language Dropdown
                 ExposedDropdownMenuBox(
                     expanded = srcExpanded,
                     onExpandedChange = { srcExpanded = !srcExpanded },
                     modifier = Modifier.weight(1f),
                 ) {
                     OutlinedTextField(
-                        value = "${state.sourceLanguage.displayName} (${state.sourceLanguage.nativeName})",
+                        value = "${state.sourceLanguage.displayName} (${state.sourceLanguage.code})",
                         onValueChange = {},
                         readOnly = true,
                         label = { Text("From") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = srcExpanded) },
-                        modifier = Modifier.menuAnchor().fillMaxWidth(),
+                        modifier = Modifier.menuAnchor(),
+                        singleLine = true,
                     )
                     ExposedDropdownMenu(
                         expanded = srcExpanded,
@@ -359,24 +361,25 @@ fun TranslationTestScreen(
 
                 IconButton(
                     onClick = { viewModel.swapLanguages() },
-                    modifier = Modifier.padding(top = 8.dp),
+                    modifier = Modifier.padding(horizontal = 4.dp),
                 ) {
                     Icon(Icons.Default.SwapHoriz, contentDescription = "Swap Languages")
                 }
 
-                // Target Language
+                // Target Language Dropdown
                 ExposedDropdownMenuBox(
                     expanded = tgtExpanded,
                     onExpandedChange = { tgtExpanded = !tgtExpanded },
                     modifier = Modifier.weight(1f),
                 ) {
                     OutlinedTextField(
-                        value = "${state.targetLanguage.displayName} (${state.targetLanguage.nativeName})",
+                        value = "${state.targetLanguage.displayName} (${state.targetLanguage.code})",
                         onValueChange = {},
                         readOnly = true,
                         label = { Text("To") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = tgtExpanded) },
-                        modifier = Modifier.menuAnchor().fillMaxWidth(),
+                        modifier = Modifier.menuAnchor(),
+                        singleLine = true,
                     )
                     ExposedDropdownMenu(
                         expanded = tgtExpanded,
@@ -424,34 +427,112 @@ fun TranslationTestScreen(
                 }
             }
 
-            // ── Input Text Box ───────────────────────────────────────────────
+            // ── Live STT Preview Banner (when recording) ─────────────────────
+            if (state.isRecording || state.sttLivePreview.isNotBlank()) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(
+                            Icons.Default.GraphicEq,
+                            contentDescription = "Recording",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(22.dp),
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "SraVaani 1.0 Live STT Recognition:",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            Text(
+                                text = if (state.sttLivePreview.isNotBlank()) state.sttLivePreview else "Listening...",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                        }
+                    }
+                }
+            }
+
+            // ── Input Text Box with Speech-to-Text Mic ────────────────────────
             OutlinedTextField(
                 value = state.inputText,
                 onValueChange = { viewModel.setInputText(it) },
                 label = { Text("Input Text (${state.sourceLanguage.displayName})") },
-                placeholder = { Text("Enter text to translate...") },
+                placeholder = { Text("Enter or speak text to translate...") },
                 modifier = Modifier.fillMaxWidth().height(130.dp),
                 maxLines = 5,
+                trailingIcon = {
+                    IconButton(
+                        onClick = { viewModel.toggleVoiceRecording() },
+                    ) {
+                        if (state.isRecording) {
+                            Icon(
+                                Icons.Default.MicOff,
+                                contentDescription = "Stop Recording",
+                                tint = Color.Red,
+                            )
+                        } else {
+                            Icon(
+                                Icons.Default.Mic,
+                                contentDescription = "Voice Input (SraVaani 1.0)",
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                },
             )
 
-            // ── Translate Button ─────────────────────────────────────────────
-            Button(
-                onClick = { viewModel.translate() },
-                enabled = !state.isTranslating && state.inputText.isNotBlank(),
-                modifier = Modifier.fillMaxWidth().height(50.dp),
+            // ── Action Buttons Row (Voice & Translate) ────────────────────────
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                if (state.isTranslating) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary,
+                OutlinedButton(
+                    onClick = { viewModel.toggleVoiceRecording() },
+                    modifier = Modifier.weight(1f).height(50.dp),
+                    colors = if (state.isRecording) {
+                        ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)
+                    } else {
+                        ButtonDefaults.outlinedButtonColors()
+                    },
+                ) {
+                    Icon(
+                        if (state.isRecording) Icons.Default.MicOff else Icons.Default.Mic,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Translating via ONNX Runtime...")
-                } else {
-                    Icon(Icons.Default.Translate, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Translate (${state.sourceLanguage.displayName} → ${state.targetLanguage.displayName})")
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(if (state.isRecording) "Stop Speaking" else "Speak (STT)")
+                }
+
+                Button(
+                    onClick = { viewModel.translate() },
+                    enabled = !state.isTranslating && state.inputText.isNotBlank(),
+                    modifier = Modifier.weight(1.5f).height(50.dp),
+                ) {
+                    if (state.isTranslating) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Translating...")
+                    } else {
+                        Icon(Icons.Default.Translate, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Translate")
+                    }
                 }
             }
 
@@ -470,7 +551,7 @@ fun TranslationTestScreen(
                 }
             }
 
-            // ── Output Text Box ──────────────────────────────────────────────
+            // ── Output Text Box with Copy & TTS Speak ─────────────────────────
             OutlinedTextField(
                 value = state.outputText,
                 onValueChange = {},
@@ -480,15 +561,32 @@ fun TranslationTestScreen(
                 modifier = Modifier.fillMaxWidth().height(140.dp),
                 maxLines = 6,
                 trailingIcon = {
-                    if (state.outputText.isNotBlank()) {
-                        IconButton(
-                            onClick = {
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                clipboard.setPrimaryClip(ClipData.newPlainText("Translation", state.outputText))
-                                Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
-                            },
-                        ) {
-                            Icon(Icons.Default.ContentCopy, contentDescription = "Copy")
+                    Row {
+                        if (state.outputText.isNotBlank()) {
+                            IconButton(
+                                onClick = {
+                                    if (state.isPlayingTts) {
+                                        viewModel.stopTts()
+                                    } else {
+                                        viewModel.speakOutput()
+                                    }
+                                },
+                            ) {
+                                Icon(
+                                    if (state.isPlayingTts) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                                    contentDescription = "Speak Translation",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("Translation", state.outputText))
+                                    Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+                                },
+                            ) {
+                                Icon(Icons.Default.ContentCopy, contentDescription = "Copy")
+                            }
                         }
                     }
                 },
@@ -514,7 +612,7 @@ fun TranslationTestScreen(
                             style = MaterialTheme.typography.labelMedium,
                         )
                         Text(
-                            text = "Engine: IndicTrans2 ONNX INT8",
+                            text = "IndicTrans2 ONNX INT8",
                             style = MaterialTheme.typography.labelMedium,
                         )
                     }
