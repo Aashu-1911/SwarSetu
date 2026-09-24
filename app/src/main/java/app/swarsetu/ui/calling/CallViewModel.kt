@@ -8,7 +8,7 @@ import app.swarsetu.mesh.MeshController
 import app.swarsetu.stt.PcmCapture
 import app.swarsetu.stt.SttEngine
 import app.swarsetu.translation.TranslatorEngine
-import app.swarsetu.voice.TtsManager
+import app.swarsetu.tts.TtsManager
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn

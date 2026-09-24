@@ -6,7 +6,7 @@ import app.swarsetu.stt.SttLanguage
 import app.swarsetu.stt.SttLiveStream
 import app.swarsetu.stt.SttResult
 import app.swarsetu.translation.TranslatorEngine
-import app.swarsetu.voice.TtsManager
+import app.swarsetu.tts.TtsManager
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.test.TestScope

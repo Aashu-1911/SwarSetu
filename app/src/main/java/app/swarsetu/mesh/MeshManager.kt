@@ -75,6 +75,7 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 
@@ -119,7 +120,7 @@ class MeshManager(
     private val clock: () -> Long = { System.currentTimeMillis() },
 ) : MeshController {
     private val _callFrames = kotlinx.coroutines.flow.MutableSharedFlow<app.swarsetu.mesh.protocol.CallContent>(extraBufferCapacity = 64)
-    override val callFrames = kotlinx.coroutines.flow.asSharedFlow(_callFrames)
+    override val callFrames = _callFrames.asSharedFlow()
     // Per-session scope for the collectors + metrics loop + router; cancelled in stop() so they don't
     // accumulate across start/stop cycles (e.g. a Diagnostics-triggered restart()).
     private var sessionScope: CoroutineScope? = null

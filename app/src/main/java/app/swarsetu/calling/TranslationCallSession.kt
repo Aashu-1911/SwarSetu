@@ -7,7 +7,9 @@ import app.swarsetu.stt.SttLanguage
 import app.swarsetu.stt.SttLiveStream
 import app.swarsetu.stt.SttResultType
 import app.swarsetu.translation.TranslatorEngine
-import app.swarsetu.voice.TtsManager
+import app.swarsetu.tts.TtsManager
+import app.swarsetu.tts.TtsRequest
+import app.swarsetu.tts.TtsLanguage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -17,6 +19,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 data class CallState(
     val status: CallStatus = CallStatus.IDLE,
@@ -82,7 +85,8 @@ class TranslationCallSession(
     suspend fun startListening() {
         if (!sttEngine.isReady) return
         _state.update { it.copy(status = CallStatus.LISTENING, outgoingText = "") }
-        sttStream = sttEngine.startLiveStream(SttLanguage.fromCode(_state.value.sourceLanguage))
+        val sttLang = SttLanguage.fromCode(_state.value.sourceLanguage) ?: SttLanguage.EN
+        sttStream = sttEngine.startLiveStream(sttLang)
         
         sttStream?.onPartial = { text ->
             _state.update { it.copy(outgoingText = text) }
@@ -142,7 +146,8 @@ class TranslationCallSession(
 
             if (frame.isFinal) {
                 _state.update { it.copy(status = CallStatus.IDLE) }
-                ttsManager.speak(translated, frame.targetLanguage)
+                val targetTtsLang = TtsLanguage.fromCode(frame.targetLanguage) ?: TtsLanguage.EN
+                ttsManager.speak(TtsRequest(requestId = UUID.randomUUID().toString(), text = translated, language = targetTtsLang))
             }
         }
     }
