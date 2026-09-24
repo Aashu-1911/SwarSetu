@@ -18,8 +18,6 @@ import app.swarsetu.ui.share.SharedContent
 import app.swarsetu.ui.theme.SwarSetuTheme
 import org.koin.android.ext.android.inject
 
-import kotlinx.coroutines.flow.first
-
 class MainActivity : ComponentActivity() {
     // Single-shot holder for content arriving via the system share sheet; SwarSetuApp/ChatScreen drain it.
     private val shareInbox: ShareInbox by inject()
@@ -29,15 +27,7 @@ class MainActivity : ComponentActivity() {
 
     private val settingsStore: SettingsStore by inject()
 
-    override fun attachBaseContext(newBase: android.content.Context) {
-        val koinSettingsStore = org.koin.java.KoinJavaComponent.getKoin().get<SettingsStore>()
-        val langCode = kotlinx.coroutines.runBlocking { koinSettingsStore.sttLanguageCode.first() }
-        val locale = java.util.Locale(langCode)
-        java.util.Locale.setDefault(locale)
-        val config = android.content.res.Configuration(newBase.resources.configuration)
-        config.setLocale(locale)
-        super.attachBaseContext(newBase.createConfigurationContext(config))
-    }
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
