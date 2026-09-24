@@ -62,8 +62,8 @@ fun LanguageInitScreen(
                 val translationCount = 3
                 totalModels = translationCount
 
-                // Speech models are NOT downloaded: SraVaani 0.5 is packaged in the APK
-                // (fresh install + no internet = working STT, PS 26173 requirement).
+                // Speech models: SraVaani 1.0 offline STT assets (tables.bin, tokens.txt) packaged in APK;
+                // ONNX weights managed via SttModelManager (PS 26173 requirement).
                 downloadStage = stageTranslation
                 translatorEngine.downloadAllRequiredModels { completed, total, currentLang ->
                     currentDownloading = "Translation: $currentLang"

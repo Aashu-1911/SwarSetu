@@ -59,8 +59,10 @@ class SravaaniFeaturizerGoldenTest {
         val frame = FloatArray(tables.melBins)
         var maxDiff = 0f
         // Chunk-0's 9 cache rows are pad_value 0.0 — compare the engine's step-0 assembly.
-        val block = FloatArray(SravaaniStreamingState.CHUNK_FRAMES * tables.melBins)
-        for (f in 0 until SravaaniStreamingState.CHUNK_SIZE) {
+        val chunkFrames = 121
+        val chunkSize = 112
+        val block = FloatArray(chunkFrames * tables.melBins)
+        for (f in 0 until chunkSize) {
             feat.getNormalizedFrame(f.toLong(), frame)
             System.arraycopy(frame, 0, block, (9 + f) * tables.melBins, tables.melBins)
         }

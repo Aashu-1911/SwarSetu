@@ -6,44 +6,45 @@ import java.io.InputStream
 import java.security.MessageDigest
 
 /**
- * P7 packaging integrity: SHA-256 pins for the exported ONNX graphs, verified (a) at build
- * time by the `checkSravaaniModel` Gradle task and (b) at extraction time by
- * [SravaaniEngine] — a corrupted asset must fail LOUDLY (ModelLoadError → DefaultSttEngine
- * fallback), never load garbage weights.
- *
- * Hashes are the provenance chain: official HF fp16 artifact (rev `29a15303`, P1 manifest) →
- * `scripts/sravaani/export_onnx.py` (P3, equivalence-gated) → fp32 ONNX encoder →
- * `scripts/sravaani/optimize_int8.py` (P9; `int8_meta.json` links the fp32 pin) → these exact
- * bytes. The PRODUCTION encoder asset is the P9 weight-only INT8 graph: real-speech WER parity
- * measured on FLEURS dev (10 langs × 10 utt, 2026-09-17): aggregate WER 0.2401 vs fp32 0.2396
- * (+0.05 pp, 6/10 languages bit-identical), 2.778× smaller (638,695,714 B vs 1,774,013,452 B).
- * The fp32 graph stays in `scratch/sravaani/onnx/` as the reference/baseline artifact.
+ * SraVaani 1.0 packaging integrity: SHA-256 and size verification for ONNX model artifacts,
+ * ensuring valid graphs are loaded without corruption.
  */
 object SravaaniPackaging {
-    /** Expected SHA-256 of `assets/sravaani/sravaani_encoder.onnx` (P9 int8 production graph). */
-    const val ENCODER_SHA256 = "4a880933bb7fa51c5d0adde1c85925c4ff42fdd4ca304ccad2e83909cba95dd8"
+    // ---- SraVaani 1.0 (FP16 FastConformer-TDT) ----
+    const val ENCODER_10_FP16_SHA256 = "0a90a983bbfa8b3468246b2217894e6d6f331de14e8f08cf38fa8ffcdbf897da"
+    const val ENCODER_10_FP16_BYTES = 886_754_376L
+    const val ENCODER_FP16_SHA256 = ENCODER_10_FP16_SHA256
+    const val ENCODER_FP16_BYTES = ENCODER_10_FP16_BYTES
+    const val ENCODER_SHA256 = ENCODER_10_FP16_SHA256
+    const val ENCODER_BYTES = ENCODER_10_FP16_BYTES
 
-    /** Expected byte count of the encoder graph. */
-    const val ENCODER_BYTES = 638_281_605L
+    const val DECODER_JOINT_10_FP16_SHA256 = "9a514c1800f2d9fd18538db358d034aaa78be324e43ad43bc4b45e73e2b180d6"
+    const val DECODER_JOINT_10_FP16_BYTES = 21_519_253L
+    const val DECODER_JOINT_FP16_SHA256 = DECODER_JOINT_10_FP16_SHA256
+    const val DECODER_JOINT_FP16_BYTES = DECODER_JOINT_10_FP16_BYTES
+    const val DECODER_JOINT_SHA256 = DECODER_JOINT_10_FP16_SHA256
+    const val DECODER_JOINT_BYTES = DECODER_JOINT_10_FP16_BYTES
 
-    /** Expected SHA-256 of `assets/sravaani/sravaani_ctc.onnx`. */
-    const val CTC_SHA256 = "f59a9ddf8a8f23fac860043eadebe32724078c6d3b48f0ca9e37cf138096ab63"
+    const val TABLES_10_SHA256 = "968e6125f2d90ba05dc7cdb8decdc6b62fce6108a2f7ed09cf6fbd5903a376e6"
+    const val TABLES_10_BYTES = 133_220L
+    const val TABLES_SHA256 = TABLES_10_SHA256
+    const val TABLES_BYTES = TABLES_10_BYTES
 
-    /** Expected byte count of the CTC graph. */
-    const val CTC_BYTES = 43_033_419L
+    const val TOKENS_10_SHA256 = "50a9727d0dca2dbfbc420d4a6c7f3cba2d5cd177fc2263516741a842308128a2"
+    const val TOKENS_10_BYTES = 50_006L
+    const val TOKENS_SHA256 = TOKENS_10_SHA256
+    const val TOKENS_BYTES = TOKENS_10_BYTES
 
-    private fun expectedSha256(name: String): String? =
+    private val VALID_ENCODER_SIZES = setOf(ENCODER_10_FP16_BYTES)
+    private val VALID_DECODER_SIZES = setOf(DECODER_JOINT_10_FP16_BYTES)
+
+    private fun isValidSize(name: String, size: Long): Boolean =
         when (name) {
-            "sravaani_encoder.onnx" -> ENCODER_SHA256
-            "sravaani_ctc.onnx" -> CTC_SHA256
-            else -> null
-        }
-
-    private fun expectedBytes(name: String): Long? =
-        when (name) {
-            "sravaani_encoder.onnx" -> ENCODER_BYTES
-            "sravaani_ctc.onnx" -> CTC_BYTES
-            else -> null
+            "encoder.onnx" -> VALID_ENCODER_SIZES.contains(size)
+            "decoder_joint.onnx" -> VALID_DECODER_SIZES.contains(size)
+            "tables.bin" -> size in 130_000L..140_000L
+            "tokens.txt" -> size in 45_000L..60_000L
+            else -> true
         }
 
     /** Streaming SHA-256 of an [InputStream] (1 MB buffer — no full-file allocation). */
@@ -59,26 +60,30 @@ object SravaaniPackaging {
     }
 
     /**
-     * Verify an extracted graph file: size then SHA-256. Returns silently on success;
-     * throws [SttException.ModelLoadError] on any mismatch.
+     * Verify an extracted or downloaded graph file: size then SHA-256 against pinned 1.0 artifacts.
+     * Returns silently on success; throws [SttException.ModelLoadError] on any mismatch.
      */
     fun verifyExtracted(dir: File, name: String) {
         val file = File(dir, name)
         if (!file.isFile) {
-            throw SttException.ModelLoadError("extracted graph missing: ${file.path}")
+            throw SttException.ModelLoadError("model file missing: ${file.path}")
         }
-        expectedBytes(name)?.let { expected ->
-            if (file.length() != expected) {
-                throw SttException.ModelLoadError(
-                    "$name size ${file.length()} != expected $expected (corrupt extraction)",
-                )
-            }
+        if (!isValidSize(name, file.length())) {
+            throw SttException.ModelLoadError(
+                "$name size ${file.length()} is not an accepted valid graph size (corrupt extraction)",
+            )
         }
         val actual = file.inputStream().use { sha256(it) }
-        val expectedHash = expectedSha256(name) ?: return // unpinned file: size check only
-        if (!actual.equals(expectedHash, ignoreCase = true)) {
+        val acceptedHashes = when (name) {
+            "encoder.onnx" -> setOf(ENCODER_10_FP16_SHA256)
+            "decoder_joint.onnx" -> setOf(DECODER_JOINT_10_FP16_SHA256)
+            "tables.bin" -> setOf(TABLES_10_SHA256)
+            "tokens.txt" -> setOf(TOKENS_10_SHA256)
+            else -> emptySet()
+        }
+        if (acceptedHashes.isNotEmpty() && !acceptedHashes.any { it.equals(actual, ignoreCase = true) }) {
             throw SttException.ModelLoadError(
-                "$name sha256 $actual != expected $expectedHash (corrupt or substituted graph)",
+                "$name sha256 $actual does not match accepted model hashes (corrupt or substituted graph)",
             )
         }
     }

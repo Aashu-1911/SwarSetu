@@ -81,6 +81,94 @@ class SravaaniFeaturizer(private val tables: SravaaniTables) {
     /** Raw log-mel scratch for complete-frame reads. */
     private val frameScratch = FloatArray(tables.melBins)
 
+    data class UtteranceFeatures(
+        val feats: FloatArray,
+        val numFrames: Int,
+    )
+
+    /**
+     * Compute 128-dimensional normalized Log-Mel spectrogram for a complete PCM utterance.
+     *
+     * @param pcm 16-bit signed PCM audio at 16 kHz mono.
+     * @return [UtteranceFeatures] with channel-major feature matrix [1, 128, T] and frame length T.
+     */
+    fun extractUtterance(pcm: ShortArray): UtteranceFeatures {
+        val n = pcm.size
+        if (n < HOP) return UtteranceFeatures(FloatArray(0), 0)
+
+        val numFrames = n / HOP
+        val preemph = DoubleArray(n)
+        if (n > 0) {
+            preemph[0] = pcm[0] / 32768.0
+            for (i in 1 until n) {
+                preemph[i] = (pcm[i] / 32768.0) - PREEMPH * (pcm[i - 1] / 32768.0)
+            }
+        }
+
+        val melBins = tables.melBins
+        val fbBins = tables.fbBins
+        val win = tables.winLength
+        val cosTab = tables.cosTab
+        val sinTab = tables.sinTab
+        val melFb = tables.melFb
+
+        // rawLogMel matrix: [melBins][numFrames]
+        val rawLogMel = FloatArray(melBins * numFrames)
+        val spec = FloatArray(fbBins)
+        val winBuf = DoubleArray(win)
+
+        for (t in 0 until numFrames) {
+            val start = t * HOP - PAD_EFFECTIVE
+            for (j in 0 until win) {
+                val p = start + j
+                winBuf[j] = if (p in 0 until n) preemph[p] else 0.0
+            }
+
+            for (k in 0 until fbBins) {
+                val row = k * win
+                var re = 0.0
+                var im = 0.0
+                for (j in 0 until win) {
+                    val s = winBuf[j]
+                    re += s * cosTab[row + j]
+                    im += s * sinTab[row + j]
+                }
+                spec[k] = (re * re + im * im).toFloat()
+            }
+
+            for (m in 0 until melBins) {
+                val row = m * fbBins
+                var acc = 0.0
+                for (k in 0 until fbBins) acc += melFb[row + k] * spec[k]
+                rawLogMel[m * numFrames + t] = kotlin.math.ln(acc + LOG_GUARD).toFloat()
+            }
+        }
+
+        // Per-feature normalization across time axis T
+        val outFeats = FloatArray(melBins * numFrames)
+        for (m in 0 until melBins) {
+            val offset = m * numFrames
+            var sumVal = 0.0
+            for (t in 0 until numFrames) {
+                sumVal += rawLogMel[offset + t]
+            }
+            val mean = sumVal / numFrames
+            var sumSqDiff = 0.0
+            for (t in 0 until numFrames) {
+                val diff = rawLogMel[offset + t] - mean
+                sumSqDiff += diff * diff
+            }
+            val variance = if (numFrames > 1) sumSqDiff / (numFrames - 1.0) else 0.0
+            val std = kotlin.math.sqrt(maxOf(0.0, variance)) + CONSTANT
+
+            for (t in 0 until numFrames) {
+                outFeats[offset + t] = ((rawLogMel[offset + t] - mean) / std).toFloat()
+            }
+        }
+
+        return UtteranceFeatures(outFeats, numFrames)
+    }
+
     /**
      * Push raw PCM and update frame production.
      *

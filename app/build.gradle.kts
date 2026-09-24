@@ -436,8 +436,8 @@ val checkSravaaniModel =
         description = "Fails the build if packaged SraVaani ONNX graphs are missing/corrupt (size+sha256)."
         val graphs =
             listOf(
-                Triple("sravaani_encoder.onnx", 638281605L, "4a880933bb7fa51c5d0adde1c85925c4ff42fdd4ca304ccad2e83909cba95dd8"),
-                Triple("sravaani_ctc.onnx", 43033419L, "f59a9ddf8a8f23fac860043eadebe32724078c6d3b48f0ca9e37cf138096ab63"),
+                Triple("encoder.onnx", 886754376L, "0a90a983bbfa8b3468246b2217894e6d6f331de14e8f08cf38fa8ffcdbf897da"),
+                Triple("decoder_joint.onnx", 21519253L, "9a514c1800f2d9fd18538db358d034aaa78be324e43ad43bc4b45e73e2b180d6"),
             ).map { (name, size, sha) ->
                 Triple(layout.projectDirectory.file("src/main/assets/sravaani/$name").asFile, size, sha)
             }
@@ -447,15 +447,13 @@ val checkSravaaniModel =
         doLast {
             graphs.forEach { (file, expectedSize, expectedSha) ->
                 if (!file.isFile) {
-                    // Absent graphs skip verification: a clean checkout has none, and the
-                    // offline-contract enforcement (graphs must exist for a shipped build)
-                    // is applied by CI wiring this task into release builds with assets staged.
+                    // Absent graphs skip verification: models are downloaded on first run
                     return@forEach
                 }
                 if (file.length() != expectedSize) {
                     throw GradleException(
                         "SraVaani graph ${file.name} is ${file.length()} bytes, expected $expectedSize — " +
-                            "truncated or substituted. Re-run scripts/sravaani/gen_android_assets.py.",
+                            "truncated or substituted.",
                     )
                 }
                 val md = MessageDigest.getInstance("SHA-256")
@@ -471,7 +469,7 @@ val checkSravaaniModel =
                 if (!actual.equals(expectedSha, ignoreCase = true)) {
                     throw GradleException(
                         "SraVaani graph ${file.name} sha256 $actual != expected $expectedSha — " +
-                            "do not ship substituted weights (SraVaani-only rule).",
+                            "do not ship substituted weights.",
                     )
                 }
             }
@@ -596,11 +594,8 @@ dependencies {
     // kotlinx-serialization) — no native tokenizer lib, so nothing to 16 KB-align and no .so added to the APK.
     implementation(libs.litert)
 
-    // SraVaani 0.5 runtime (stt/sravaani/SravaaniEngine): ONNX Runtime executes the exported
-    // encoder + CTC graphs (see gradle/libs.versions.toml for the 1.27.0 pin rationale —
-    // must match the version that passed the P3 numeric-equivalence gate). Pure inference
-    // runtime, no network, Apache-2.0/MIT. The graphs themselves land in assets/sravaani via
-    // scripts/sravaani/export_onnx.py + gen_android_assets.py (P7 gates the packaging).
+    // SraVaani 1.0 runtime (stt/sravaani/Sravaani10Engine): ONNX Runtime executes the exported
+    // FastConformer encoder + TDT decoder_joint graphs. Pure inference runtime, no network.
     implementation(libs.onnxruntime.android)
 
     // E2E encryption (Tink — Java + native, no Kotlin metadata / no Gradle plugin, like SQLCipher)

@@ -37,8 +37,8 @@ class SravaaniBenchmarkInstrumentedTest {
     private val pkg = context.packageName
 
     private fun graphsPackaged(): Boolean = try {
-        val assets = context.assets.list(SravaaniAssetDir.DIR).orEmpty()
-        assets.contains("sravaani_encoder.onnx") && assets.contains("sravaani_ctc.onnx")
+        val modelDir = SttModelManager(context).modelDir
+        File(modelDir, "encoder.onnx").exists() && File(modelDir, "decoder_joint.onnx").exists()
     } catch (_: Exception) {
         false
     }

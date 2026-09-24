@@ -14,11 +14,11 @@ import org.koin.dsl.module
  * All STT objects are app-scoped singletons:
  * - [SttModelManager] — manages model availability and lifecycle
  * - [SttEngineFactory] — creates engine instances
- * - [SttEngine] — the shared, app-wide engine singleton (SraVaani 0.5-backed)
+ * - [SttEngine] — the shared, app-wide engine singleton (SraVaani 1.0-backed)
  * - [PcmCapture] — the shared, app-wide PCM capture instance
  *
  * The engine is a `single` (one instance, app-wide) because model loading is expensive
- * (the SraVaani encoder maps ~1.8 GB lazily on first use) and the microphone is an exclusive
+ * (the SraVaani 1.0 FP16 encoder maps ~886 MB lazily on first use) and the microphone is an exclusive
  * system resource — only one transcription should run at a time. This mirrors
  * [app.swarsetu.ui.voice.VoicePlayer]'s pattern.
  *
