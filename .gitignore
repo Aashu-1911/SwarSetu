@@ -50,9 +50,8 @@ app/release/*
 # Private working area: marketing masters (see above) + personal files — kept out of the public repo.
 .private/
 
-# SraVaani 0.5 model artifacts (P1): multi-hundred-MB weights stay out of git; fetched by
-# scripts/sravaani/download_model.py and verified by scripts/sravaani/verify_manifest.py.
-/scratch/sravaani/
+# SraVaani model artifacts and scratch workspace: multi-hundred-MB weights stay out of git
+/scratch/
 *.fp16.ts
 /sravaani-model/
 

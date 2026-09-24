@@ -528,7 +528,7 @@
     <string name="settings_active_voice_model_title">Active Voice Models</string>
     <string name="settings_active_voice_model_stt">Speech Recognition (STT)</string>
     <string name="settings_active_voice_model_tts">Voice Synthesis (TTS)</string>
-    <string name="settings_active_voice_model_sravaani">SraVaani 0.5 Offline Engine (%1$s)</string>
+    <string name="settings_active_voice_model_sravaani">SraVaani 1.0 Offline Engine (%1$s)</string>
     <string name="settings_active_voice_model_system_tts">System Text-To-Speech (%1$s)</string>
     <string name="settings_voice_model_status_ready">Active • 16 kHz Offline</string>
     <string name="settings_voice_model_tts_status">Ready • Real-Time Playback</string>

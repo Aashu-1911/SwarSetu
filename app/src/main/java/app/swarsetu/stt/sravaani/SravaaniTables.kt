@@ -40,30 +40,61 @@ class SravaaniTables private constructor(
     val sinTab: FloatArray,
 ) {
     companion object {
-        /** "SRVT" as a little-endian u32. */
-        const val MAGIC: Int = 0x54565253
+        /** "SRVT" as a little-endian u32 (0.5 format). */
+        const val MAGIC_05: Int = 0x54565253
+        /** "SRV1" as a little-endian u32 (1.0 format). */
+        const val MAGIC_10: Int = 0x53525631
+        const val MAGIC: Int = MAGIC_10
         const val VERSION: Int = 1
 
         fun read(input: InputStream): SravaaniTables {
             val buf = ByteBuffer.wrap(input.readBytes()).order(ByteOrder.LITTLE_ENDIAN)
-            require(buf.int == MAGIC) { "tables.bin: bad magic" }
-            require(buf.int == VERSION) { "tables.bin: unsupported version" }
-            val nFft = buf.int
-            val win = buf.int
-            val hop = buf.int
-            val melBins = buf.int
-            val fbBins = buf.int
+            val magic = buf.int
+            val nFft: Int
+            val win: Int
+            val hop: Int
+            val melBins: Int
+            val fbBins: Int
+
+            when (magic) {
+                MAGIC_10 -> {
+                    nFft = buf.int
+                    hop = buf.int
+                    win = buf.int
+                    melBins = buf.int
+                    fbBins = nFft / 2 + 1
+                    // 4 float scalars: preemph, guard, pad_val, constant
+                    val preemph = buf.float
+                    val guard = buf.float
+                    val padVal = buf.float
+                    val constant = buf.float
+                }
+                MAGIC_05 -> {
+                    val ver = buf.int
+                    require(ver == VERSION) { "tables.bin: unsupported 0.5 version $ver" }
+                    nFft = buf.int
+                    win = buf.int
+                    hop = buf.int
+                    melBins = buf.int
+                    fbBins = buf.int
+                }
+                else -> {
+                    throw IllegalArgumentException("tables.bin: bad magic 0x${Integer.toHexString(magic).uppercase()}")
+                }
+            }
+
             require(nFft in 2..(1 shl 20) && win in 1..nFft && hop in 1..nFft) {
                 "tables.bin: implausible geometry ($nFft, $win, $hop)"
             }
             require(melBins in 1..4096 && fbBins == nFft / 2 + 1) {
                 "tables.bin: implausible filterbank ($melBins x $fbBins)"
             }
+
             val window = FloatArray(win) { buf.float }
             val melFb = FloatArray(melBins * fbBins) { buf.float }
-            require(buf.remaining() == 0) { "tables.bin: trailing bytes" }
+            require(buf.remaining() == 0) { "tables.bin: trailing bytes (${buf.remaining()})" }
 
-            // Fused DFT basis (see class KDoc). Doubles during construction, f32 at rest —
+            // Fused DFT basis. Doubles during construction, f32 at rest —
             // matches how the export script built the equivalent Conv1D kernel.
             val cosTab = FloatArray(fbBins * win)
             val sinTab = FloatArray(fbBins * win)

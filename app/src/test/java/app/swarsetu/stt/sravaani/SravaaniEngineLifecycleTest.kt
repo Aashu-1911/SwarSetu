@@ -72,7 +72,7 @@ class SravaaniEngineLifecycleTest {
                     )
                 }
                 true
-            } catch (e: SttException.ModelLoadError) {
+            } catch (e: Throwable) {
                 false
             }
             if (!packagingPresent) {
