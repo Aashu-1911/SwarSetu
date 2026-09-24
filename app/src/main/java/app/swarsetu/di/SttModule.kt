@@ -12,7 +12,7 @@ import org.koin.dsl.module
  * [moderationModule], and [uiModule] in [app.swarsetu.SwarSetuApplication].
  *
  * All STT objects are app-scoped singletons:
- * - [SttModelManager] — manages model availability and lifecycle 
+ * - [SttModelManager] — manages model availability and lifecycle    
  * - [SttEngineFactory] — creates engine instances
  * - [SttEngine] — the shared, app-wide engine singleton (SraVaani 1.0-backed)
  * - [PcmCapture] — the shared, app-wide PCM capture instance
