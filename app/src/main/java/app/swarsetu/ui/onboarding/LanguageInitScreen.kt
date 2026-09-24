@@ -38,9 +38,9 @@ fun LanguageInitScreen(
     onInitializationComplete: () -> Unit,
     settingsStore: SettingsStore = koinInject(),
     translatorEngine: TranslatorEngine = koinInject(),
+    sttModelManager: SttModelManager = koinInject(),
 ) {
-    var completedModels by remember { mutableIntStateOf(0) }
-    var totalModels by remember { mutableIntStateOf(10) }
+    var progressFraction by remember { mutableStateOf(0f) }
     var currentDownloading by remember { mutableStateOf("") }
     var downloadStage by remember { mutableStateOf("") }
     var isDownloading by remember { mutableStateOf(false) }
@@ -49,26 +49,31 @@ fun LanguageInitScreen(
     val scope = rememberCoroutineScope()
 
     val stageTranslation = stringResource(R.string.lang_init_stage_translation)
-    val speechEn = stringResource(R.string.lang_init_speech_en)
-    val speechHi = stringResource(R.string.lang_init_speech_hi)
     val errorDefault = stringResource(R.string.lang_init_error_default)
 
     val downloadModels = {
         isError = false
         isDownloading = true
         errorMessage = ""
+        progressFraction = 0f
         scope.launch {
             try {
-                val translationCount = 3
-                totalModels = translationCount
+                // 1. Download Speech-to-Text Model: SraVaani 1.0 FP16 ONNX (0.0 to 0.5)
+                downloadStage = "Speech Recognition (SraVaani 1.0)"
+                sttModelManager.downloadSraVaaniModel { _, _, pct, file ->
+                    currentDownloading = "$file ($pct%)"
+                    progressFraction = (pct / 100f) * 0.5f
+                }
+                progressFraction = 0.5f
 
-                // Speech models: SraVaani 1.0 offline STT assets (tables.bin, tokens.txt) packaged in APK;
-                // ONNX weights managed via SttModelManager (PS 26173 requirement).
+                // 2. Download Translation Models: IndicTrans2 (0.5 to 1.0)
                 downloadStage = stageTranslation
                 translatorEngine.downloadAllRequiredModels { completed, total, currentLang ->
-                    currentDownloading = "Translation: $currentLang"
-                    completedModels = completed
+                    val transFraction = if (total > 0) completed.toFloat() / total.toFloat() else 0f
+                    progressFraction = 0.5f + (transFraction * 0.5f)
+                    currentDownloading = "Translation ($completed of $total): $currentLang"
                 }
+                progressFraction = 1f
 
                 settingsStore.setLanguageInitComplete(true)
                 onInitializationComplete()
@@ -134,11 +139,10 @@ fun LanguageInitScreen(
                 }
             }
         } else {
-            val progress = if (totalModels > 0) completedModels.toFloat() / totalModels.toFloat() else 0f
-            LinearProgressIndicator(progress = { progress })
+            LinearProgressIndicator(progress = { progressFraction.coerceIn(0f, 1f) })
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "$downloadStage ($completedModels of $totalModels total)...",
+                text = "$downloadStage (${(progressFraction * 100).toInt()}%)...",
                 style = MaterialTheme.typography.titleMedium,
                 textAlign = TextAlign.Center,
             )

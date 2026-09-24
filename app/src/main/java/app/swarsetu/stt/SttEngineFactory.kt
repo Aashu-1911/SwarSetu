@@ -31,17 +31,9 @@ class SttEngineFactory(
             return DefaultSttEngine(context, modelManager)
         }
 
-        // 2. Check SraVaani 1.0 model availability
-        if (modelManager.isSraVaaniAvailable()) {
-            android.util.Log.i(TAG, "Instantiating SraVaani 1.0 TDT STT engine ($executionProvider)")
-            return Sravaani10Engine(context, modelManager, executionProvider)
-        }
-
-        android.util.Log.w(
-            TAG,
-            "SraVaani 1.0 ONNX models missing from ${modelManager.modelDir.path} — fallback to DefaultSttEngine until downloaded",
-        )
-        return DefaultSttEngine(context, modelManager)
+        // 2. Always provide SraVaani 1.0 (lazy loads weights on demand)
+        android.util.Log.i(TAG, "Instantiating SraVaani 1.0 TDT STT engine ($executionProvider)")
+        return Sravaani10Engine(context, modelManager, executionProvider)
     }
 
     companion object {

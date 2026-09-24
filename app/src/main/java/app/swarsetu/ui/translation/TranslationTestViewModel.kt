@@ -29,6 +29,12 @@ data class TranslationTestUiState(
     val downloadPercent: Int = 0,
     val isDownloading: Boolean = false,
     val currentDownloadFile: String = "",
+    val isSttModelDownloaded: Boolean = false,
+    val sttDownloadedBytes: Long = 0L,
+    val sttTotalBytes: Long = 908_456_855L,
+    val sttDownloadPercent: Int = 0,
+    val isSttDownloading: Boolean = false,
+    val sttCurrentDownloadFile: String = "",
     val sourceLanguage: IndicLanguage = IndicLanguage.HINDI,
     val targetLanguage: IndicLanguage = IndicLanguage.MARATHI,
     val inputText: String = "नमस्ते, यह स्वरासेतु ऑफ़लाइन अनुवाद परीक्षण है।",
@@ -47,20 +53,30 @@ class TranslationTestViewModel(
     private val translatorEngine: TranslatorEngine,
     private val sttPipeline: SttPipeline,
     private val ttsManager: TtsManager,
+    private val sttModelManager: app.swarsetu.stt.SttModelManager,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TranslationTestUiState())
     val uiState: StateFlow<TranslationTestUiState> = _uiState.asStateFlow()
 
     private var downloadJob: Job? = null
+    private var sttDownloadJob: Job? = null
 
     init {
         updateAutoSelectedBundle()
         refreshModelStatus()
+        refreshSttModelStatus()
+
+        viewModelScope.launch {
+            sttPipeline.state.collect { state ->
+                val capturing = state == SttPipeline.PipelineState.CAPTURING
+                _uiState.update { it.copy(isRecording = capturing) }
+            }
+        }
 
         viewModelScope.launch {
             sttPipeline.partialText.collect { partial ->
-                if (_uiState.value.isRecording && partial.isNotBlank()) {
+                if (partial.isNotBlank()) {
                     _uiState.update { it.copy(sttLivePreview = partial) }
                 }
             }
@@ -68,7 +84,7 @@ class TranslationTestViewModel(
 
         viewModelScope.launch {
             sttPipeline.latestResult.collect { result ->
-                if (result != null && result.text.isNotBlank() && _uiState.value.isRecording) {
+                if (result != null && result.text.isNotBlank()) {
                     _uiState.update {
                         it.copy(
                             isRecording = false,
@@ -169,7 +185,7 @@ class TranslationTestViewModel(
 
     fun toggleVoiceRecording() {
         if (_uiState.value.isRecording) {
-            _uiState.update { it.copy(isRecording = false) }
+            _uiState.update { it.copy(sttLivePreview = "Transcribing audio...") }
             sttPipeline.stopCapture()
         } else {
             val src = _uiState.value.sourceLanguage
@@ -277,6 +293,74 @@ class TranslationTestViewModel(
         val bundle = _uiState.value.selectedBundle
         modelManager.deleteModel(bundle)
         refreshModelStatus()
+    }
+
+    fun refreshSttModelStatus() {
+        val isDownloaded = sttModelManager.isSraVaaniAvailable()
+        val bytes = sttModelManager.getDownloadedBytes()
+        val total = sttModelManager.totalExpectedBytes
+        val pct = if (total > 0) ((bytes * 100) / total).toInt().coerceIn(0, 100) else 0
+
+        _uiState.update {
+            it.copy(
+                isSttModelDownloaded = isDownloaded,
+                sttDownloadedBytes = bytes,
+                sttTotalBytes = total,
+                sttDownloadPercent = if (isDownloaded) 100 else pct,
+            )
+        }
+    }
+
+    fun downloadSttModel() {
+        if (_uiState.value.isSttDownloading) return
+
+        sttDownloadJob?.cancel()
+        sttDownloadJob = viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    isSttDownloading = true,
+                    errorMessage = null,
+                )
+            }
+
+            try {
+                val success = sttModelManager.downloadSraVaaniModel { bytes, total, pct, file ->
+                    _uiState.update {
+                        it.copy(
+                            sttDownloadedBytes = bytes,
+                            sttTotalBytes = total,
+                            sttDownloadPercent = pct,
+                            sttCurrentDownloadFile = file,
+                        )
+                    }
+                }
+
+                _uiState.update {
+                    it.copy(
+                        isSttDownloading = false,
+                        isSttModelDownloaded = success,
+                        sttDownloadPercent = if (success) 100 else it.sttDownloadPercent,
+                        sttCurrentDownloadFile = if (success) "Completed" else "Incomplete",
+                        errorMessage = if (!success) "STT Download incomplete. Please try again." else null,
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isSttDownloading = false,
+                        errorMessage = "STT Download error: ${e.message}",
+                    )
+                }
+            }
+        }
+    }
+
+    fun deleteSttModel() {
+        val dir = sttModelManager.getModelDir()
+        if (dir.exists()) {
+            dir.deleteRecursively()
+        }
+        refreshSttModelStatus()
     }
 
     fun translate() {

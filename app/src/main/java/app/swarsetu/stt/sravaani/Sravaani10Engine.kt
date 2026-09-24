@@ -93,17 +93,27 @@ class Sravaani10Engine(
     override suspend fun warmUp() = withContext(Dispatchers.IO) {
         mutex.withLock {
             if (!_isReady) return@withLock
+            Log.d(TAG, "Warming up SraVaani 1.0 (tables, tokenizer, ONNX sessions)...")
             loadTablesAndTokenizer()
             ensureSessionsLoaded()
+            Log.d(TAG, "SraVaani 1.0 warmUp complete and ready")
         }
     }
 
     override suspend fun transcribe(pcm: ShortArray, language: SttLanguage): SttResult = withContext(Dispatchers.Default) {
         mutex.withLock {
-            if (pcm.isEmpty()) return@withContext SttResult.empty(language)
+            if (pcm.isEmpty()) {
+                Log.d(TAG, "transcribe called with empty PCM buffer")
+                return@withContext SttResult.empty(language)
+            }
             if (!_isReady) {
+                Log.e(TAG, "transcribe called but engine not ready (_isReady=false)")
                 throw SttException.EngineNotReady("engine never initialized or already released")
             }
+
+            val t0 = System.currentTimeMillis()
+            val durationMs = pcm.size * 1000L / SttLanguage.SAMPLE_RATE
+            Log.d(TAG, "transcribe: ${pcm.size} samples (${durationMs}ms) for ${language.code} (${language.englishName})")
 
             loadTablesAndTokenizer()
             ensureSessionsLoaded()
@@ -114,25 +124,37 @@ class Sravaani10Engine(
             val curTokenizer = tokenizer ?: throw SttException.EngineNotReady("Tokenizer not initialized")
 
             // 1. Featurize PCM to 128-dim Log-Mel Spectrogram
+            val tFeat0 = System.currentTimeMillis()
             val utteranceFeats = curFeaturizer.extractUtterance(pcm)
+            val tFeat = System.currentTimeMillis() - tFeat0
+            Log.d(TAG, "Featurization: ${utteranceFeats.numFrames} frames extracted in ${tFeat}ms")
             if (utteranceFeats.numFrames <= 0) {
+                Log.w(TAG, "Featurization produced 0 frames")
                 return@withContext SttResult.empty(language)
             }
 
             // 2. Run FastConformer ONNX Encoder
+            val tEnc0 = System.currentTimeMillis()
             val encOut = curEncoder.encode(utteranceFeats.feats, utteranceFeats.numFrames)
+            val tEnc = System.currentTimeMillis() - tEnc0
+            Log.d(TAG, "Encoder: ${encOut.numFrames} acoustic frames in ${tEnc}ms")
             if (encOut.numFrames <= 0) {
+                Log.w(TAG, "Encoder produced 0 frames")
                 return@withContext SttResult.empty(language)
             }
 
             // 3. Run TDT Greedy Decoder with Language Script Mask
+            val tDec0 = System.currentTimeMillis()
             val mask = curTokenizer.getAllowedMask(language)
             val tokenIds = curDecoder.decode(encOut, mask)
+            val tDec = System.currentTimeMillis() - tDec0
+            Log.d(TAG, "Decoder: ${tokenIds.size} tokens in ${tDec}ms: $tokenIds")
 
             // 4. Decode Token IDs to text
             val text = curTokenizer.decode(tokenIds)
+            val totalTime = System.currentTimeMillis() - t0
+            Log.i(TAG, "Transcribed [${language.code}]: '$text' (total ${totalTime}ms)")
 
-            val durationMs = pcm.size * 1000L / SttLanguage.SAMPLE_RATE
             val confidence = if (text.isNotBlank()) 0.95f else 0.0f
 
             return@withContext SttResult(
@@ -287,7 +309,8 @@ class Sravaani10Engine(
         private val engine: Sravaani10Engine,
         private val language: SttLanguage,
     ) : SttLiveStream {
-        private val pcmBuffer = mutableListOf<Short>()
+        private val chunks = mutableListOf<ShortArray>()
+        private var totalSamples = 0
         private var isFinished = false
         override var onPartial: ((String) -> Unit)? = null
 
@@ -296,7 +319,10 @@ class Sravaani10Engine(
             if (!engine.isReady) {
                 throw SttException.EngineNotReady("engine never initialized or already released")
             }
-            for (s in samples) pcmBuffer.add(s)
+            if (samples.isNotEmpty()) {
+                chunks.add(samples.clone())
+                totalSamples += samples.size
+            }
         }
 
         override suspend fun finish(): SttResult {
@@ -305,13 +331,23 @@ class Sravaani10Engine(
             if (!engine.isReady) {
                 throw SttException.EngineNotReady("engine never initialized or already released")
             }
-            if (pcmBuffer.isEmpty()) return SttResult.empty(language)
-            val allPcm = ShortArray(pcmBuffer.size) { pcmBuffer[it] }
+            if (totalSamples == 0) {
+                Log.d(TAG, "LiveStream finished with 0 samples")
+                return SttResult.empty(language)
+            }
+            Log.d(TAG, "LiveStream finishing: assembling $totalSamples samples from ${chunks.size} chunks")
+            val allPcm = ShortArray(totalSamples)
+            var offset = 0
+            for (c in chunks) {
+                System.arraycopy(c, 0, allPcm, offset, c.size)
+                offset += c.size
+            }
             return engine.transcribe(allPcm, language)
         }
 
         override fun release() {
-            pcmBuffer.clear()
+            chunks.clear()
+            totalSamples = 0
         }
     }
 

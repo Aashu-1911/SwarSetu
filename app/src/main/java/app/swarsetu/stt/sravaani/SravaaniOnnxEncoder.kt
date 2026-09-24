@@ -81,11 +81,12 @@ class SravaaniOnnxEncoder(
         val totalFloats = MEL_BINS * numFrames
         val buf = getOrCreateFeatsBuffer(totalFloats)
         buf.put(feats, 0, totalFloats)
-        buf.rewind()
+        buf.flip()
 
         lenBuf.clear()
         lenBuf.put(0, numFrames.toLong())
-        lenBuf.rewind()
+        lenBuf.limit(1)
+        lenBuf.position(0)
 
         val featsTensor = OnnxTensor.createTensor(
             env,

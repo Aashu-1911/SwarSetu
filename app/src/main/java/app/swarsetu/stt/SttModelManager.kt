@@ -300,6 +300,46 @@ class SttModelManager(
         }
     }
 
+    val totalExpectedBytes: Long
+        get() = SRAVAANI_10_MANIFEST.sumOf { it.expectedBytes }
+
+    fun getDownloadedBytes(version: String = "1.0"): Long {
+        val dir = getModelDir(version)
+        if (!dir.exists()) return 0L
+        return SRAVAANI_10_MANIFEST.sumOf { spec ->
+            val f = File(dir, spec.name)
+            if (f.exists()) f.length() else 0L
+        }
+    }
+
+    suspend fun downloadSraVaaniModel(
+        version: String = "1.0",
+        hfToken: String? = null,
+        onProgress: (bytesDownloaded: Long, totalBytes: Long, percent: Int, currentFile: String) -> Unit = { _, _, _, _ -> },
+    ): Boolean = withContext(Dispatchers.IO) {
+        ensureModelFilesAvailable(version, hfToken) { state ->
+            when (state) {
+                is ModelDownloadState.Downloading -> {
+                    val overall = getDownloadedBytes(version)
+                    val total = totalExpectedBytes
+                    val pct = if (total > 0) ((overall * 100) / total).toInt().coerceIn(0, 100) else 0
+                    onProgress(overall, total, pct, state.currentFile)
+                }
+                is ModelDownloadState.Verifying -> {
+                    val overall = getDownloadedBytes(version)
+                    val total = totalExpectedBytes
+                    val pct = if (total > 0) ((overall * 100) / total).toInt().coerceIn(0, 100) else 0
+                    onProgress(overall, total, pct, "Verifying ${state.currentFile}")
+                }
+                is ModelDownloadState.Ready -> {
+                    val total = totalExpectedBytes
+                    onProgress(total, total, 100, "Ready")
+                }
+                else -> {}
+            }
+        }
+    }
+
     private fun downloadFromHuggingFace(
         targetDir: File,
         version: String,
@@ -315,70 +355,127 @@ class SttModelManager(
             throw SttException.ModelLoadError("Insufficient storage: need ${totalRequiredBytes / (1024 * 1024)} MB, available ${availableBytes / (1024 * 1024)} MB")
         }
 
-        val baseUrl = "https://huggingface.co/killbanhar/sravaani-1.0-onnx/resolve/main"
+        val baseUrl = "https://huggingface.co/ashishbiradar/sravaani-1.0-onnx/resolve/main"
 
         for (item in manifest) {
             val target = File(targetDir, item.name)
             if (target.isFile && target.length() == item.expectedBytes) continue
 
-            val tmp = File(targetDir, "${item.name}.tmp")
-            val url = URL("$baseUrl/${item.name}")
-            val conn = (url.openConnection() as HttpURLConnection).apply {
-                connectTimeout = 30_000
-                readTimeout = 60_000
-                instanceFollowRedirects = true
-                if (!hfToken.isNullOrBlank()) {
-                    setRequestProperty("Authorization", "Bearer $hfToken")
-                }
-            }
+            val fileUrl = "$baseUrl/${item.name}"
+            val success = downloadSingleFileWithRedirects(
+                urlStr = fileUrl,
+                destination = target,
+                expectedBytes = item.expectedBytes,
+                hfToken = hfToken,
+                onChunk = { bytesReadThisFile, fileSize ->
+                    val total = if (fileSize > 0) fileSize else item.expectedBytes
+                    val pct = if (total > 0) ((bytesReadThisFile * 100) / total).toInt().coerceIn(0, 100) else 0
+                    val state = ModelDownloadState.Downloading(item.name, pct, bytesReadThisFile, total)
+                    _downloadState.value = state
+                    onStateChange?.invoke(state)
+                },
+            )
 
-            conn.connect()
-            if (conn.responseCode !in 200..299) {
-                throw SttException.ModelLoadError("HTTP ${conn.responseCode} downloading ${item.name}")
-            }
-
-            val totalLen = conn.contentLengthLong.let { if (it > 0) it else item.expectedBytes }
-            var downloaded = 0L
-
-            conn.inputStream.use { input ->
-                FileOutputStream(tmp).use { output ->
-                    val buf = ByteArray(64 * 1024)
-                    var read: Int
-                    var lastProgress = 0
-                    while (input.read(buf).also { read = it } != -1) {
-                        output.write(buf, 0, read)
-                        downloaded += read
-                        val pct = if (totalLen > 0) ((downloaded * 100) / totalLen).toInt() else 0
-                        if (pct != lastProgress) {
-                            lastProgress = pct
-                            val state = ModelDownloadState.Downloading(item.name, pct, downloaded, totalLen)
-                            _downloadState.value = state
-                            onStateChange?.invoke(state)
-                        }
-                    }
-                }
+            if (!success) {
+                throw SttException.ModelLoadError("Failed downloading ${item.name} from $fileUrl")
             }
 
             // Verify checksum if present
-            if (item.sha256.isNotBlank() && tmp.length() == item.expectedBytes) {
+            if (item.sha256.isNotBlank() && target.length() == item.expectedBytes) {
                 val verifyingState = ModelDownloadState.Verifying(item.name)
                 _downloadState.value = verifyingState
                 onStateChange?.invoke(verifyingState)
 
-                val hash = computeSha256(tmp)
+                val hash = computeSha256(target)
                 if (!hash.equals(item.sha256, ignoreCase = true)) {
-                    tmp.delete()
+                    target.delete()
                     throw SttException.ModelLoadError("Integrity check failed for ${item.name}: expected ${item.sha256}, got $hash")
                 }
             }
-
-            tmp.renameTo(target)
         }
 
         // Write version marker
         File(targetDir, "manifest.json").writeText(
             """{"version": "1.0", "status": "verified", "arch": "FastConformer-TDT-FP16"}"""
         )
+    }
+
+    private fun downloadSingleFileWithRedirects(
+        urlStr: String,
+        destination: File,
+        expectedBytes: Long,
+        hfToken: String?,
+        onChunk: (bytesRead: Long, fileSize: Long) -> Unit,
+    ): Boolean {
+        var currentUrl = urlStr
+        var redirects = 0
+        val maxRedirects = 5
+        val tempFile = File(destination.parentFile, "${destination.name}.tmp")
+
+        try {
+            while (redirects < maxRedirects) {
+                val url = URL(currentUrl)
+                val conn = url.openConnection() as HttpURLConnection
+                conn.connectTimeout = 30_000
+                conn.readTimeout = 60_000
+                conn.instanceFollowRedirects = false
+                conn.setRequestProperty("User-Agent", "SwarSetu-Sravaani10-Android")
+                if (!hfToken.isNullOrBlank()) {
+                    conn.setRequestProperty("Authorization", "Bearer $hfToken")
+                }
+
+                val code = conn.responseCode
+                if (code == HttpURLConnection.HTTP_MOVED_PERM ||
+                    code == HttpURLConnection.HTTP_MOVED_TEMP ||
+                    code == HttpURLConnection.HTTP_SEE_OTHER ||
+                    code == 307 || code == 308
+                ) {
+                    val location = conn.getHeaderField("Location")
+                    conn.disconnect()
+                    if (location == null) return false
+                    currentUrl = if (location.startsWith("http")) location else URL(url, location).toString()
+                    redirects++
+                    continue
+                }
+
+                if (code !in 200..299) {
+                    Log.e(TAG, "HTTP error $code for $currentUrl")
+                    conn.disconnect()
+                    return false
+                }
+
+                val fileSize = conn.contentLengthLong.let { if (it > 0) it else expectedBytes }
+                conn.inputStream.use { input ->
+                    FileOutputStream(tempFile).use { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        var bytesRead: Int
+                        var totalRead = 0L
+
+                        while (input.read(buffer).also { bytesRead = it } != -1) {
+                            output.write(buffer, 0, bytesRead)
+                            totalRead += bytesRead
+                            onChunk(totalRead, fileSize)
+                        }
+                    }
+                }
+                conn.disconnect()
+
+                if (tempFile.exists() && (expectedBytes <= 0 || tempFile.length() == expectedBytes || tempFile.length() > expectedBytes * 0.9)) {
+                    if (destination.exists()) destination.delete()
+                    val renamed = tempFile.renameTo(destination)
+                    return renamed && destination.exists()
+                } else {
+                    Log.e(TAG, "Downloaded file size mismatch: actual=${tempFile.length()}, expected=$expectedBytes")
+                    tempFile.delete()
+                    return false
+                }
+            }
+            return false
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception downloading $urlStr: ${e.message}", e)
+            if (tempFile.exists()) tempFile.delete()
+            return false
+        }
     }
 
     /**
