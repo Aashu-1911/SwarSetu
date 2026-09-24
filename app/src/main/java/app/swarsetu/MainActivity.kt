@@ -27,6 +27,16 @@ class MainActivity : ComponentActivity() {
 
     private val settingsStore: SettingsStore by inject()
 
+    override fun attachBaseContext(newBase: android.content.Context) {
+        val koinSettingsStore = org.koin.java.KoinJavaComponent.getKoin().get<SettingsStore>()
+        val langCode = kotlinx.coroutines.runBlocking { kotlinx.coroutines.flow.first(koinSettingsStore.sttLanguageCode) }
+        val locale = java.util.Locale(langCode)
+        java.util.Locale.setDefault(locale)
+        val config = android.content.res.Configuration(newBase.resources.configuration)
+        config.setLocale(locale)
+        super.attachBaseContext(newBase.createConfigurationContext(config))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -47,8 +57,22 @@ class MainActivity : ComponentActivity() {
                 "light" -> false
                 else -> isSystemInDarkTheme()
             }
-            SwarSetuTheme(darkTheme = isDark) {
-                SwarSetuApp(startRoute = startRoute)
+
+            val langCode by settingsStore.sttLanguageCode.collectAsStateWithLifecycle(initialValue = "en")
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val locale = java.util.Locale(langCode)
+            java.util.Locale.setDefault(locale)
+            val configuration = android.content.res.Configuration(context.resources.configuration)
+            configuration.setLocale(locale)
+            val localizedContext = context.createConfigurationContext(configuration)
+
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.ui.platform.LocalContext provides localizedContext,
+                androidx.compose.ui.platform.LocalConfiguration provides configuration
+            ) {
+                SwarSetuTheme(darkTheme = isDark) {
+                    SwarSetuApp(startRoute = startRoute)
+                }
             }
         }
     }

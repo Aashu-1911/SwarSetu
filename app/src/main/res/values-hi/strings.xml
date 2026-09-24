@@ -1,0 +1,499 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+<string name="app_name">[हिंदी] SwarSetu</string>
+<!-- Notification channel groups -->
+<string name="notif_group_messages">[हिंदी] Messages</string>
+<string name="notif_group_app">[हिंदी] App</string>
+<!-- Mesh foreground service (App group) -->
+<string name="mesh_channel_name">[हिंदी] Mesh networking</string>
+<string name="channel_status_desc">[हिंदी] Keeps the mesh running while the app is in the background</string>
+<string name="mesh_notification_title">[हिंदी] SwarSetu mesh is active</string>
+<string name="mesh_notification_searching">[हिंदी] Mesh is active and searching</string>
+<plurals name="mesh_notification_connected">
+<item quantity="one">[हिंदी] Connected to %d nearby device</item>
+<item quantity="other">[हिंदी] Connected to %d nearby devices</item>
+</plurals>
+<string name="mesh_notification_stop">[हिंदी] Stop</string>
+<!-- Connection &amp; error alerts (App group) -->
+<string name="channel_alerts_name">[हिंदी] Connection &amp; alerts</string>
+<string name="channel_alerts_desc">[हिंदी] Mesh connection changes and errors</string>
+<!-- Message channels (Messages group) -->
+<string name="channel_nearby_name">[हिंदी] Nearby</string>
+<string name="channel_nearby_desc">[हिंदी] Messages in the public Nearby room</string>
+<string name="channel_groups_name">[हिंदी] Group messages</string>
+<string name="channel_groups_desc">[हिंदी] Messages in your group chats</string>
+<string name="channel_dms_name">[हिंदी] Direct messages</string>
+<string name="channel_dms_desc">[हिंदी] Private 1:1 messages</string>
+<string name="mention_channel_name">[हिंदी] Mentions</string>
+<string name="mention_channel_description">[हिंदी] Notifications when someone @-mentions you</string>
+<!-- Notification conversation titles (per channel) -->
+<string name="notif_title_nearby">[हिंदी] Nearby</string>
+<string name="notif_title_groups">[हिंदी] Group messages</string>
+<string name="notif_title_dms">[हिंदी] Direct messages</string>
+<string name="notif_title_mentions">[हिंदी] Mentions</string>
+<string name="notif_self_name">[हिंदी] You</string>
+<!-- Notification quick actions + group summary (Signal-style) -->
+<string name="notif_action_reply">[हिंदी] Reply</string>
+<string name="notif_reply_hint">[हिंदी] Message</string>
+<string name="notif_action_mark_read">[हिंदी] Mark read</string>
+<string name="notif_summary">[हिंदी] %1$d messages in %2$d chats</string>
+<!-- Message requests (coalesced heads-up) -->
+<string name="channel_requests_name">[हिंदी] Message requests</string>
+<string name="channel_requests_desc">[हिंदी] Alerts you when someone new messages you</string>
+<string name="notif_requests_title">[हिंदी] Message request received</string>
+<plurals name="notif_requests_body">
+<item quantity="one">[हिंदी] %d message request</item>
+<item quantity="other">[हिंदी] %d message requests</item>
+</plurals>
+<!-- Onboarding -->
+<string name="onboarding_title">[हिंदी] Welcome to SwarSetu</string>
+<string name="onboarding_blurb">[हिंदी] SwarSetu connects directly to nearby phones over Wi-Fi Aware to relay encrypted messages — no internet, no servers. It needs the nearby-devices permission to find peers, and works best when allowed to run in the background.</string>
+<string name="onboarding_grant_permissions">[हिंदी] Grant permissions</string>
+<string name="onboarding_permissions_granted">[हिंदी] Permissions granted</string>
+<string name="onboarding_unsupported">[हिंदी] This device doesn\'t support Wi-Fi Aware, so it can\'t join the mesh. You can still open the app, but it won\'t connect to nearby phones.</string>
+<string name="onboarding_start">[हिंदी] Start meshing</string>
+<!-- Chat -->
+<string name="chat_more_options">[हिंदी] More options</string>
+<string name="chat_connection_none">[हिंदी] No mesh nodes connected</string>
+<plurals name="chat_connection_count">
+<item quantity="one">[हिंदी] Connected to %d mesh node</item>
+<item quantity="other">[हिंदी] Connected to %d mesh nodes</item>
+</plurals>
+<string name="chat_connection_radio_off">[हिंदी] Turn on Wi-Fi or Bluetooth to connect</string>
+<string name="chat_connection_airplane">[हिंदी] Airplane mode is on — turn on Wi-Fi or Bluetooth</string>
+<string name="chat_connection_degraded">[हिंदी] Mesh radio unavailable — another app may be using it</string>
+<!--
+      Connection header, Internet plane. These two replace the mesh line only when the Internet plane is
+      carrying the conversation and the radios are not — saying "No mesh nodes connected" then would be
+      false, since messages are still moving. When both planes work the mesh line stands and the glyph
+      alone reports the Internet.
+    -->
+<string name="chat_connection_relay_only">[हिंदी] Relaying over Internet</string>
+<string name="chat_connection_relay_no_radios">[हिंदी] No nearby radios — relaying over Internet</string>
+<!-- Spoken form of the header's Internet glyph, appended to the visible line for TalkBack. -->
+<string name="chat_connection_relay_live_desc">[हिंदी] Internet relays connected</string>
+<string name="chat_connection_relay_down_desc">[हिंदी] Internet relays not connected</string>
+<string name="chat_connection_desc">[हिंदी] %1$s. %2$s</string>
+<!-- Chat-list radio-off banner -->
+<string name="chatlist_radio_banner_bluetooth_off">[हिंदी] Bluetooth is off — tap to turn it on for better range and reliability</string>
+<string name="chatlist_radio_banner_wifi_off">[हिंदी] Wi-Fi is off — tap to turn it on for faster, longer-range mesh</string>
+<string name="chatlist_radio_banner_all_off">[हिंदी] SwarSetu can\'t connect — turn on Wi-Fi or Bluetooth to reach people nearby</string>
+<string name="chatlist_radio_banner_all_off_airplane">[हिंदी] Airplane mode is on — turn it off or turn on Wi-Fi/Bluetooth to connect</string>
+<string name="chatlist_radio_banner_dismiss">[हिंदी] Dismiss</string>
+<string name="chat_empty">[हिंदी] No messages yet.\nSay hello to nearby devices.</string>
+<string name="chat_message_hint">[हिंदी] SwarSetu Message</string>
+<string name="chat_typing">[हिंदी] %1$s is typing</string>
+<string name="chat_typing_multiple">[हिंदी] %1$s and others are typing</string>
+<string name="chat_loading_photo">[हिंदी] Photo appears once a device that has it is reachable</string>
+<string name="chat_sending">[हिंदी] Sending…</string>
+<string name="chat_attachment_image_desc">[हिंदी] Photo attachment</string>
+<string name="chat_view_photo">[हिंदी] View photo</string>
+<string name="chat_image_viewer_desc">[हिंदी] Photo</string>
+<string name="chat_image_saved">[हिंदी] Saved to Pictures/SwarSetu</string>
+<string name="chat_image_save_failed">[हिंदी] Couldn\'t save image</string>
+<string name="chat_image_capture_failed">[हिंदी] Couldn\'t attach that photo</string>
+<string name="chat_attachment_preview_desc">[हिंदी] Attachment preview</string>
+<string name="chat_remove_attachment">[हिंदी] Remove attachment</string>
+<!-- Voice notes -->
+<string name="chat_voice_record">[हिंदी] Hold to record a voice message</string>
+<string name="chat_voice_record_start">[हिंदी] Record a voice message</string>
+<string name="chat_voice_record_stop">[हिंदी] Stop recording</string>
+<string name="chat_voice_recording">[हिंदी] Recording</string>
+<string name="chat_voice_slide_to_cancel">[हिंदी] Slide to cancel</string>
+<string name="chat_voice_cancel">[हिंदी] Cancel recording</string>
+<string name="chat_voice_record_failed">[हिंदी] Couldn\'t record that voice message</string>
+<string name="chat_voice_too_short">[हिंदी] Hold the button to record</string>
+<string name="chat_voice_mic_denied">[हिंदी] SwarSetu needs microphone access to record a voice message.</string>
+<string name="chat_voice_play">[हिंदी] Play voice message</string>
+<string name="chat_voice_pause">[हिंदी] Pause voice message</string>
+<string name="chat_voice_loading">[हिंदी] Voice message appears once a device that has it is reachable</string>
+<string name="chat_voice_desc">[हिंदी] Voice message, %1$s</string>
+<string name="chat_voice_remove">[हिंदी] Remove voice message</string>
+<string name="chat_self_name">[हिंदी] You</string>
+<string name="chat_status_sent">[हिंदी] Sent</string>
+<string name="chat_status_delivered">[हिंदी] Delivered</string>
+<!-- Group form: the ✓✓ flips on the FIRST member's ack, so the ratio is what the tick can't say -->
+<string name="chat_status_delivered_count">[हिंदी] Delivered to %1$d of %2$d</string>
+<string name="chat_status_delivered_internet">[हिंदी] Delivered over the Internet</string>
+<string name="chat_status_arrived_internet">[हिंदी] Arrived over the Internet</string>
+<string name="chat_status_arrived_nearby">[हिंदी] Arrived nearby</string>
+<string name="chat_status_pending_key">[हिंदी] Not sent yet — waiting for their key</string>
+<string name="chat_time_just_now">[हिंदी] Just now</string>
+<string name="chat_action_copy">[हिंदी] Copy text</string>
+<string name="chat_action_reply">[हिंदी] Reply</string>
+<string name="chat_reply_photo">[हिंदी] 📷 Photo</string>
+<string name="chat_reply_voice">[हिंदी] 🎤 Voice message</string>
+<string name="chat_reply_cancel">[हिंदी] Cancel reply</string>
+<string name="chat_message_copied">[हिंदी] Copied to clipboard</string>
+<string name="chat_action_details">[हिंदी] Message info</string>
+<string name="chat_action_delete">[हिंदी] Delete message</string>
+<string name="chat_message_deleted">[हिंदी] Message deleted</string>
+<string name="chat_delete_confirm_title">[हिंदी] Delete message?</string>
+<string name="chat_delete_confirm_body">[हिंदी] It will be removed from this device only.</string>
+<string name="chat_delete_confirm_action">[हिंदी] Delete</string>
+<string name="chat_list_delete_action">[हिंदी] Delete</string>
+<string name="chat_list_delete_confirm_title">[हिंदी] Delete chat?</string>
+<string name="chat_list_delete_confirm_body">[हिंदी] All messages in this chat will be removed from this device only.</string>
+<string name="chat_action_block">[हिंदी] Block user</string>
+<string name="chat_action_unblock">[हिंदी] Unblock user</string>
+<string name="chat_view_profile">[हिंदी] View %1$s\'s profile</string>
+<string name="chat_view_group_info">[हिंदी] View group info</string>
+<string name="chat_group_settings">[हिंदी] Settings</string>
+<string name="chat_react_with">[हिंदी] React with %1$s</string>
+<plurals name="chat_reaction_count">
+<item quantity="one">[हिंदी] %2$s, %1$d reaction</item>
+<item quantity="other">[हिंदी] %2$s, %1$d reactions</item>
+</plurals>
+<string name="chat_user_blocked">[हिंदी] User blocked</string>
+<string name="chat_user_unblocked">[हिंदी] User unblocked</string>
+<!-- Group chat -->
+<string name="group_unnamed">[हिंदी] Group</string>
+<plurals name="chat_group_member_count">
+<item quantity="one">[हिंदी] %d member</item>
+<item quantity="other">[हिंदी] %d members</item>
+</plurals>
+<string name="chat_group_rename">[हिंदी] Rename group</string>
+<string name="chat_group_set_photo">[हिंदी] Set group photo</string>
+<string name="chat_group_name_label">[हिंदी] Group name</string>
+<string name="chat_group_rename_action">[हिंदी] Rename</string>
+<string name="chat_group_leave">[हिंदी] Leave group</string>
+<string name="chat_group_leave_confirm_title">[हिंदी] Leave group?</string>
+<string name="chat_group_leave_confirm_body">[हिंदी] You\'ll stop receiving messages and this chat will be removed from this device.</string>
+<string name="chat_group_leave_confirm_action">[हिंदी] Leave</string>
+<string name="chat_group_member_left">[हिंदी] %1$s left the chat</string>
+<string name="group_details_title">[हिंदी] Group info</string>
+<string name="group_details_members">[हिंदी] Members</string>
+<string name="group_details_view_photo">[हिंदी] View photo</string>
+<string name="group_details_fs_active">[हिंदी] Messages here are sent with forward secrecy</string>
+<string name="group_details_fs_waiting">[हिंदी] Legacy encryption until %1$s updates SwarSetu</string>
+<string name="blocked_users_title">[हिंदी] Blocked users</string>
+<string name="blocked_users_empty">[हिंदी] No blocked users</string>
+<string name="blocked_users_unblock">[हिंदी] Unblock</string>
+<!-- Message requests -->
+<string name="message_requests_title">[हिंदी] Message requests</string>
+<string name="message_requests_empty">[हिंदी] No message requests</string>
+<string name="message_requests_accept">[हिंदी] Accept</string>
+<string name="message_requests_block">[हिंदी] Block</string>
+<string name="message_requests_block_confirm_title">[हिंदी] Block this person?</string>
+<string name="message_requests_block_confirm_body">[हिंदी] You won\'t receive messages from them, and this request is removed.</string>
+<string name="message_requests_delete_confirm_title">[हिंदी] Delete request?</string>
+<string name="message_requests_delete_confirm_body">[हिंदी] This conversation will be removed from this device only.</string>
+<!-- Donate -->
+<string name="donate_title">[हिंदी] Support SwarSetu</string>
+<string name="donate_blurb">[हिंदी] SwarSetu is free and funded entirely by tips — no ads, no servers, no tracking. If it\'s useful to you, a small donation helps keep development going.</string>
+<string name="donate_kofi">[हिंदी] Ko-fi</string>
+<string name="donate_liberapay">[हिंदी] Liberapay</string>
+<!-- Install offline (offline APK share) -->
+<string name="share_app_menu">[हिंदी] Install offline</string>
+<string name="share_app_dialog_title">[हिंदी] Install offline</string>
+<string name="share_app_dialog_body">[हिंदी] Send SwarSetu to a nearby phone, even with no internet. Pick Quick Share or Bluetooth next. On the other phone, open the received file and allow installing it to finish.</string>
+<string name="share_app_dialog_confirm">[हिंदी] Share</string>
+<string name="share_app_chooser_title">[हिंदी] Install offline</string>
+<!-- Shown while a Play (App Bundle / split) install is merged into one shareable APK — several seconds. -->
+<string name="share_app_preparing">[हिंदी] Preparing SwarSetu to share…</string>
+<string name="share_app_error">[हिंदी] Couldn\'t share the app</string>
+<string name="share_app_error_storage">[हिंदी] Not enough free space to prepare SwarSetu to share.</string>
+<!-- Share SwarSetu (Play Store link) -->
+<string name="share_knit_menu">[हिंदी] Share SwarSetu</string>
+<string name="share_knit_chooser_title">[हिंदी] Share SwarSetu</string>
+<!-- %1$s = Play Store URL -->
+<string name="share_knit_text">[हिंदी] SwarSetu is a free, offline mesh messenger — no servers, no accounts, no internet needed. Get it: %1$s</string>
+<!-- Rate / review prompt -->
+<string name="review_prompt_title">[हिंदी] Enjoying SwarSetu?</string>
+<string name="review_prompt_body">[हिंदी] You\'ve been meshing for a while now — how\'s it going?</string>
+<string name="review_prompt_positive">[हिंदी] Yes!</string>
+<string name="review_prompt_negative">[हिंदी] Not really</string>
+<string name="review_menu">[हिंदी] Rate SwarSetu</string>
+<!-- Share sheet target picker -->
+<string name="share_target_title">[हिंदी] Share to…</string>
+<!-- Direct messages / contacts -->
+<string name="contacts_title">[हिंदी] New message</string>
+<string name="contacts_new_message">[हिंदी] New message</string>
+<string name="contacts_empty">[हिंदी] No contacts yet.\nSay hi in Nearby, or use Verify contact to add someone by code.</string>
+<string name="contacts_start_chat">[हिंदी] Start chat</string>
+<string name="contacts_selected">[हिंदी] Selected</string>
+<string name="contacts_not_selected">[हिंदी] Not selected</string>
+<string name="contacts_group_full">[हिंदी] Groups can have up to %1$d people</string>
+<!-- Chat list -->
+<string name="nearby_title">[हिंदी] Nearby</string>
+<string name="chat_list_empty_preview">[हिंदी] No messages yet</string>
+<string name="chat_list_preview_photo">[हिंदी] 📷 Photo</string>
+<string name="chat_list_preview_voice">[हिंदी] 🎤 Voice message</string>
+<string name="chat_list_preview_with_sender">[हिंदी] %1$s: %2$s</string>
+<plurals name="chat_list_unread_count">
+<item quantity="one">[हिंदी] %d unread message</item>
+<item quantity="other">[हिंदी] %d unread messages</item>
+</plurals>
+<!-- Settings (your own profile) -->
+<string name="settings_title">[हिंदी] Settings</string>
+<string name="profile_display_name_label">[हिंदी] Display name</string>
+<string name="profile_status_label">[हिंदी] Status</string>
+<string name="profile_node_id">[हिंदी] Node ID: %1$s</string>
+<string name="battery_allowed">[हिंदी] Background battery use: allowed</string>
+<string name="battery_restricted">[हिंदी] Background battery use: restricted — the mesh may drop when idle</string>
+<string name="battery_allow_button">[हिंदी] Allow background battery use</string>
+<string name="profile_avatar_crop_hint">[हिंदी] Drag and pinch to adjust</string>
+<string name="profile_avatar_crop_desc">[हिंदी] Adjust profile photo</string>
+<string name="profile_change_photo_desc">[हिंदी] Change profile photo</string>
+<string name="profile_remove_photo_desc">[हिंदी] Remove profile photo</string>
+<string name="settings_content_filtering_title">[हिंदी] Content filtering</string>
+<string name="settings_content_filtering_subtitle">[हिंदी] Hide explicit images and abusive messages you receive from others</string>
+<!-- Profile details (another peer) -->
+<string name="profile_details_title">[हिंदी] Profile</string>
+<string name="profile_details_message">[हिंदी] Message</string>
+<string name="profile_details_online">[हिंदी] Online</string>
+<string name="profile_details_offline">[हिंदी] Offline</string>
+<string name="profile_details_view_photo">[हिंदी] View photo</string>
+<!-- Encryption indicator in the chat header -->
+<string name="chat_encrypted_desc">[हिंदी] Encrypted</string>
+<string name="chat_encryption_info_title">[हिंदी] End-to-end encrypted</string>
+<string name="chat_encryption_info_body">[हिंदी] Messages in this chat are end-to-end encrypted — only the people in this conversation can read them.</string>
+<!-- E2E key verification -->
+<string name="verify_section_title">[हिंदी] Encryption</string>
+<string name="verify_verified">[हिंदी] Verified</string>
+<string name="verify_not_verified">[हिंदी] Not verified</string>
+<string name="verify_no_key">[हिंदी] Encryption keys haven\'t been exchanged with this contact yet.</string>
+<string name="verify_safety_number">[हिंदी] Safety number</string>
+<string name="verify_caption">[हिंदी] Compare this number with %1$s in person, or scan their code, to confirm no one is intercepting your messages.</string>
+<string name="verify_qr_caption">[हिंदी] Let %1$s scan this code</string>
+<string name="verify_scan">[हिंदी] Scan their code</string>
+<string name="verify_mark_verified">[हिंदी] Mark as verified</string>
+<string name="verify_clear">[हिंदी] Clear verification</string>
+<string name="verify_match">[हिंदी] Verified — keys match.</string>
+<string name="verify_mismatch">[हिंदी] Codes don\'t match. This may not be the right contact.</string>
+<!-- Standalone "Verify contact" screen (chat-list overflow) -->
+<string name="verify_contact_title">[हिंदी] Verify contact</string>
+<string name="verify_standalone_caption">[हिंदी] Show your code to someone nearby, or scan theirs, to add them as a verified contact — even if you\'ve never chatted.</string>
+<string name="verify_qr_caption_generic">[हिंदी] Let them scan this code</string>
+<string name="verify_added">[हिंदी] Verified — added to your contacts.</string>
+<string name="verify_self">[हिंदी] That\'s your own code.</string>
+<string name="verify_invalid">[हिंदी] That\'s not a SwarSetu contact code.</string>
+<!-- QR scanner (camera) -->
+<string name="scan_hint">[हिंदी] Point the camera at the other person\'s code.</string>
+<string name="scan_permission_denied">[हिंदी] SwarSetu needs camera access to scan a contact\'s code. You can turn it on in Settings.</string>
+<string name="scan_no_camera">[हिंदी] This device has no camera, so codes can\'t be scanned. You can still show your own code for someone else to scan.</string>
+<!-- In-chat photo capture, and the states shared with the QR scanner above -->
+<string name="camera_unavailable">[हिंदी] The camera couldn\'t be opened. Close any other app using it and try again.</string>
+<string name="camera_permission_denied">[हिंदी] SwarSetu needs camera access to take a photo. You can turn it on in Settings.</string>
+<string name="camera_no_camera">[हिंदी] This device has no camera, so there\'s nothing to take a photo with. You can still attach one from your photos.</string>
+<string name="camera_capture_failed">[हिंदी] That photo couldn\'t be taken. Try again.</string>
+<string name="camera_capturing">[हिंदी] Taking photo</string>
+<string name="camera_switch_lens">[हिंदी] Switch camera</string>
+<!-- Diagnostics -->
+<string name="diagnostics_title">[हिंदी] Diagnostics</string>
+<string name="diagnostics_self">[हिंदी] This device</string>
+<string name="diagnostics_metrics">[हिंदी] Mesh metrics</string>
+<string name="diagnostics_directly_connected">[हिंदी] Directly connected (%1$d)</string>
+<string name="diagnostics_via_relay">[हिंदी] Reachable via relay (%1$d)</string>
+<string name="diagnostics_none_direct">[हिंदी] No direct connections</string>
+<string name="diagnostics_none_relay">[हिंदी] No relay-only nodes</string>
+<string name="diagnostics_profile_age">[हिंदी] Profile %1$s</string>
+<string name="diagnostics_metric_originated">[हिंदी] Originated</string>
+<string name="diagnostics_metric_delivered">[हिंदी] Delivered</string>
+<string name="diagnostics_metric_relayed">[हिंदी] Relayed</string>
+<string name="diagnostics_metric_suppressed">[हिंदी] Suppressed</string>
+<string name="diagnostics_metric_deduped">[हिंदी] Deduped</string>
+<string name="diagnostics_metric_bytes_sent">[हिंदी] Bytes sent</string>
+<string name="diagnostics_metric_dropped">[हिंदी] Dropped</string>
+<string name="diagnostics_metric_key_requests">[हिंदी] Key requests sent</string>
+<string name="diagnostics_metric_keys_served">[हिंदी] Keys served</string>
+<string name="diagnostics_metric_keys_recovered">[हिंदी] Keys recovered</string>
+<string name="diagnostics_metric_frames_held">[हिंदी] Frames held for key</string>
+<string name="diagnostics_metric_frames_replayed">[हिंदी] Frames replayed</string>
+<string name="diagnostics_metric_receipts_resent">[हिंदी] Receipts re-sent</string>
+<string name="diagnostics_metric_dms_ratcheted">[हिंदी] DMs sent forward-secret</string>
+<string name="diagnostics_metric_dms_v1_fallback">[हिंदी] DMs sent legacy (v1)</string>
+<string name="diagnostics_metric_groups_ratcheted">[हिंदी] Group messages sent forward-secret</string>
+<string name="diagnostics_metric_groups_v1_fallback">[हिंदी] Group messages sent legacy (v1)</string>
+<string name="diagnostics_metric_group_seeds_sent">[हिंदी] Group epoch seeds sent</string>
+<string name="diagnostics_metric_group_seeds_adopted">[हिंदी] Group epoch seeds adopted</string>
+<string name="diagnostics_metric_receipts_sealed">[हिंदी] Receipts sent sealed</string>
+<string name="diagnostics_metric_receipts_sealed_fallback">[हिंदी] Receipts sent cleartext (fallback)</string>
+<string name="diagnostics_metric_receipts_custodied">[हिंदी] Group ticks escalated to custody</string>
+<string name="diagnostics_metric_reactions_sealed">[हिंदी] Reactions sent sealed</string>
+<string name="diagnostics_metric_reactions_sealed_fallback">[हिंदी] Reactions sent cleartext (fallback)</string>
+<string name="diagnostics_metric_bt_connect_fails">[हिंदी] BT connect failures</string>
+<string name="diagnostics_spools">[हिंदी] Internet relays</string>
+<string name="diagnostics_metric_spool_pushed">[हिंदी] Messages sent to Internet relays</string>
+<string name="diagnostics_metric_spool_bridged">[हिंदी] Messages received via Internet relays</string>
+<string name="diagnostics_metric_spool_invalid">[हिंदी] Relay blobs quarantined</string>
+<string name="diagnostics_metric_spool_errors">[हिंदी] Relay errors</string>
+<string name="diagnostics_metric_spool_attach_pushed">[हिंदी] Photo chunks sent to Internet relays</string>
+<string name="diagnostics_metric_spool_attach_pulled">[हिंदी] Photos received via Internet relays</string>
+<string name="diagnostics_metric_spool_attach_deferred">[हिंदी] Photos left to nearby radios</string>
+<string name="diagnostics_controls">[हिंदी] Mesh controls</string>
+<string name="diagnostics_status_healthy">[हिंदी] Mesh status: Healthy</string>
+<string name="diagnostics_status_degraded">[हिंदी] Mesh status: Degraded</string>
+<string name="diagnostics_status_degraded_hint">[हिंदी] The radio may be in use by another app like Quick Share. Tap Restart mesh if it doesn\'t recover on its own.</string>
+<string name="diagnostics_status_unavailable">[हिंदी] Mesh status: Radios off</string>
+<string name="diagnostics_status_unavailable_hint">[हिंदी] Wi-Fi and Bluetooth are both off (or airplane mode is on). Turn one on to join the mesh.</string>
+<string name="diagnostics_restart_mesh">[हिंदी] Restart mesh</string>
+<string name="diagnostics_scan_now">[हिंदी] Scan for nearby devices</string>
+<string name="diagnostics_mesh_restarted">[हिंदी] Mesh restarted</string>
+<string name="diagnostics_scanning">[हिंदी] Scanning for nearby devices…</string>
+<string name="diagnostics_transports">[हिंदी] Transports</string>
+<string name="diagnostics_none_transports">[हिंदी] No active transports</string>
+<string name="diagnostics_transport_bluetooth">[हिंदी] Bluetooth</string>
+<string name="diagnostics_transport_wifi_aware">[हिंदी] Wi-Fi Aware</string>
+<string name="diagnostics_transport_other">[हिंदी] Other</string>
+<string name="diagnostics_transport_counts">[हिंदी] %1$d nearby · %2$d linked</string>
+<string name="diagnostics_tag_ble">[हिंदी] BLE</string>
+<string name="diagnostics_tag_nan">[हिंदी] NAN</string>
+<string name="diagnostics_transport_audio">[हिंदी] audio</string>
+<!-- Crash log — a manual, opt-in report the user reads and hands over themselves. Reached from
+         Diagnostics; nothing here is ever uploaded. See ui/diagnostics/CrashLogScreen.kt. -->
+<string name="crash_section">[हिंदी] Problem reports</string>
+<string name="crash_last_label">[हिंदी] Last crash</string>
+<string name="crash_open_action">[हिंदी] Open crash details</string>
+<string name="crash_title">[हिंदी] Last crash</string>
+<string name="crash_when">[हिंदी] Saved %1$s</string>
+<string name="crash_empty">[हिंदी] No crashes have been recorded on this phone.</string>
+<string name="crash_explainer">[हिंदी] SwarSetu saved this on your phone the last time it closed unexpectedly. It stays here — nothing is sent anywhere unless you send it yourself.</string>
+<string name="crash_native_note">[हिंदी] Not every crash can be recorded. If SwarSetu closed and nothing new turned up here, that\'s a kind of failure this can\'t capture — describe what you were doing instead.</string>
+<string name="crash_trace_header">[हिंदी] Details</string>
+<string name="crash_action_report">[हिंदी] Report on GitHub</string>
+<string name="crash_action_copy">[हिंदी] Copy</string>
+<string name="crash_action_share">[हिंदी] Share as a file</string>
+<string name="crash_action_delete">[हिंदी] Delete</string>
+<string name="crash_copied">[हिंदी] Copied</string>
+<string name="crash_share_chooser_title">[हिंदी] Send crash details</string>
+<string name="crash_share_error">[हिंदी] Couldn\'t prepare the file to share.</string>
+<string name="crash_report_title">[हिंदी] Report this on GitHub?</string>
+<string name="crash_report_body">[हिंदी] GitHub issues are public — anyone can read what you post. SwarSetu removed ids, names and message text from this report before showing it to you, but read it over first. Your browser will open a bug form with the details filled in, and the full report will be on your clipboard to paste in.</string>
+<string name="crash_report_confirm">[हिंदी] Open the form</string>
+<string name="crash_delete_title">[हिंदी] Delete crash details?</string>
+<string name="crash_delete_body">[हिंदी] This removes every saved crash report from this phone. It can\'t be undone.</string>
+<string name="crash_delete_confirm">[हिंदी] Delete all</string>
+<string name="crash_deleted">[हिंदी] Crash details deleted</string>
+<!-- Generic actions / content descriptions -->
+<string name="action_send">[हिंदी] Send</string>
+<string name="action_attach_photo">[हिंदी] Attach photo</string>
+<string name="action_take_photo">[हिंदी] Take photo</string>
+<string name="action_open_settings">[हिंदी] Open settings</string>
+<string name="action_back">[हिंदी] Back</string>
+<string name="action_close">[हिंदी] Close</string>
+<string name="action_cancel">[हिंदी] Cancel</string>
+<string name="action_save">[हिंदी] Save</string>
+<!-- Content moderation (on-device) -->
+<string name="moderation_text_blocked">[हिंदी] Message not sent: it may contain abusive language</string>
+<string name="moderation_text_hidden">[हिंदी] Message hidden — tap to reveal</string>
+<string name="moderation_image_blocked">[हिंदी] Explicit images can\'t be sent to the Nearby room</string>
+<string name="moderation_image_confirm_title">[हिंदी] Send explicit image?</string>
+<string name="moderation_image_confirm_body">[हिंदी] This image may contain explicit content. Pleasure ensure the recipient wants to receive this kind of content.</string>
+<string name="moderation_image_confirm_send">[हिंदी] Send anyway</string>
+<string name="moderation_image_hidden">[हिंदी] Sensitive image — tap to view</string>
+<!--
+      Internet relays (the spool plane, docs/SPOOL_PROTOCOL.md).
+
+      Two rules hold this copy together. First, a relay refusal is never a failed send: the mesh still
+      carries the message, so every string here talks about *reach* ("nearby only", "not covered")
+      rather than failure. Second, the disclosure is deliberately concrete about what a relay observes
+      — vague reassurance would be the dishonest option for a feature that ships sealed bytes to a
+      machine the user does not hold.
+    -->
+<string name="relays_title">[हिंदी] Internet relays</string>
+<string name="settings_internet_relays_title">[हिंदी] Use Internet relays</string>
+<string name="settings_internet_relays_subtitle">[हिंदी] Keep conversations flowing when nobody is in radio range, by storing sealed copies on relay servers. Relays cannot read your messages, but they do see that a conversation is active and the IP addresses connecting to it.</string>
+<string name="relays_summary_off">[हिंदी] Off</string>
+<string name="relays_summary_on">[हिंदी] On · %1$d of %2$d connected</string>
+<string name="relays_summary_none">[हिंदी] On · no relays added</string>
+<string name="relays_section_list">[हिंदी] Relays</string>
+<string name="relays_off_note">[हिंदी] Turning this off stops new uploads. Sealed copies already on a relay are unreadable to it and expire within 48 hours.</string>
+<string name="relays_empty">[हिंदी] No relays added. The Internet plane stays off until you add one — your messages still travel by Wi-Fi and Bluetooth.</string>
+<string name="relays_add">[हिंदी] Add relay</string>
+<string name="relays_add_title">[हिंदी] Add a relay</string>
+<string name="relays_add_label">[हिंदी] Relay address</string>
+<string name="relays_add_hint">[हिंदी] wss://host/spool/v1</string>
+<string name="relays_add_invalid">[हिंदी] Must start with wss://</string>
+<string name="relays_add_duplicate">[हिंदी] That relay is already in your list</string>
+<string name="relays_remove">[हिंदी] Remove</string>
+<string name="relays_remove_desc">[हिंदी] Remove relay %1$s</string>
+<string name="relays_status_connected">[हिंदी] Connected</string>
+<string name="relays_status_connecting">[हिंदी] Connecting…</string>
+<string name="relays_status_off">[हिंदी] Not in use</string>
+<plurals name="relays_scope_count">
+<item quantity="one">[हिंदी] %d conversation</item>
+<item quantity="other">[हिंदी] %d conversations</item>
+</plurals>
+<string name="relays_no_photos">[हिंदी] Carries messages only — no photos</string>
+<string name="relays_error_unreachable">[हिंदी] Cannot be reached</string>
+<string name="relays_error_auth">[हिंदी] Rejected the access token</string>
+<string name="relays_error_quota">[हिंदी] Full — it is holding all it can for this conversation</string>
+<string name="relays_error_rate">[हिंदी] Asking us to slow down</string>
+<string name="relays_error_pow">[हिंदी] Wants more setup work before it accepts this conversation</string>
+<string name="relays_error_other">[हिंदी] Refused a request (%1$s)</string>
+<!-- First-enable consent -->
+<string name="relays_consent_title">[हिंदी] Use Internet relays?</string>
+<string name="relays_consent_can_title">[हिंदी] A relay can see</string>
+<string name="relays_consent_can_body">[हिंदी] Your IP address, and when you send and roughly how much.</string>
+<string name="relays_consent_cannot_title">[हिंदी] A relay cannot see</string>
+<string name="relays_consent_cannot_body">[हिंदी] Your messages or photos, who you are talking to, or who else is in a group.</string>
+<string name="relays_consent_scope">[हिंदी] This applies to every conversation, not just one. You can turn it off at any time; new uploads stop immediately and sealed copies already on a relay expire within 48 hours.</string>
+<string name="relays_consent_accept">[हिंदी] Turn on</string>
+<string name="relays_consent_decline">[हिंदी] Not now</string>
+<!-- Relay reach, shown in a conversation -->
+<string name="chat_relay_room">[हिंदी] Nearby is never sent over the Internet</string>
+<string name="chat_relay_pending">[हिंदी] Not covered by relays yet</string>
+<string name="chat_relay_room_title">[हिंदी] Nearby stays local</string>
+<string name="chat_relay_room_body">[हिंदी] The Nearby room is carried only by Wi-Fi and Bluetooth, by design — it is a public, unencrypted room, so it is never uploaded to a relay.</string>
+<string name="chat_relay_pending_title">[हिंदी] Not covered yet</string>
+<string name="chat_relay_pending_body">[हिंदी] This conversation does not have a relay channel yet. It usually appears on its own once both sides have exchanged encryption keys. Until then, messages travel by Wi-Fi and Bluetooth.</string>
+<string name="chat_relay_nearby_only">[हिंदी] Nearby only</string>
+<string name="chat_relay_nearby_only_desc">[हिंदी] Attachment will not be sent over the Internet</string>
+<string name="chat_relay_too_large_title">[हिंदी] Too large for your relays</string>
+<string name="chat_relay_too_large_body">[हिंदी] This attachment is bigger than any of your relays will hold, so it is not being uploaded. It still arrives when you and %1$s are in Wi-Fi or Bluetooth range of each other.</string>
+<string name="chat_relay_unsupported_title">[हिंदी] Your relays carry messages only</string>
+<string name="chat_relay_unsupported_body">[हिंदी] None of your relays accepts attachments, so this one is not being uploaded. It still arrives when you and %1$s are in Wi-Fi or Bluetooth range of each other.</string>
+<string name="chat_relay_staged_too_large">[हिंदी] Nearby only — too large for your relays</string>
+<string name="chat_relay_staged_unsupported">[हिंदी] Nearby only — your relays carry messages only</string>
+<!-- Message details ("Message info", from a message's long-press menu) -->
+<string name="message_details_title">[हिंदी] Message info</string>
+<string name="message_details_sent_by">[हिंदी] Sent by %1$s</string>
+<string name="message_details_attachment">[हिंदी] 📷 Photo</string>
+<string name="message_details_voice">[हिंदी] 🎤 Voice message</string>
+<string name="message_details_hidden_body">[हिंदी] Message hidden by content filtering</string>
+<string name="message_details_no_reactions">[हिंदी] No one has reacted to this message yet</string>
+<string name="message_details_filter_all">[हिंदी] All %1$d</string>
+<string name="message_details_filter_emoji">[हिंदी] %1$s %2$d</string>
+<!-- Per-recipient delivery, on a group message you sent -->
+<string name="message_details_delivered_to">[हिंदी] Delivered to</string>
+<string name="message_details_waiting_on">[हिंदी] Waiting on</string>
+<string name="message_details_received_by">[हिंदी] Received by %1$d</string>
+<!-- Row content descriptions: a section header is not announced with the rows under it -->
+<string name="message_details_recipient_delivered">[हिंदी] %1$s, delivered %2$s</string>
+<string name="message_details_recipient_waiting">[हिंदी] %1$s, not delivered yet</string>
+<!-- Voice & Translation / Onboarding / Profile -->
+<string name="lang_init_title">[हिंदी] Voice &amp; Translation Models</string>
+<string name="lang_init_desc">[हिंदी] To enable Walkie-Talkie voice translation offline over the mesh, SwarSetu needs to download language models.</string>
+<string name="lang_init_download_button">[हिंदी] Download Models</string>
+<string name="lang_init_skip_button">[हिंदी] Skip for Now</string>
+<string name="lang_init_retry_button">[हिंदी] Retry Download</string>
+<string name="lang_init_error_default">[हिंदी] Download encountered an issue.</string>
+<string name="lang_init_stage_translation">[हिंदी] Downloading Translation Models</string>
+<string name="lang_init_stage_speech">[हिंदी] Downloading Offline Speech Models</string>
+<string name="lang_init_progress_translation">[हिंदी] Translation: %1$s</string>
+<string name="lang_init_speech_en">[हिंदी] Speech Model: English</string>
+<string name="lang_init_speech_hi">[हिंदी] Speech Model: Hindi</string>
+<string name="profile_setup_title">[हिंदी] Set Up Your Profile</string>
+<string name="profile_setup_desc">[हिंदी] Enter your display name and choose your preferred language to receive translated Walkie-Talkie messages.</string>
+<string name="profile_setup_name_label">[हिंदी] Display Name</string>
+<string name="profile_setup_lang_label">[हिंदी] Preferred Language</string>
+<string name="profile_setup_complete_button">[हिंदी] Complete Setup</string>
+<string name="profile_pref_lang_title">[हिंदी] Preferred Language (Walkie-Talkie &amp; TTS)</string>
+<string name="profile_pref_lang_desc">[हिंदी] Voice messages you speak and receive will be transcribed, translated, and spoken in this language.</string>
+<string name="profile_pref_lang_selector_label">[हिंदी] Selected Language (Installed Models)</string>
+<string name="profile_pref_lang_ready">[हिंदी] %1$s (Ready)</string>
+<string name="chat_voice_note_badge">[हिंदी] Voice Note (%1$s)</string>
+<string name="chat_translated_badge">[हिंदी] Translated (%1$s)</string>
+<string name="chat_play_voice_desc">[हिंदी] Play Voice Audio</string>
+<string name="emergency_alert_text">[हिंदी] EMERGENCY ALERT: Please check on me.</string>
+<string name="settings_active_voice_model_title">[हिंदी] Active Voice Models</string>
+<string name="settings_active_voice_model_stt">[हिंदी] Speech Recognition (STT)</string>
+<string name="settings_active_voice_model_tts">[हिंदी] Voice Synthesis (TTS)</string>
+<string name="settings_active_voice_model_sravaani">[हिंदी] SraVaani 0.5 Offline Engine (%1$s)</string>
+<string name="settings_active_voice_model_system_tts">[हिंदी] System Text-To-Speech (%1$s)</string>
+<string name="settings_voice_model_status_ready">[हिंदी] Active • 16 kHz Offline</string>
+<string name="settings_voice_model_tts_status">[हिंदी] Ready • Real-Time Playback</string>
+<string name="settings_voice_model_download">[हिंदी] Download</string>
+<string name="settings_voice_model_downloading">[हिंदी] Downloading (%1$d%%)…</string>
+</resources>
