@@ -85,7 +85,7 @@ class TranslationCallSession(
     suspend fun startListening() {
         if (!sttEngine.isReady) return
         _state.update { it.copy(status = CallStatus.LISTENING, outgoingText = "") }
-        val sttLang = SttLanguage.fromCode(_state.value.sourceLanguage) ?: SttLanguage.EN
+        val sttLang = SttLanguage.fromCode(_state.value.sourceLanguage) ?: SttLanguage.ENGLISH
         sttStream = sttEngine.startLiveStream(sttLang)
         
         sttStream?.onPartial = { text ->
@@ -146,7 +146,7 @@ class TranslationCallSession(
 
             if (frame.isFinal) {
                 _state.update { it.copy(status = CallStatus.IDLE) }
-                val targetTtsLang = TtsLanguage.fromCode(frame.targetLanguage) ?: TtsLanguage.EN
+                val targetTtsLang = TtsLanguage.fromLanguageCode(frame.targetLanguage) ?: TtsLanguage.ENGLISH
                 ttsManager.speak(TtsRequest(requestId = UUID.randomUUID().toString(), text = translated, language = targetTtsLang))
             }
         }
