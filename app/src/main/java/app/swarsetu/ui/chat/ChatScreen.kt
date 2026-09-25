@@ -73,6 +73,7 @@ import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.ContentCopy
@@ -227,6 +228,7 @@ fun ChatScreen(
     onOpenProfile: (nodeId: String) -> Unit,
     onOpenGroupDetails: (conversationId: String) -> Unit,
     onOpenMessageDetails: (messageId: String) -> Unit,
+    onStartCall: (peerId: String, peerName: String) -> Unit = { _, _ -> },
     viewModel: ChatViewModel = koinViewModel { parametersOf(conversationId) },
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -381,6 +383,7 @@ fun ChatScreen(
         onOpenProfile = onOpenProfile,
         onOpenGroupDetails = onOpenGroupDetails,
         onOpenMessageDetails = onOpenMessageDetails,
+        onStartCall = onStartCall,
         onSend = {
             val text = inputState.text.toString()
             val applied = pendingMentions.filter { text.contains("@${it.name}") }
@@ -467,6 +470,7 @@ internal fun ChatScreenContent(
     // Opens a message's details screen from its long-press menu. Defaulted so previews and the
     // content-level tests can leave it out.
     onOpenMessageDetails: (messageId: String) -> Unit = {},
+    onStartCall: (peerId: String, peerName: String) -> Unit = { _, _ -> },
     onSend: () -> Unit,
     onAttachClick: () -> Unit,
     // Long-pressing the attach affordance; opens the in-app camera. Defaulted so previews and the
@@ -660,8 +664,17 @@ internal fun ChatScreenContent(
                 actions = {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(end = 8.dp),
+                        modifier = Modifier.padding(end = 4.dp),
                     ) {
+                        if (!state.isRoom && !state.isGroup) {
+                            IconButton(onClick = { onStartCall(conversationId, state.title) }) {
+                                Icon(
+                                    Icons.Filled.Call,
+                                    contentDescription = stringResource(R.string.call_start_title),
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
                         IconButton(onClick = onSendAlert) {
                             Icon(
                                 Icons.Filled.Warning,

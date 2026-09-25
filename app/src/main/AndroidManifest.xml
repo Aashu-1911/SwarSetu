@@ -55,6 +55,10 @@
     <!-- Always-on mesh foreground service -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- Restart the mesh foreground service after a device reboot (see .mesh.BootReceiver). -->
@@ -99,6 +103,15 @@
             android:name=".mesh.MeshService"
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
+
+        <service
+            android:name=".call.LiveCallService"
+            android:exported="false"
+            android:foregroundServiceType="microphone|connectedDevice" />
+
+        <receiver
+            android:name=".call.LiveCallActionReceiver"
+            android:exported="false" />
 
         <!-- Restart the always-on mesh after a device reboot, unless the user manually stopped it
              (mesh_enabled=false). BOOT_COMPLETED is delivered post-unlock, so the credential-encrypted

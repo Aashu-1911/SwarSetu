@@ -58,20 +58,22 @@ fun LanguageInitScreen(
         progressFraction = 0f
         scope.launch {
             try {
-                // 1. Download Speech-to-Text Model: SraVaani 1.0 FP16 ONNX (0.0 to 0.5)
-                downloadStage = "Speech Recognition (SraVaani 1.0)"
-                sttModelManager.downloadSraVaaniModel { _, _, pct, file ->
-                    currentDownloading = "$file ($pct%)"
+                // 1. Download Speech-to-Text Model: SraVaani 1.0 FP16 ONNX (Step 1 of 2)
+                downloadStage = "Step 1 of 2: Speech Recognition (SraVaani 1.0)"
+                sttModelManager.downloadSraVaaniModel { bytes, total, pct, file ->
+                    val mbDownloaded = bytes / (1024 * 1024)
+                    val mbTotal = total / (1024 * 1024)
+                    currentDownloading = "$file • $mbDownloaded MB / $mbTotal MB ($pct%)"
                     progressFraction = (pct / 100f) * 0.5f
                 }
                 progressFraction = 0.5f
 
-                // 2. Download Translation Models: IndicTrans2 (0.5 to 1.0)
-                downloadStage = stageTranslation
+                // 2. Download Translation Models: IndicTrans2 (Step 2 of 2)
+                downloadStage = "Step 2 of 2: $stageTranslation"
                 translatorEngine.downloadAllRequiredModels { completed, total, currentLang ->
                     val transFraction = if (total > 0) completed.toFloat() / total.toFloat() else 0f
                     progressFraction = 0.5f + (transFraction * 0.5f)
-                    currentDownloading = "Translation ($completed of $total): $currentLang"
+                    currentDownloading = "Bundle $completed of $total: $currentLang"
                 }
                 progressFraction = 1f
 

@@ -127,6 +127,12 @@ interface MeshController {
 
     /** Broadcasts a best-effort "now typing" cue for [conversationId] to nearby peers. */
     suspend fun sendTyping(conversationId: String)
+
+    /** Sends a live call signaling packet across the mesh to [recipientId]. */
+    suspend fun sendCallSignal(recipientId: String, signalCbor: ByteArray): Boolean = false
+
+    /** Registers a handler invoked when an inbound call signaling frame arrives from the mesh. */
+    fun setCallSignalHandler(handler: (signalBytes: ByteArray, fromPeerId: String) -> Unit) {}
 }
 
 /**

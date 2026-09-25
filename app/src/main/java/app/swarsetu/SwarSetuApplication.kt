@@ -7,6 +7,7 @@ import app.swarsetu.crash.currentCrashEnvironment
 import app.swarsetu.data.blob.BlobDao
 import app.swarsetu.data.settings.SettingsStore
 import app.swarsetu.di.appModule
+import app.swarsetu.di.callModule
 import app.swarsetu.di.meshModule
 import app.swarsetu.di.moderationModule
 import app.swarsetu.di.seedDemoIfEnabled
@@ -52,7 +53,7 @@ class SwarSetuApplication :
             startKoin {
                 androidLogger()
                 androidContext(this@SwarSetuApplication)
-                modules(appModule, meshModule, moderationModule, sttModule, ttsModule, uiModule, voiceModule)
+                modules(appModule, meshModule, moderationModule, sttModule, ttsModule, uiModule, voiceModule, callModule)
             }
         // Register the message notification channel up front so it appears in system settings.
         koinApp.koin.get<Notifier>().createChannel()

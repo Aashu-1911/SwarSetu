@@ -455,7 +455,7 @@ fun TranslationTestScreen(
                             modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
                         )
                         Text(
-                            text = "Fetching ${state.sttCurrentDownloadFile} • ${state.sttDownloadedBytes / (1024 * 1024)} MB / ${state.sttTotalBytes / (1024 * 1024)} MB",
+                            text = "Fetching ${state.sttCurrentDownloadFile} • ${state.sttDownloadedBytes / (1024 * 1024)} MB / ${state.sttTotalBytes / (1024 * 1024)} MB (${state.sttDownloadPercent}%)",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

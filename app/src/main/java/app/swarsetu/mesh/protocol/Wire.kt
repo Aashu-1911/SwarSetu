@@ -41,6 +41,7 @@ object FrameType {
     const val BLOB_REQ = "blobreq"
     const val KEY_REQ = "keyreq"
     const val TYPING = "typing"
+    const val CALL_SIGNAL = "callsignal"
 
     /**
      * Whether a frame of [type] is worth parking for replay when it's dropped for a missing sender key
@@ -255,6 +256,30 @@ data class KeyReqContent(
 data class TypingContent(
     val groupId: String? = null,
 )
+
+/**
+ * Content of a [FrameType.CALL_SIGNAL] frame for offline VoIP call signaling across the mesh.
+ */
+@Serializable
+data class CallSignalPayload(
+    val callId: String,
+    val signalType: String,
+    val payloadCbor: ByteArray,
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+        other as CallSignalPayload
+        return callId == other.callId && signalType == other.signalType && payloadCbor.contentEquals(other.payloadCbor)
+    }
+
+    override fun hashCode(): Int {
+        var result = callId.hashCode()
+        result = 31 * result + signalType.hashCode()
+        result = 31 * result + payloadCbor.contentHashCode()
+        return result
+    }
+}
 
 /**
  * A structured "@" mention inside a chat body. [nodeId] is the canonical node id used for reliable

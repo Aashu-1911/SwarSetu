@@ -27,6 +27,9 @@ import app.swarsetu.mesh.MeshService
 import app.swarsetu.review.ReviewPrompter
 import app.swarsetu.tts.ui.TtsTestScreen
 import app.swarsetu.ui.blocked.BlockedUsersScreen
+import app.swarsetu.call.CallManager
+import app.swarsetu.call.CallState
+import app.swarsetu.ui.call.LiveCallScreen
 import app.swarsetu.ui.chat.ChatScreen
 import app.swarsetu.ui.chat.MessageDetailsScreen
 import app.swarsetu.ui.chatlist.ChatListScreen
@@ -66,6 +69,10 @@ private object Routes {
     const val SHARE = "share"
     const val TTS_TEST = "tts_test"
     const val TRANSLATION_TEST = "translation_test"
+    const val LIVE_CALL = "live_call/{peerId}/{peerName}"
+
+    fun liveCall(peerId: String, peerName: String = "Peer") = "live_call/$peerId/$peerName"
+
     const val CHAT = "chat/{conversationId}"
 
     fun chat(conversationId: String) = "chat/$conversationId"
@@ -142,6 +149,19 @@ fun SwarSetuApp(startRoute: String? = null) {
                 }
             lifecycleOwner.lifecycle.addObserver(observer)
             onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+        }
+    }
+
+    val callManager = koinInject<CallManager>()
+    val callState by callManager.callState.collectAsStateWithLifecycle()
+    val currentSession by callManager.currentSession.collectAsStateWithLifecycle()
+
+    LaunchedEffect(callState, currentSession) {
+        if (callState == CallState.INCOMING && currentSession != null) {
+            val s = currentSession!!
+            navController.navigate(Routes.liveCall(s.peerId, s.peerName)) {
+                launchSingleTop = true
+            }
         }
     }
 
@@ -263,6 +283,7 @@ fun SwarSetuApp(startRoute: String? = null) {
                 onOpenProfile = { id -> navController.navigate(Routes.profileDetails(id)) },
                 onOpenGroupDetails = { id -> navController.navigate(Routes.groupDetails(id)) },
                 onOpenMessageDetails = { id -> navController.navigate(Routes.messageDetails(id)) },
+                onStartCall = { peerId, peerName -> navController.navigate(Routes.liveCall(peerId, peerName)) },
             )
         }
         composable(
@@ -368,6 +389,21 @@ fun SwarSetuApp(startRoute: String? = null) {
         }
         composable(Routes.VERIFY) {
             VerifyContactScreen(onBack = { navController.popBackStack() })
+        }
+        composable(
+            route = Routes.LIVE_CALL,
+            arguments = listOf(
+                navArgument("peerId") { type = NavType.StringType },
+                navArgument("peerName") { type = NavType.StringType; defaultValue = "Peer" },
+            ),
+        ) { backStackEntry ->
+            val peerId = backStackEntry.arguments?.getString("peerId") ?: return@composable
+            val peerName = backStackEntry.arguments?.getString("peerName") ?: "Peer"
+            LiveCallScreen(
+                peerId = peerId,
+                peerName = peerName,
+                onBack = { navController.popBackStack() },
+            )
         }
     }
 

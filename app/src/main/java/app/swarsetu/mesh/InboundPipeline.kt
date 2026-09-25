@@ -39,6 +39,7 @@ import app.swarsetu.mesh.crypto.ratchet.RatchetCrypto
 import app.swarsetu.mesh.crypto.ratchet.RatchetEngine
 import app.swarsetu.mesh.crypto.ratchet.RatchetSessions
 import app.swarsetu.mesh.protocol.BlobReqContent
+import app.swarsetu.mesh.protocol.CallSignalPayload
 import app.swarsetu.mesh.protocol.ChatContent
 import app.swarsetu.mesh.protocol.EncEnvelope
 import app.swarsetu.mesh.protocol.FrameId
@@ -141,6 +142,8 @@ class InboundPipeline(
     // nodeId -> avatar hash a non-direct peer advertised but whose bytes we're still pulling, so a blob
     // arriving via the multi-hop BlobExchange can be attributed back to the peer that advertised it.
     private val advertisedAvatars = ConcurrentHashMap<String, String>()
+
+    var callSignalHandler: ((ByteArray, String) -> Unit)? = null
 
     // groupId -> the group photo (hash + its last-writer-wins clock) a group frame advertised but whose
     // bytes we're still pulling, so a blob arriving via the multi-hop BlobExchange can be adopted onto the
@@ -255,6 +258,12 @@ class InboundPipeline(
 
             FrameType.TYPING -> {
                 handleTyping(env)
+            }
+
+            FrameType.CALL_SIGNAL -> {
+                WireCodec.decodePayload<CallSignalPayload>(env.payload)?.let { payload ->
+                    callSignalHandler?.invoke(payload.payloadCbor, fromNodeId)
+                }
             }
 
             else -> {

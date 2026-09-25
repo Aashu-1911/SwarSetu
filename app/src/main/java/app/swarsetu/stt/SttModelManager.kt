@@ -40,6 +40,9 @@ class SttModelManager(
             val progressPercent: Int,
             val bytesDownloaded: Long,
             val totalBytes: Long,
+            val fileProgressPercent: Int = progressPercent,
+            val fileBytesDownloaded: Long = bytesDownloaded,
+            val fileTotalBytes: Long = totalBytes,
         ) : ModelDownloadState
         data class Verifying(val currentFile: String) : ModelDownloadState
         data object Ready : ModelDownloadState
@@ -308,7 +311,14 @@ class SttModelManager(
         if (!dir.exists()) return 0L
         return SRAVAANI_10_MANIFEST.sumOf { spec ->
             val f = File(dir, spec.name)
-            if (f.exists()) f.length() else 0L
+            val tmp = File(dir, "${spec.name}.tmp")
+            if (f.exists()) {
+                f.length()
+            } else if (tmp.exists()) {
+                tmp.length()
+            } else {
+                0L
+            }
         }
     }
 
@@ -320,15 +330,17 @@ class SttModelManager(
         ensureModelFilesAvailable(version, hfToken) { state ->
             when (state) {
                 is ModelDownloadState.Downloading -> {
-                    val overall = getDownloadedBytes(version)
-                    val total = totalExpectedBytes
-                    val pct = if (total > 0) ((overall * 100) / total).toInt().coerceIn(0, 100) else 0
-                    onProgress(overall, total, pct, state.currentFile)
+                    onProgress(
+                        state.bytesDownloaded,
+                        state.totalBytes,
+                        state.progressPercent,
+                        state.currentFile,
+                    )
                 }
                 is ModelDownloadState.Verifying -> {
                     val overall = getDownloadedBytes(version)
                     val total = totalExpectedBytes
-                    val pct = if (total > 0) ((overall * 100) / total).toInt().coerceIn(0, 100) else 0
+                    val pct = if (total > 0) ((overall * 100) / total).toInt().coerceIn(0, 100) else 100
                     onProgress(overall, total, pct, "Verifying ${state.currentFile}")
                 }
                 is ModelDownloadState.Ready -> {
@@ -347,6 +359,7 @@ class SttModelManager(
         onStateChange: ((ModelDownloadState) -> Unit)?,
     ) {
         val manifest = SRAVAANI_10_MANIFEST
+        val totalExpected = totalExpectedBytes
 
         val stat = StatFs(targetDir.path)
         val availableBytes = stat.availableBlocksLong * stat.blockSizeLong
@@ -356,10 +369,14 @@ class SttModelManager(
         }
 
         val baseUrl = "https://huggingface.co/ashishbiradar/sravaani-1.0-onnx/resolve/main"
+        var completedPriorBytes = 0L
 
         for (item in manifest) {
             val target = File(targetDir, item.name)
-            if (target.isFile && target.length() == item.expectedBytes) continue
+            if (target.isFile && target.length() == item.expectedBytes) {
+                completedPriorBytes += item.expectedBytes
+                continue
+            }
 
             val fileUrl = "$baseUrl/${item.name}"
             val success = downloadSingleFileWithRedirects(
@@ -368,9 +385,20 @@ class SttModelManager(
                 expectedBytes = item.expectedBytes,
                 hfToken = hfToken,
                 onChunk = { bytesReadThisFile, fileSize ->
-                    val total = if (fileSize > 0) fileSize else item.expectedBytes
-                    val pct = if (total > 0) ((bytesReadThisFile * 100) / total).toInt().coerceIn(0, 100) else 0
-                    val state = ModelDownloadState.Downloading(item.name, pct, bytesReadThisFile, total)
+                    val fileExpected = if (fileSize > 0) fileSize else item.expectedBytes
+                    val filePct = if (fileExpected > 0) ((bytesReadThisFile * 100) / fileExpected).toInt().coerceIn(0, 100) else 0
+                    val totalDownloaded = completedPriorBytes + bytesReadThisFile
+                    val overallPct = if (totalExpected > 0) ((totalDownloaded * 100) / totalExpected).toInt().coerceIn(0, 100) else 0
+
+                    val state = ModelDownloadState.Downloading(
+                        currentFile = item.name,
+                        progressPercent = overallPct,
+                        bytesDownloaded = totalDownloaded,
+                        totalBytes = totalExpected,
+                        fileProgressPercent = filePct,
+                        fileBytesDownloaded = bytesReadThisFile,
+                        fileTotalBytes = fileExpected,
+                    )
                     _downloadState.value = state
                     onStateChange?.invoke(state)
                 },
@@ -379,6 +407,8 @@ class SttModelManager(
             if (!success) {
                 throw SttException.ModelLoadError("Failed downloading ${item.name} from $fileUrl")
             }
+
+            completedPriorBytes += target.length()
 
             // Verify checksum if present
             if (item.sha256.isNotBlank() && target.length() == item.expectedBytes) {

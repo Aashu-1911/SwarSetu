@@ -33,6 +33,7 @@ import app.swarsetu.mesh.crypto.b64d
 import app.swarsetu.mesh.crypto.ratchet.GroupRatchetSessions
 import app.swarsetu.mesh.crypto.ratchet.RatchetEngine
 import app.swarsetu.mesh.crypto.ratchet.RatchetSessions
+import app.swarsetu.mesh.protocol.CallSignalPayload
 import app.swarsetu.mesh.protocol.ChatContent
 import app.swarsetu.mesh.protocol.EncEnvelope
 import app.swarsetu.mesh.protocol.FrameId
@@ -1218,6 +1219,26 @@ class MeshManager(
             )
         val wire = sign(env, relay = false)
         if (recipientId != null) transport.fastSend(wire, Peer(recipientId)) else transport.fastFanout(wire)
+    }
+
+    override suspend fun sendCallSignal(recipientId: String, signalCbor: ByteArray): Boolean {
+        val me = identity.nodeId()
+        val env =
+            RelayEnvelope(
+                type = FrameType.CALL_SIGNAL,
+                id = FrameId.new(),
+                senderId = me,
+                sentAt = clock(),
+                recipientId = recipientId,
+                payload = WireCodec.encodePayload(CallSignalPayload(callId = "", signalType = "CALL", payloadCbor = signalCbor)),
+            )
+        val wire = sign(env, relay = false)
+        transport.fastSend(wire, Peer(recipientId))
+        return true
+    }
+
+    override fun setCallSignalHandler(handler: (signalBytes: ByteArray, fromPeerId: String) -> Unit) {
+        pipeline.callSignalHandler = handler
     }
 
     /** On startup, sweep orphaned blobs/reactions/receipts and re-request attachment blobs we're still missing. */

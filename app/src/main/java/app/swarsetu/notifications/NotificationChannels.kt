@@ -37,6 +37,7 @@ object NotificationChannels {
     // App group
     const val STATUS = "knit_mesh" // ongoing foreground notification; id kept stable
     const val ALERTS = "knit_alerts"
+    const val LIVE_CALL = "knit_live_call"
 
     private const val GROUP_MESSAGES = "knit_grp_messages"
     private const val GROUP_APP = "knit_grp_app"
@@ -149,6 +150,16 @@ object NotificationChannels {
                 NotificationManagerCompat.IMPORTANCE_LOW,
                 R.string.channel_alerts_name,
                 R.string.channel_alerts_desc,
+            ),
+        )
+        manager.createNotificationChannel(
+            channel(
+                context,
+                LIVE_CALL,
+                GROUP_APP,
+                NotificationManagerCompat.IMPORTANCE_HIGH,
+                R.string.channel_call_name,
+                R.string.channel_call_desc,
             ),
         )
 
