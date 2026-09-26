@@ -29,7 +29,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import app.swarsetu.R
+import app.swarsetu.ui.i18n.UiTextKey
+import app.swarsetu.ui.i18n.uiText
 import app.swarsetu.ui.preview.SwarSetuPreview
 
 /**
@@ -98,7 +99,7 @@ fun RadioWarningBanner(
                 ) {
                     Icon(
                         Icons.Filled.Close,
-                        contentDescription = stringResource(R.string.chatlist_radio_banner_dismiss),
+                        contentDescription = uiText(UiTextKey.ACTION_DISMISS),
                     )
                 }
             }
@@ -110,18 +111,18 @@ fun RadioWarningBanner(
 private fun bannerMessage(warning: RadioWarning): String =
     when (warning) {
         RadioWarning.BluetoothOff -> {
-            stringResource(R.string.chatlist_radio_banner_bluetooth_off)
+            uiText(UiTextKey.RADIO_BLUETOOTH_OFF)
         }
 
         RadioWarning.WifiOff -> {
-            stringResource(R.string.chatlist_radio_banner_wifi_off)
+            uiText(UiTextKey.RADIO_WIFI_OFF)
         }
 
         RadioWarning.AllRadiosOff -> {
             if (isAirplaneModeOn()) {
-                stringResource(R.string.chatlist_radio_banner_all_off_airplane)
+                uiText(UiTextKey.RADIO_AIRPLANE_MODE)
             } else {
-                stringResource(R.string.chatlist_radio_banner_all_off)
+                uiText(UiTextKey.RADIO_ALL_OFF)
             }
         }
     }

@@ -29,6 +29,8 @@ import app.swarsetu.R
 import app.swarsetu.ui.hasAllMeshPermissions
 import app.swarsetu.ui.hasBleHardware
 import app.swarsetu.ui.hasWifiAwareHardware
+import app.swarsetu.ui.i18n.UiTextKey
+import app.swarsetu.ui.i18n.uiText
 import app.swarsetu.ui.preview.SwarSetuPreview
 import app.swarsetu.ui.requestIgnoreBatteryOptimizations
 import app.swarsetu.ui.requiredMeshPermissions
@@ -86,11 +88,11 @@ internal fun OnboardingScreenContent(
             verticalArrangement = Arrangement.Center,
         ) {
             Text(
-                text = stringResource(R.string.onboarding_title),
+                text = uiText(UiTextKey.ONBOARDING_WELCOME_TITLE),
                 style = MaterialTheme.typography.headlineMedium,
             )
             Text(
-                text = stringResource(R.string.onboarding_blurb),
+                text = uiText(UiTextKey.ONBOARDING_WELCOME_DESC),
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(vertical = 24.dp),
@@ -98,7 +100,7 @@ internal fun OnboardingScreenContent(
 
             if (!meshSupported) {
                 Text(
-                    text = stringResource(R.string.onboarding_unsupported),
+                    text = uiText(UiTextKey.ONBOARDING_UNSUPPORTED),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.error,
                     textAlign = TextAlign.Center,
@@ -112,9 +114,9 @@ internal fun OnboardingScreenContent(
             ) {
                 Text(
                     if (granted) {
-                        stringResource(R.string.onboarding_permissions_granted)
+                        uiText(UiTextKey.ONBOARDING_PERMISSIONS_GRANTED)
                     } else {
-                        stringResource(R.string.onboarding_grant_permissions)
+                        uiText(UiTextKey.ONBOARDING_GRANT_PERMISSIONS)
                     },
                 )
             }
@@ -126,7 +128,7 @@ internal fun OnboardingScreenContent(
                         .fillMaxWidth()
                         .padding(top = 8.dp),
             ) {
-                Text(stringResource(R.string.battery_allow_button))
+                Text(uiText(UiTextKey.BATTERY_ALLOW_BUTTON))
             }
 
             Button(
@@ -138,7 +140,7 @@ internal fun OnboardingScreenContent(
                         .padding(top = 24.dp)
                         .testTag("onboarding_start"),
             ) {
-                Text(stringResource(R.string.onboarding_start))
+                Text(uiText(UiTextKey.ONBOARDING_START))
             }
         }
     }

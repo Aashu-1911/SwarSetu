@@ -59,28 +59,7 @@ data class DeliveryText(
 fun DeliveryText.resolve(): String = stringResource(resId, *args.toTypedArray())
 
 /**
- * The user-facing line for a message's delivery [status] on [plane]. The single definition shared by the
- * chat bubble's tick (an accessibility description — the tick itself is icon-only), the chat-list row, and
- * the message-details screen (where it is visible text), so the three can't drift apart.
- *
- * The plane only qualifies a delivery that actually happened: a [DeliveryStatus.Sent] message has no
- * receipt yet, so there is no plane to name. For an inbound message the frame's own arrival plane is the
- * evidence ([MessageEntity.receivedVia]), and all three radio values read as "nearby" — see [DeliveryPlane].
- *
- * [delivered]/[total] are the per-recipient counts for a **group** message we sent (`message_receipts`
- * against the effective roster, ADR 036). Given both, the line reports the ratio instead of a bare
- * "Delivered", because the tick itself cannot: `received` flips on the *first* member's ack, so ✓✓ means
- * "at least one", and on a group that is exactly the thing worth being precise about. Three rules keep it
- * honest:
- *
- * - **A zero count is not reported.** A message acked before this device recorded ackers is ticked with no
- *   rows at all; "Delivered to 0 of 3" would contradict its own tick. It falls back to plain "Delivered",
- *   the same "predates the table" rule the details screen's split uses.
- * - **The count outranks the plane.** A group's stored plane is first-evidence-wins across the whole
- *   roster, so naming it would describe whichever member happened to ack first — the ratio is the more
- *   useful of the two, and saying both is a mouthful in a tick description.
- * - **Absent counts change nothing.** Callers with no roster to hand (the chat list, every DM and
- *   broadcast message) omit them and get exactly today's wording.
+ * The user-facing line for a message's delivery [status] on [plane].
  */
 fun deliveryLabel(
     status: DeliveryStatus,

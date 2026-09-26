@@ -41,6 +41,8 @@ import androidx.compose.ui.unit.sp
 import app.swarsetu.ui.components.Avatar
 import app.swarsetu.ui.components.GroupAvatar
 import app.swarsetu.ui.components.RoomAvatar
+import app.swarsetu.ui.i18n.UiTextKey
+import app.swarsetu.ui.i18n.uiText
 import app.swarsetu.ui.theme.BrandTertiaryDark
 import app.swarsetu.ui.theme.BrandTertiaryLight
 
@@ -131,7 +133,7 @@ fun ChatTopBar(
                 IconButton(onClick = onBack) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
+                        contentDescription = uiText(UiTextKey.CD_BACK),
                         tint = MaterialTheme.colorScheme.onSurface,
                     )
                 }
@@ -140,7 +142,7 @@ fun ChatTopBar(
                 IconButton(onClick = { menuExpanded = true }) {
                     Icon(
                         imageVector = Icons.Default.MoreVert,
-                        contentDescription = "Menu",
+                        contentDescription = uiText(UiTextKey.CD_MORE_OPTIONS),
                         tint = MaterialTheme.colorScheme.onSurface,
                     )
                 }
@@ -150,21 +152,21 @@ fun ChatTopBar(
                     onDismissRequest = { menuExpanded = false },
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Details & Profile") },
+                        text = { Text(uiText(UiTextKey.CHAT_VIEW_PROFILE)) },
                         onClick = {
                             menuExpanded = false
                             onViewDetails()
                         },
                     )
                     DropdownMenuItem(
-                        text = { Text("Clear Chat") },
+                        text = { Text(uiText(UiTextKey.ACTION_CLEAR)) },
                         onClick = {
                             menuExpanded = false
                             onClearChat()
                         },
                     )
                     DropdownMenuItem(
-                        text = { Text("Mesh Diagnostics") },
+                        text = { Text(uiText(UiTextKey.DIAGNOSTICS_TITLE)) },
                         onClick = {
                             menuExpanded = false
                             onOpenDiagnostics()

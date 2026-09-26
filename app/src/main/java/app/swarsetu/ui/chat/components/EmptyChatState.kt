@@ -22,6 +22,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.swarsetu.ui.i18n.UiTextKey
+import app.swarsetu.ui.i18n.uiText
 import app.swarsetu.ui.theme.BrandPrimaryDark
 import app.swarsetu.ui.theme.BrandPrimaryLight
 
@@ -50,7 +52,7 @@ fun EmptyChatState(
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.Default.Lock,
-                        contentDescription = "Encrypted",
+                        contentDescription = null,
                         tint = accentColor,
                         modifier = Modifier.size(24.dp),
                     )
@@ -60,7 +62,7 @@ fun EmptyChatState(
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "End-to-End Encrypted",
+                text = uiText(UiTextKey.CHAT_EMPTY_TITLE),
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 16.sp,
@@ -71,7 +73,7 @@ fun EmptyChatState(
             Spacer(modifier = Modifier.height(6.dp))
 
             Text(
-                text = "Messages and voice translations stay private between you and your peer over the local mesh.",
+                text = uiText(UiTextKey.CHAT_EMPTY_DESC),
                 style = MaterialTheme.typography.bodySmall.copy(
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

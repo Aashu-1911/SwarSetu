@@ -27,11 +27,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.swarsetu.data.settings.SettingsStore
 import app.swarsetu.stt.SttLanguage
+import app.swarsetu.ui.i18n.UiTextKey
+import app.swarsetu.ui.i18n.uiText
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
-
-import androidx.compose.ui.res.stringResource
-import app.swarsetu.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,13 +52,13 @@ fun ProfileSetupScreen(
         verticalArrangement = Arrangement.Center,
     ) {
         Text(
-            text = stringResource(R.string.profile_setup_title),
+            text = uiText(UiTextKey.PROFILE_SETUP_TITLE),
             style = MaterialTheme.typography.headlineSmall,
             textAlign = TextAlign.Center,
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = stringResource(R.string.profile_setup_desc),
+            text = uiText(UiTextKey.PROFILE_SETUP_DESC),
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -69,7 +68,7 @@ fun ProfileSetupScreen(
         OutlinedTextField(
             value = name,
             onValueChange = { name = it },
-            label = { Text(stringResource(R.string.profile_setup_name_label)) },
+            label = { Text(uiText(UiTextKey.PROFILE_DISPLAY_NAME_LABEL)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -85,7 +84,7 @@ fun ProfileSetupScreen(
                 value = selectedLanguage.fullDisplayName,
                 onValueChange = {},
                 readOnly = true,
-                label = { Text(stringResource(R.string.profile_setup_lang_label)) },
+                label = { Text(uiText(UiTextKey.PREFERRED_LANGUAGE)) },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                 colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
                 modifier = Modifier.menuAnchor().fillMaxWidth(),
@@ -140,7 +139,7 @@ fun ProfileSetupScreen(
             enabled = name.isNotBlank(),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(stringResource(R.string.profile_setup_complete_button))
+            Text(uiText(UiTextKey.ACTION_CONTINUE))
         }
     }
 }

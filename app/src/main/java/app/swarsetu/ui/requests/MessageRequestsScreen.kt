@@ -48,6 +48,8 @@ import app.swarsetu.R
 import app.swarsetu.notifications.Notifier
 import app.swarsetu.ui.components.Avatar
 import app.swarsetu.ui.components.GroupAvatar
+import app.swarsetu.ui.i18n.UiTextKey
+import app.swarsetu.ui.i18n.uiText
 import app.swarsetu.ui.preview.SwarSetuPreview
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
@@ -104,11 +106,11 @@ internal fun MessageRequestsScreenContent(
                     IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.action_back),
+                            contentDescription = uiText(UiTextKey.CD_BACK),
                         )
                     }
                 },
-                title = { Text(stringResource(R.string.message_requests_title)) },
+                title = { Text(uiText(UiTextKey.MESSAGE_REQUESTS)) },
             )
         },
     ) { padding ->
@@ -118,7 +120,7 @@ internal fun MessageRequestsScreenContent(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = stringResource(R.string.message_requests_empty),
+                    text = uiText(UiTextKey.MESSAGE_REQUESTS_EMPTY),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -189,17 +191,17 @@ private fun RequestRowItem(
             onClick = onAccept,
             modifier = Modifier.testTag("request_accept_${row.conversationId}"),
         ) {
-            Text(stringResource(R.string.message_requests_accept))
+            Text(uiText(UiTextKey.ACTION_ACCEPT))
         }
         Box {
             IconButton(onClick = { menuOpen = true }) {
-                Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.chat_more_options))
+                Icon(Icons.Filled.MoreVert, contentDescription = uiText(UiTextKey.CD_MORE_OPTIONS))
             }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 // Block targets the DM peer (conversationId == node id); it has no meaning for a group.
                 if (!row.isGroup) {
                     DropdownMenuItem(
-                        text = { Text(stringResource(R.string.message_requests_block)) },
+                        text = { Text(uiText(UiTextKey.ACTION_BLOCK)) },
                         leadingIcon = { Icon(Icons.Filled.Block, contentDescription = null) },
                         onClick = {
                             menuOpen = false
@@ -210,7 +212,7 @@ private fun RequestRowItem(
                 DropdownMenuItem(
                     text = {
                         Text(
-                            text = stringResource(R.string.chat_list_delete_action),
+                            text = uiText(UiTextKey.ACTION_DELETE),
                             color = MaterialTheme.colorScheme.error,
                         )
                     },
@@ -233,22 +235,22 @@ private fun RequestRowItem(
     if (showBlockConfirm) {
         AlertDialog(
             onDismissRequest = { showBlockConfirm = false },
-            title = { Text(stringResource(R.string.message_requests_block_confirm_title)) },
-            text = { Text(stringResource(R.string.message_requests_block_confirm_body)) },
+            title = { Text(uiText(UiTextKey.ACTION_BLOCK)) },
+            text = { Text(uiText(UiTextKey.ACTION_BLOCK)) },
             confirmButton = {
                 TextButton(onClick = {
                     onBlock()
                     showBlockConfirm = false
                 }) {
                     Text(
-                        text = stringResource(R.string.message_requests_block),
+                        text = uiText(UiTextKey.ACTION_BLOCK),
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showBlockConfirm = false }) {
-                    Text(stringResource(android.R.string.cancel))
+                    Text(uiText(UiTextKey.ACTION_CANCEL))
                 }
             },
         )
@@ -256,22 +258,22 @@ private fun RequestRowItem(
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text(stringResource(R.string.message_requests_delete_confirm_title)) },
-            text = { Text(stringResource(R.string.message_requests_delete_confirm_body)) },
+            title = { Text(uiText(UiTextKey.CHAT_DELETE_CHAT_TITLE)) },
+            text = { Text(uiText(UiTextKey.CHAT_DELETE_CHAT_BODY)) },
             confirmButton = {
                 TextButton(onClick = {
                     onDelete()
                     showDeleteConfirm = false
                 }) {
                     Text(
-                        text = stringResource(R.string.chat_list_delete_action),
+                        text = uiText(UiTextKey.ACTION_DELETE),
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text(stringResource(android.R.string.cancel))
+                    Text(uiText(UiTextKey.ACTION_CANCEL))
                 }
             },
         )

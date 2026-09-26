@@ -14,10 +14,11 @@ import kotlin.math.sqrt
  */
 class CallVadEndpointDetector(
     private val sampleRate: Int = 16000,
-    private val energyThresholdRms: Float = 450.0f,
-    private val silenceEndpointTimeoutMs: Long = 450L,
-    private val minSpeechDurationMs: Long = 300L,
-    private val maxUtteranceDurationMs: Long = 3500L,
+    private val minEnergyThresholdRms: Float = 250.0f,
+    private val silenceEndpointTimeoutMs: Long = 400L,
+    private val minSpeechDurationMs: Long = 250L,
+    private val maxUtteranceDurationMs: Long = 2600L,
+    private val onSpeechStarted: (() -> Unit)? = null,
     private val onSpeechSegmentFinalized: (pcmData: ShortArray, durationMs: Long) -> Unit,
 ) {
     var isSpeechActive = false
@@ -26,8 +27,12 @@ class CallVadEndpointDetector(
     private var lastSpeechSampleTimeMs = 0L
     private var processedSamplesCount = 0L
 
-    // Pre-allocated ring accumulator for current utterance (up to 4.5 seconds at 16kHz = 72,000 shorts)
-    private val maxAccumulatorSize = (sampleRate * 4.5).toInt()
+    // Adaptive noise floor tracking (exponential moving average)
+    private var noiseFloorRms = 100.0f
+    private val noiseFloorAlpha = 0.05f
+
+    // Pre-allocated ring accumulator for current utterance (up to 4.0 seconds at 16kHz = 64,000 shorts)
+    private val maxAccumulatorSize = (sampleRate * 4.0).toInt()
     private val speechAccumulator = ShortArray(maxAccumulatorSize)
     private var accumulatedSamples = 0
 
@@ -47,14 +52,27 @@ class CallVadEndpointDetector(
             if (length <= 0) return
 
             var chunkEnergySum = 0.0
+            var zeroCrossings = 0
+            var prevSampleSign = pcmChunk[0] >= 0
+
             for (i in 0 until length) {
                 val sample = pcmChunk[i].toDouble()
                 chunkEnergySum += sample * sample
-            }
-            val rms = sqrt(chunkEnergySum / length).toFloat()
-            val isChunkSpeech = rms >= energyThresholdRms
 
-            val chunkDurationMs = (length * 1000L) / sampleRate
+                val currentSign = pcmChunk[i] >= 0
+                if (currentSign != prevSampleSign) {
+                    zeroCrossings++
+                    prevSampleSign = currentSign
+                }
+            }
+
+            val rms = sqrt(chunkEnergySum / length).toFloat()
+            val zcr = zeroCrossings.toFloat() / length.toFloat()
+
+            // Adaptive threshold calculation
+            val dynamicThreshold = maxOf(minEnergyThresholdRms, (noiseFloorRms * 2.2f) + 100f)
+            val isChunkSpeech = rms >= dynamicThreshold || (rms >= (dynamicThreshold * 0.7f) && zcr > 0.15f)
+
             val currentTimeMs = (processedSamplesCount * 1000L) / sampleRate
             processedSamplesCount += length
 
@@ -67,34 +85,35 @@ class CallVadEndpointDetector(
                     speechStartSampleTimeMs = currentTimeMs
                     accumulatedSamples = 0
 
-                    // Prepend pre-roll buffer
+                    // Prepend pre-roll buffer to preserve leading consonant phonemes
                     copyPreRollToAccumulator()
+                    onSpeechStarted?.invoke()
                 }
 
                 // Accumulate current chunk
                 appendChunkToAccumulator(pcmChunk, length)
 
-                // Check max segment duration limit (e.g. 3.5s)
+                // Check max segment duration limit (e.g. 2.6s) to prevent STT delay buildup
                 val currentUtteranceDuration = currentTimeMs - speechStartSampleTimeMs
                 if (currentUtteranceDuration >= maxUtteranceDurationMs) {
                     finalizeSegment()
                 }
             } else {
-                // Chunk is silent
-                if (isSpeechActive) {
-                    // Still in speech session, accumulate short silence chunks
+                // Chunk is silent: update background noise floor estimate
+                if (!isSpeechActive) {
+                    noiseFloorRms = ((1f - noiseFloorAlpha) * noiseFloorRms) + (noiseFloorAlpha * rms)
+                    updatePreRoll(pcmChunk, length)
+                } else {
+                    // Still within active speech session, accumulate short silence chunks
                     appendChunkToAccumulator(pcmChunk, length)
 
                     val silenceDuration = currentTimeMs - lastSpeechSampleTimeMs
                     val totalDuration = currentTimeMs - speechStartSampleTimeMs
 
                     if (silenceDuration >= silenceEndpointTimeoutMs || totalDuration >= maxUtteranceDurationMs) {
-                        // Endpoint detected!
+                        // Utterance endpoint detected!
                         finalizeSegment()
                     }
-                } else {
-                    // Ongoing background silence, update pre-roll ring buffer
-                    updatePreRoll(pcmChunk, length)
                 }
             }
         }
@@ -163,6 +182,7 @@ class CallVadEndpointDetector(
             processedSamplesCount = 0L
             preRollIndex = 0
             preRollFilled = 0
+            noiseFloorRms = 100.0f
         }
     }
 }

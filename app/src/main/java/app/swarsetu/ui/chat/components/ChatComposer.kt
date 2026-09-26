@@ -54,6 +54,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.swarsetu.ui.i18n.UiTextKey
+import app.swarsetu.ui.i18n.uiText
 import app.swarsetu.ui.theme.BrandPrimaryDark
 import app.swarsetu.ui.theme.BrandPrimaryLight
 import app.swarsetu.ui.theme.SwarSetuTheme
@@ -115,7 +117,7 @@ fun ChatComposer(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Add,
-                            contentDescription = "Attach file",
+                            contentDescription = uiText(UiTextKey.CD_ATTACH_PHOTO),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(24.dp),
                         )
@@ -138,7 +140,7 @@ fun ChatComposer(
                         ) {
                             if (!hasText) {
                                 Text(
-                                    text = "SwarSetu Message...",
+                                    text = uiText(UiTextKey.CHAT_MESSAGE_HINT),
                                     style = MaterialTheme.typography.bodyMedium.copy(
                                         fontSize = 15.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
@@ -178,7 +180,7 @@ fun ChatComposer(
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = Icons.AutoMirrored.Filled.Send,
-                                        contentDescription = "Send",
+                                        contentDescription = uiText(UiTextKey.ACTION_SEND),
                                         tint = if (isDark) Color(0xFF1F1604) else Color.White,
                                         modifier = Modifier.size(20.dp),
                                     )
@@ -197,7 +199,7 @@ fun ChatComposer(
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = Icons.Default.Mic,
-                                        contentDescription = "Record Voice Message",
+                                        contentDescription = uiText(UiTextKey.CD_RECORD_VOICE),
                                         tint = accentColor,
                                         modifier = Modifier.size(22.dp),
                                     )
@@ -267,7 +269,7 @@ private fun RecordingStateRow(
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
-                    contentDescription = "Cancel Recording",
+                    contentDescription = uiText(UiTextKey.ACTION_CANCEL),
                     tint = MaterialTheme.colorScheme.error,
                 )
             }
@@ -286,7 +288,7 @@ private fun RecordingStateRow(
             Spacer(modifier = Modifier.width(8.dp))
 
             Text(
-                text = "Recording $timeFormatted",
+                text = "${uiText(UiTextKey.CHAT_RECORDING)} $timeFormatted",
                 style = MaterialTheme.typography.labelMedium.copy(
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 14.sp,
@@ -308,7 +310,7 @@ private fun RecordingStateRow(
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.Send,
-                        contentDescription = "Send Voice Message",
+                        contentDescription = uiText(UiTextKey.ACTION_SEND),
                         tint = Color.White,
                         modifier = Modifier.size(20.dp),
                     )

@@ -30,6 +30,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.swarsetu.R
+import app.swarsetu.ui.i18n.UiTextKey
+import app.swarsetu.ui.i18n.uiText
 import app.swarsetu.ui.preview.SwarSetuPreview
 import app.swarsetu.ui.scan.QrScanner
 import org.koin.androidx.compose.koinViewModel
@@ -51,10 +53,10 @@ fun VerifyContactScreen(
     val scanResult by viewModel.scanResult.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    val addedMessage = stringResource(R.string.verify_added)
-    val mismatchMessage = stringResource(R.string.verify_mismatch)
-    val selfMessage = stringResource(R.string.verify_self)
-    val invalidMessage = stringResource(R.string.verify_invalid)
+    val addedMessage = uiText(UiTextKey.VERIFY_SUCCESS)
+    val mismatchMessage = uiText(UiTextKey.VERIFY_MISMATCH)
+    val selfMessage = uiText(UiTextKey.VERIFY_SELF)
+    val invalidMessage = uiText(UiTextKey.VERIFY_MISMATCH)
     LaunchedEffect(scanResult) {
         when (scanResult) {
             VerifyResult.VERIFIED -> snackbarHostState.showSnackbar(addedMessage)
@@ -99,12 +101,12 @@ internal fun VerifyContactScreenContent(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.verify_contact_title)) },
+                title = { Text(uiText(UiTextKey.VERIFY_CONTACT)) },
                 navigationIcon = {
                     IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.action_back),
+                            contentDescription = uiText(UiTextKey.CD_BACK),
                         )
                     }
                 },

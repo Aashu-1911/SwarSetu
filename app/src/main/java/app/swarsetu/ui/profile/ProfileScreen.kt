@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -35,7 +36,10 @@ import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -85,11 +89,9 @@ import app.swarsetu.ui.preview.SwarSetuPreview
 import app.swarsetu.ui.requestIgnoreBatteryOptimizations
 import org.koin.androidx.compose.koinViewModel
 
-import androidx.compose.foundation.layout.height
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import app.swarsetu.stt.SttLanguage
+import app.swarsetu.ui.i18n.UiTextKey
+import app.swarsetu.ui.i18n.uiText
 
 /** UI-local projection of [ProfileViewModel]'s per-field flows for the stateless content. */
 internal data class ProfileFormState(
@@ -214,13 +216,13 @@ internal fun ProfileScreenContent(
             TopAppBar(
                 title = {
                     Text(
-                        text = stringResource(R.string.settings_title),
+                        text = uiText(UiTextKey.SETTINGS_TITLE),
                         fontWeight = FontWeight.SemiBold,
                     )
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = uiText(UiTextKey.CD_BACK))
                     }
                 },
             )
@@ -245,7 +247,7 @@ internal fun ProfileScreenContent(
                     background = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     textStyle = MaterialTheme.typography.displaySmall,
-                    contentDescription = stringResource(R.string.profile_change_photo_desc),
+                    contentDescription = uiText(UiTextKey.PROFILE_PHOTO_CHANGE),
                     onClick = onPickPhoto,
                 )
                 if (form.avatarHash != null) {
@@ -265,7 +267,7 @@ internal fun ProfileScreenContent(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Text(
-                        text = "ACCOUNT",
+                        text = uiText(UiTextKey.ACCOUNT_SECTION),
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary,
@@ -280,7 +282,7 @@ internal fun ProfileScreenContent(
                                 .fillMaxWidth()
                                 .testTag("profile_name")
                                 .onFocusChanged { if (!it.isFocused) onNameCommit() },
-                        label = { Text(stringResource(R.string.profile_display_name_label)) },
+                        label = { Text(uiText(UiTextKey.PROFILE_DISPLAY_NAME_LABEL)) },
                         placeholder = { Text(form.alias) },
                         singleLine = true,
                         shape = RoundedCornerShape(10.dp),
@@ -294,13 +296,13 @@ internal fun ProfileScreenContent(
                                 .fillMaxWidth()
                                 .testTag("profile_status")
                                 .onFocusChanged { if (!it.isFocused) onStatusCommit() },
-                        label = { Text(stringResource(R.string.profile_status_label)) },
+                        label = { Text(uiText(UiTextKey.PROFILE_STATUS_LABEL)) },
                         singleLine = true,
                         shape = RoundedCornerShape(10.dp),
                         supportingText = { CharCounter(form.status.length, TextLimits.STATUS) },
                     )
                     Text(
-                        text = stringResource(R.string.profile_node_id, form.nodeId),
+                        text = "${uiText(UiTextKey.PROFILE_NODE_ID_LABEL)}: ${form.nodeId}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -319,7 +321,7 @@ internal fun ProfileScreenContent(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Text(
-                        text = "APPEARANCE",
+                        text = uiText(UiTextKey.APPEARANCE_SECTION),
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary,
@@ -345,7 +347,7 @@ internal fun ProfileScreenContent(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Text(
-                        text = "VOICE & TRANSLATION",
+                        text = uiText(UiTextKey.VOICE_AND_TRANSLATION),
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary,
@@ -382,7 +384,7 @@ internal fun ProfileScreenContent(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Text(
-                        text = "CONNECTION & SECURITY",
+                        text = uiText(UiTextKey.CONNECTION_AND_SECURITY),
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary,
@@ -408,7 +410,7 @@ internal fun ProfileScreenContent(
                 modifier = Modifier.fillMaxWidth().testTag("profile_save"),
             ) {
                 Text(
-                    text = stringResource(R.string.action_save),
+                    text = uiText(UiTextKey.ACTION_SAVE),
                     fontWeight = FontWeight.SemiBold,
                 )
             }
@@ -423,9 +425,9 @@ private fun AppearanceSelectorRow(
     modifier: Modifier = Modifier,
 ) {
     val options = listOf(
-        "system" to "System",
-        "light" to "Light",
-        "dark" to "Dark",
+        "system" to uiText(UiTextKey.THEME_SYSTEM),
+        "light" to uiText(UiTextKey.THEME_LIGHT),
+        "dark" to uiText(UiTextKey.THEME_DARK),
     )
 
     Row(
@@ -479,13 +481,13 @@ private fun AutoPlayTtsRow(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "Auto-play Translated Voice",
+                text = uiText(UiTextKey.AUTO_PLAY_TTS_TITLE),
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                text = "Automatically speak incoming voice messages in your preferred language",
+                text = uiText(UiTextKey.AUTO_PLAY_TTS_DESC),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -512,12 +514,12 @@ private fun PreferredLanguageSection(
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Text(
-            text = stringResource(R.string.profile_pref_lang_title),
+            text = uiText(UiTextKey.PREFERRED_LANGUAGE),
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.primary,
         )
         Text(
-            text = stringResource(R.string.profile_pref_lang_desc),
+            text = uiText(UiTextKey.PREFERRED_LANGUAGE_DESC),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -531,7 +533,7 @@ private fun PreferredLanguageSection(
                 value = selectedLanguage.fullDisplayName,
                 onValueChange = {},
                 readOnly = true,
-                label = { Text(stringResource(R.string.profile_pref_lang_selector_label)) },
+                label = { Text(uiText(UiTextKey.PREFERRED_LANGUAGE)) },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                 colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
                 modifier = Modifier.menuAnchor().fillMaxWidth(),
@@ -575,7 +577,7 @@ private fun PreferredLanguageSection(
                                         color = MaterialTheme.colorScheme.primaryContainer,
                                     ) {
                                         Text(
-                                            text = "Ready",
+                                            text = uiText(UiTextKey.MODEL_READY),
                                             style = MaterialTheme.typography.labelSmall.copy(
                                                 fontWeight = FontWeight.SemiBold,
                                             ),
@@ -606,7 +608,7 @@ private fun ActiveVoiceModelSection(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
-            text = stringResource(R.string.settings_active_voice_model_title),
+            text = uiText(UiTextKey.ACTIVE_VOICE_MODEL),
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.primary,
         )
@@ -627,19 +629,19 @@ private fun ActiveVoiceModelSection(
                 ) {
                     Icon(
                         Icons.Filled.Mic,
-                        contentDescription = stringResource(R.string.settings_active_voice_model_stt),
+                        contentDescription = uiText(UiTextKey.SPEECH_RECOGNITION_MODEL),
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(22.dp),
                     )
                     Spacer(Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = stringResource(R.string.settings_active_voice_model_stt),
+                            text = uiText(UiTextKey.SPEECH_RECOGNITION_MODEL),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            text = stringResource(R.string.settings_active_voice_model_sravaani, language.displayName),
+                            text = uiText(UiTextKey.SRAVAANI_MODEL_NAME, language.displayName),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold,
                         )
@@ -652,7 +654,7 @@ private fun ActiveVoiceModelSection(
                         color = MaterialTheme.colorScheme.primaryContainer,
                     ) {
                         Text(
-                            text = stringResource(R.string.settings_voice_model_status_ready),
+                            text = uiText(UiTextKey.MODEL_READY),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
@@ -669,19 +671,19 @@ private fun ActiveVoiceModelSection(
                 ) {
                     Icon(
                         Icons.AutoMirrored.Filled.VolumeUp,
-                        contentDescription = stringResource(R.string.settings_active_voice_model_tts),
+                        contentDescription = uiText(UiTextKey.STEP_NEURAL_TRANSLATION),
                         tint = MaterialTheme.colorScheme.secondary,
                         modifier = Modifier.size(22.dp),
                     )
                     Spacer(Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = stringResource(R.string.settings_active_voice_model_tts),
+                            text = uiText(UiTextKey.VOICE_AND_TRANSLATION),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            text = stringResource(R.string.settings_active_voice_model_system_tts, language.displayName),
+                            text = "${language.displayName} (Neural Engine)",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold,
                         )
@@ -691,7 +693,7 @@ private fun ActiveVoiceModelSection(
                         color = MaterialTheme.colorScheme.secondaryContainer,
                     ) {
                         Text(
-                            text = stringResource(R.string.settings_voice_model_tts_status),
+                            text = uiText(UiTextKey.STATUS_ONLINE),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSecondaryContainer,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
@@ -704,18 +706,11 @@ private fun ActiveVoiceModelSection(
 }
 
 /**
- * Small circular "X" badge that clears the photo, straddling the avatar's top-end edge. The visible
- * circle is intentionally small (28dp), but [minimumInteractiveComponentSize] keeps the *touch target* at
- * the 48dp accessibility minimum, and the badge carries its own spoken label + [Role.Button] so TalkBack
- * announces it as a distinct, named action separate from the avatar's "change photo" tap.
- *
- * The [offset] nudges the badge up-and-out along the circle's 45° so its center lands on the avatar's
- * rim — roughly half the button hangs outside the circle — so it reads as an attached control rather
- * than an overlay covering the photo.
+ * Small circular "X" badge that clears the photo, straddling the avatar's top-end edge.
  */
 @Composable
 private fun BoxScope.RemovePhotoButton(onClick: () -> Unit) {
-    val description = stringResource(R.string.profile_remove_photo_desc)
+    val description = uiText(UiTextKey.PROFILE_PHOTO_REMOVE)
     Box(
         modifier =
             Modifier
@@ -773,11 +768,11 @@ private fun ContentFilteringRow(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = stringResource(R.string.settings_content_filtering_title),
+                text = uiText(UiTextKey.CONTENT_FILTERING_TITLE),
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
-                text = stringResource(R.string.settings_content_filtering_subtitle),
+                text = uiText(UiTextKey.CONTENT_FILTERING_DESC),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -787,8 +782,6 @@ private fun ContentFilteringRow(
         Switch(checked = enabled, onCheckedChange = null)
     }
 }
-
-
 
 /**
  * Whether the app is currently exempt from battery optimization, refreshed on every screen resume.
@@ -827,9 +820,9 @@ private fun BatteryOptimizationRow(
         Text(
             text =
                 if (exempt) {
-                    stringResource(R.string.battery_allowed)
+                    uiText(UiTextKey.BATTERY_ALLOWED)
                 } else {
-                    stringResource(R.string.battery_restricted)
+                    uiText(UiTextKey.BATTERY_RESTRICTED)
                 },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -837,7 +830,7 @@ private fun BatteryOptimizationRow(
         )
         if (!exempt) {
             TextButton(onClick = onAllow) {
-                Text(stringResource(R.string.battery_allow_button))
+                Text(uiText(UiTextKey.BATTERY_ALLOW_BUTTON))
             }
         }
     }

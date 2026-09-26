@@ -24,6 +24,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.swarsetu.ui.i18n.UiTextKey
+import app.swarsetu.ui.i18n.uiText
 import app.swarsetu.ui.theme.BrandPrimaryDark
 import app.swarsetu.ui.theme.BrandPrimaryLight
 
@@ -116,7 +118,7 @@ fun LanguagePickerDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel", color = accentColor)
+                Text(uiText(UiTextKey.ACTION_CANCEL), color = accentColor)
             }
         },
         shape = RoundedCornerShape(20.dp),

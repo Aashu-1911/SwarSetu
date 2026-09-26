@@ -27,6 +27,8 @@ import app.swarsetu.R
 import app.swarsetu.ui.chatlist.ChatListViewModel
 import app.swarsetu.ui.chatlist.ConversationListItem
 import app.swarsetu.ui.chatlist.ConversationRow
+import app.swarsetu.ui.i18n.UiTextKey
+import app.swarsetu.ui.i18n.uiText
 import app.swarsetu.ui.preview.PREVIEW_NOW
 import app.swarsetu.ui.preview.SwarSetuPreview
 import app.swarsetu.ui.util.rememberCurrentTimeMillis
@@ -76,11 +78,11 @@ internal fun ShareTargetScreenContent(
                     IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.action_back),
+                            contentDescription = uiText(UiTextKey.CD_BACK),
                         )
                     }
                 },
-                title = { Text(stringResource(R.string.share_target_title)) },
+                title = { Text(uiText(UiTextKey.SHARE_APP)) },
             )
         },
     ) { padding ->

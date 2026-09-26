@@ -141,14 +141,30 @@ class LiveCallTestSuite {
     }
 
     @Test
+    fun testJitterBuffer_SequenceGapLossTracking() {
+        val jb = JitterBuffer(targetDelayMs = 50L)
+        val now = System.currentTimeMillis()
+
+        jb.push(CallPacket("call1", 1L, now - 50, "alice", CallPayloadType.TRANSLATED_SEGMENT, ByteArray(12), ByteArray(10)), now)
+        // Jump from sequence 1 to 4 (packets 2 and 3 dropped on network)
+        jb.push(CallPacket("call1", 4L, now - 20, "alice", CallPayloadType.TRANSLATED_SEGMENT, ByteArray(12), ByteArray(10)), now)
+
+        assertTrue(jb.lossRatePercent > 0f)
+    }
+
+    @Test
     fun testCallVadEndpointDetector_SpeechAccumulationAndEndpoint() {
         var finalizedCount = 0
         var totalCapturedSamples = 0
+        var speechStartedCount = 0
 
         val vad = CallVadEndpointDetector(
-            energyThresholdRms = 250f,
+            minEnergyThresholdRms = 250f,
             silenceEndpointTimeoutMs = 200L,
             minSpeechDurationMs = 100L,
+            onSpeechStarted = {
+                speechStartedCount++
+            },
             onSpeechSegmentFinalized = { pcmShorts, durationMs ->
                 finalizedCount++
                 totalCapturedSamples += pcmShorts.size
@@ -161,6 +177,7 @@ class LiveCallTestSuite {
             vad.processPcmChunk(silenceChunk, silenceChunk.size)
         }
         assertEquals(0, finalizedCount)
+        assertEquals(0, speechStartedCount)
 
         // 2. Send loud speech: RMS > 1000
         val speechChunk = ShortArray(320) { if (it % 2 == 0) 4000 else -4000 }
@@ -168,6 +185,7 @@ class LiveCallTestSuite {
             vad.processPcmChunk(speechChunk, speechChunk.size)
         }
         assertTrue(vad.isSpeechActive)
+        assertEquals(1, speechStartedCount)
 
         // 3. Send silence to trigger endpoint detection (200ms timeout)
         for (i in 0 until 12) { // 240 ms of silence

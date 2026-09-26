@@ -49,6 +49,8 @@ import app.swarsetu.R
 import app.swarsetu.ui.components.Avatar
 import app.swarsetu.ui.components.FullscreenImageViewer
 import app.swarsetu.ui.image.BlobImage
+import app.swarsetu.ui.i18n.UiTextKey
+import app.swarsetu.ui.i18n.uiText
 import app.swarsetu.ui.preview.SwarSetuPreview
 import app.swarsetu.ui.scan.QrScanner
 import app.swarsetu.ui.verify.EncryptionSection
@@ -75,8 +77,8 @@ fun ProfileDetailsScreen(
     val scanResult by viewModel.scanResult.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    val matchMessage = stringResource(R.string.verify_match)
-    val mismatchMessage = stringResource(R.string.verify_mismatch)
+    val matchMessage = uiText(UiTextKey.VERIFY_SUCCESS)
+    val mismatchMessage = uiText(UiTextKey.VERIFY_MISMATCH)
     LaunchedEffect(scanResult) {
         when (scanResult) {
             VerifyScanResult.MATCH -> snackbarHostState.showSnackbar(matchMessage)
@@ -137,12 +139,12 @@ internal fun ProfileDetailsScreenContent(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.profile_details_title)) },
+                title = { Text(uiText(UiTextKey.PROFILE)) },
                 navigationIcon = {
                     IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.action_back),
+                            contentDescription = uiText(UiTextKey.CD_BACK),
                         )
                     }
                 },
@@ -151,20 +153,18 @@ internal fun ProfileDetailsScreenContent(
                         IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(48.dp)) {
                             Icon(
                                 Icons.Filled.MoreVert,
-                                contentDescription = stringResource(R.string.chat_more_options),
+                                contentDescription = uiText(UiTextKey.CD_MORE_OPTIONS),
                             )
                         }
                         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                             DropdownMenuItem(
                                 text = {
                                     Text(
-                                        stringResource(
-                                            if (state.isBlocked) {
-                                                R.string.chat_action_unblock
-                                            } else {
-                                                R.string.chat_action_block
-                                            },
-                                        ),
+                                        if (state.isBlocked) {
+                                            uiText(UiTextKey.ACTION_UNBLOCK)
+                                        } else {
+                                            uiText(UiTextKey.ACTION_BLOCK)
+                                        },
                                     )
                                 },
                                 leadingIcon = { Icon(Icons.Filled.Block, contentDescription = null) },
@@ -199,7 +199,7 @@ internal fun ProfileDetailsScreenContent(
                 // Tappable only when a photo is set: a default (initials) avatar has nothing to enlarge,
                 // so onClick stays null and Avatar renders non-interactive (no ripple / no touch target).
                 contentDescription = if (state.avatarHash != null) state.displayName else null,
-                onClickLabel = stringResource(R.string.profile_details_view_photo),
+                onClickLabel = uiText(UiTextKey.CHAT_VIEW_PHOTO),
                 onClick = if (state.avatarHash != null) ({ showAvatarFullscreen = true }) else null,
             )
 
@@ -226,13 +226,11 @@ internal fun ProfileDetailsScreenContent(
                 Spacer(Modifier.width(6.dp))
                 Text(
                     text =
-                        stringResource(
-                            if (state.online) {
-                                R.string.profile_details_online
-                            } else {
-                                R.string.profile_details_offline
-                            },
-                        ),
+                        if (state.online) {
+                            uiText(UiTextKey.STATUS_ONLINE)
+                        } else {
+                            uiText(UiTextKey.STATUS_OFFLINE)
+                        },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -246,7 +244,7 @@ internal fun ProfileDetailsScreenContent(
             }
 
             Text(
-                text = stringResource(R.string.profile_node_id, state.nodeId),
+                text = uiText(UiTextKey.PROFILE_NODE_ID_LABEL, state.nodeId),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -287,7 +285,7 @@ internal fun ProfileDetailsScreenContent(
     if (showAvatarFullscreen && state.avatarHash != null) {
         FullscreenImageViewer(
             model = BlobImage(state.avatarHash!!),
-            contentDescription = stringResource(R.string.chat_image_viewer_desc),
+            contentDescription = uiText(UiTextKey.CHAT_PHOTO_ATTACHMENT),
             title = state.displayName,
             onDismiss = { showAvatarFullscreen = false },
         )

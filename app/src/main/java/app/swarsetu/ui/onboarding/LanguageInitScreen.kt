@@ -27,11 +27,10 @@ import androidx.compose.ui.unit.dp
 import app.swarsetu.data.settings.SettingsStore
 import app.swarsetu.stt.SttModelManager
 import app.swarsetu.translation.TranslatorEngine
+import app.swarsetu.ui.i18n.UiTextKey
+import app.swarsetu.ui.i18n.uiText
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
-
-import androidx.compose.ui.res.stringResource
-import app.swarsetu.R
 
 @Composable
 fun LanguageInitScreen(
@@ -48,8 +47,9 @@ fun LanguageInitScreen(
     var errorMessage by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
-    val stageTranslation = stringResource(R.string.lang_init_stage_translation)
-    val errorDefault = stringResource(R.string.lang_init_error_default)
+    val stageStt = uiText(UiTextKey.STEP_SPEECH_RECOGNITION)
+    val stageTranslation = uiText(UiTextKey.STEP_NEURAL_TRANSLATION)
+    val errorDefault = uiText(UiTextKey.MODEL_DOWNLOAD_FAILED)
 
     val downloadModels = {
         isError = false
@@ -59,7 +59,7 @@ fun LanguageInitScreen(
         scope.launch {
             try {
                 // 1. Download Speech-to-Text Model: SraVaani 1.0 FP16 ONNX (Step 1 of 2)
-                downloadStage = "Step 1 of 2: Speech Recognition (SraVaani 1.0)"
+                downloadStage = stageStt
                 sttModelManager.downloadSraVaaniModel { bytes, total, pct, file ->
                     val mbDownloaded = bytes / (1024 * 1024)
                     val mbTotal = total / (1024 * 1024)
@@ -69,7 +69,7 @@ fun LanguageInitScreen(
                 progressFraction = 0.5f
 
                 // 2. Download Translation Models: IndicTrans2 (Step 2 of 2)
-                downloadStage = "Step 2 of 2: $stageTranslation"
+                downloadStage = stageTranslation
                 translatorEngine.downloadAllRequiredModels { completed, total, currentLang ->
                     val transFraction = if (total > 0) completed.toFloat() / total.toFloat() else 0f
                     progressFraction = 0.5f + (transFraction * 0.5f)
@@ -103,13 +103,13 @@ fun LanguageInitScreen(
         verticalArrangement = Arrangement.Center,
     ) {
         Text(
-            text = stringResource(R.string.lang_init_title),
+            text = uiText(UiTextKey.LANGUAGE_INIT_TITLE),
             style = MaterialTheme.typography.headlineSmall,
             textAlign = TextAlign.Center,
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = stringResource(R.string.lang_init_desc),
+            text = uiText(UiTextKey.LANGUAGE_INIT_DESC),
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -118,11 +118,11 @@ fun LanguageInitScreen(
 
         if (!isDownloading && !isError) {
             Button(onClick = { downloadModels() }) {
-                Text(stringResource(R.string.lang_init_download_button))
+                Text(uiText(UiTextKey.MODEL_DOWNLOAD_BTN))
             }
             Spacer(modifier = Modifier.height(12.dp))
             OutlinedButton(onClick = { skipInit() }) {
-                Text(stringResource(R.string.lang_init_skip_button))
+                Text(uiText(UiTextKey.ACTION_SKIP))
             }
         } else if (isError) {
             Text(
@@ -133,11 +133,11 @@ fun LanguageInitScreen(
             Spacer(modifier = Modifier.height(16.dp))
             Row {
                 Button(onClick = { downloadModels() }) {
-                    Text(stringResource(R.string.lang_init_retry_button))
+                    Text(uiText(UiTextKey.ACTION_RETRY))
                 }
                 Spacer(modifier = Modifier.width(16.dp))
                 OutlinedButton(onClick = { skipInit() }) {
-                    Text(stringResource(R.string.lang_init_skip_button))
+                    Text(uiText(UiTextKey.ACTION_SKIP))
                 }
             }
         } else {
@@ -159,7 +159,7 @@ fun LanguageInitScreen(
             }
             Spacer(modifier = Modifier.height(24.dp))
             OutlinedButton(onClick = { skipInit() }) {
-                Text(stringResource(R.string.lang_init_skip_button))
+                Text(uiText(UiTextKey.ACTION_SKIP))
             }
         }
     }

@@ -46,6 +46,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.swarsetu.data.message.DeliveryPlane
 import app.swarsetu.ui.chat.DeliveryStatus
+import app.swarsetu.ui.i18n.UiTextKey
+import app.swarsetu.ui.i18n.uiText
 import app.swarsetu.ui.theme.BrandPrimaryDark
 import app.swarsetu.ui.theme.BrandPrimaryLight
 import app.swarsetu.ui.theme.SwarSetuTheme
@@ -107,7 +109,7 @@ fun TranslatedVoiceMessageBubble(
             )
             Spacer(modifier = Modifier.width(4.dp))
             Text(
-                text = "Voice • $languageBadgeText",
+                text = "${uiText(UiTextKey.CHAT_VOICE_DESC)} • $languageBadgeText",
                 style = MaterialTheme.typography.labelSmall.copy(
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 11.sp,
@@ -139,7 +141,7 @@ fun TranslatedVoiceMessageBubble(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = if (isOriginalExpanded) "Hide original" else "Original text",
+                    text = uiText(UiTextKey.CHAT_ORIGINAL_MESSAGE),
                     fontSize = 11.sp,
                     color = metaColor,
                     fontWeight = FontWeight.Medium,
@@ -184,7 +186,7 @@ fun TranslatedVoiceMessageBubble(
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (isPlaying) "Pause playback" else "Play translation",
+                        contentDescription = if (isPlaying) uiText(UiTextKey.CHAT_PAUSE_VOICE) else uiText(UiTextKey.CHAT_PLAY_VOICE),
                         tint = if (isDark) Color(0xFF1F1604) else Color.White,
                         modifier = Modifier.size(18.dp),
                     )

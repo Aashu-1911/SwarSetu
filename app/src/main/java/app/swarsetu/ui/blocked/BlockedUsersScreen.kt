@@ -34,6 +34,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.swarsetu.R
 import app.swarsetu.ui.components.Avatar
+import app.swarsetu.ui.i18n.UiTextKey
+import app.swarsetu.ui.i18n.uiText
 import app.swarsetu.ui.preview.SwarSetuPreview
 import org.koin.androidx.compose.koinViewModel
 
@@ -57,11 +59,11 @@ fun BlockedUsersScreen(
                     IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.action_back),
+                            contentDescription = uiText(UiTextKey.CD_BACK),
                         )
                     }
                 },
-                title = { Text(stringResource(R.string.blocked_users_title)) },
+                title = { Text(uiText(UiTextKey.BLOCKED_USERS_TITLE)) },
             )
         },
     ) { padding ->
@@ -71,7 +73,7 @@ fun BlockedUsersScreen(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = stringResource(R.string.blocked_users_empty),
+                    text = uiText(UiTextKey.BLOCKED_USERS_EMPTY),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -114,7 +116,7 @@ private fun BlockedUserRow(
             )
         }
         TextButton(onClick = onUnblock) {
-            Text(stringResource(R.string.blocked_users_unblock))
+            Text(uiText(UiTextKey.ACTION_UNBLOCK))
         }
     }
 }

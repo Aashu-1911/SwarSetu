@@ -55,6 +55,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.swarsetu.R
 import app.swarsetu.crash.CrashReportRef
+import app.swarsetu.ui.i18n.UiTextKey
+import app.swarsetu.ui.i18n.uiText
 import app.swarsetu.ui.openUrl
 import app.swarsetu.ui.preview.PREVIEW_NOW
 import app.swarsetu.ui.preview.SwarSetuPreview
@@ -88,8 +90,8 @@ fun CrashLogScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     // Resolved at composition — lint forbids LocalContext.getString here — then mapped from the emitted
     // resource id, the same idiom as DiagnosticsScreen.
-    val copiedMsg = stringResource(R.string.crash_copied)
-    val deletedMsg = stringResource(R.string.crash_deleted)
+    val copiedMsg = uiText(UiTextKey.CHAT_MESSAGE_COPIED)
+    val deletedMsg = uiText(UiTextKey.CHAT_MESSAGE_DELETED)
     val shareErrorMsg = stringResource(R.string.crash_share_error)
     LaunchedEffect(copiedMsg, deletedMsg, shareErrorMsg) {
         viewModel.events.collect { resId ->
@@ -156,11 +158,11 @@ internal fun CrashLogScreenContent(
                     IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.action_back),
+                            contentDescription = uiText(UiTextKey.CD_BACK),
                         )
                     }
                 },
-                title = { Text(stringResource(R.string.crash_title)) },
+                title = { Text(uiText(UiTextKey.CRASH_LOG)) },
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -210,7 +212,7 @@ internal fun CrashLogScreenContent(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     ) {
                         Text(
-                            text = stringResource(R.string.crash_action_delete),
+                            text = uiText(UiTextKey.ACTION_DELETE),
                             color = MaterialTheme.colorScheme.error,
                         )
                     }
@@ -314,7 +316,7 @@ private fun ConfirmDialog(
         title = { Text(stringResource(title)) },
         text = { Text(stringResource(body)) },
         confirmButton = { TextButton(onClick = onConfirm) { Text(stringResource(confirm)) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(uiText(UiTextKey.ACTION_CANCEL)) } },
     )
 }
 

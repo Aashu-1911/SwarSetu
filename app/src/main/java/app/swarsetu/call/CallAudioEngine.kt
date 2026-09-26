@@ -133,7 +133,8 @@ class CallAudioEngine(
             captureJob = scope.launch(Dispatchers.IO) {
                 val pcmBuffer = ShortArray(CHUNK_SIZE_SAMPLES)
                 while (isActive && isCapturing.get()) {
-                    val readCount = audioRecord?.read(pcmBuffer, 0, CHUNK_SIZE_SAMPLES) ?: -1
+                    val record = audioRecord ?: break
+                    val readCount = record.read(pcmBuffer, 0, CHUNK_SIZE_SAMPLES)
                     if (readCount > 0) {
                         if (!_isMuted.value) {
                             onPcmCaptured(pcmBuffer, readCount)
@@ -142,8 +143,12 @@ class CallAudioEngine(
                             val silentChunk = ShortArray(readCount)
                             onPcmCaptured(silentChunk, readCount)
                         }
-                    } else if (readCount < 0) {
-                        Log.w(TAG, "AudioRecord read returned error code: $readCount")
+                    } else if (readCount == AudioRecord.ERROR_INVALID_OPERATION || readCount == AudioRecord.ERROR_BAD_VALUE) {
+                        Log.w(TAG, "AudioRecord read returned non-fatal error: $readCount")
+                        kotlinx.coroutines.delay(20)
+                    } else if (readCount == AudioRecord.ERROR_DEAD_OBJECT) {
+                        Log.e(TAG, "AudioRecord dead object encountered! Breaking capture loop.")
+                        break
                     }
                 }
             }
@@ -179,6 +184,22 @@ class CallAudioEngine(
     fun setSpeakerphone(on: Boolean) {
         _isSpeakerphoneOn.value = on
         try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                val devices = audioManager.availableCommunicationDevices
+                val speakerDevice = devices.firstOrNull { it.type == android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+                val earpieceDevice = devices.firstOrNull {
+                    it.type == android.media.AudioDeviceInfo.TYPE_BUILTIN_EARPIECE ||
+                    it.type == android.media.AudioDeviceInfo.TYPE_WIRED_HEADSET ||
+                    it.type == android.media.AudioDeviceInfo.TYPE_BLE_HEADSET
+                }
+                if (on && speakerDevice != null) {
+                    audioManager.setCommunicationDevice(speakerDevice)
+                } else if (!on && earpieceDevice != null) {
+                    audioManager.setCommunicationDevice(earpieceDevice)
+                } else {
+                    audioManager.clearCommunicationDevice()
+                }
+            }
             audioManager.isSpeakerphoneOn = on
             Log.d(TAG, "Speakerphone set to: $on")
         } catch (e: Exception) {

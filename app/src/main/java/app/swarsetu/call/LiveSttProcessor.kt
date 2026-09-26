@@ -7,6 +7,8 @@ import app.swarsetu.stt.sravaani.Sravaani10Engine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+import kotlinx.coroutines.withTimeoutOrNull
+
 /**
  * Result produced by LiveSttProcessor for a finalized speech segment.
  */
@@ -28,7 +30,11 @@ class LiveSttProcessor(
 ) {
     companion object {
         private const val TAG = "LiveSttProcessor"
+        private const val INFERENCE_TIMEOUT_MS = 2500L
     }
+
+    private var lastRecognizedText: String = ""
+    private var lastRecognizedTimestampMs: Long = 0L
 
     /**
      * Initializes the SraVaani 1.0 ASR model for the call's language.
@@ -48,7 +54,7 @@ class LiveSttProcessor(
     }
 
     /**
-     * Transcribes a finalized PCM speech segment from VAD.
+     * Transcribes a finalized PCM speech segment from VAD with timeout and noise filtering.
      */
     suspend fun processSpeechSegment(
         callId: String,
@@ -61,25 +67,54 @@ class LiveSttProcessor(
 
         val startTime = System.currentTimeMillis()
         try {
-            val result = sravaaniEngine.transcribe(pcmShorts, language)
-            val latencyMs = System.currentTimeMillis() - startTime
-
-            val recognizedText = result.text.trim()
-            if (recognizedText.isNotBlank()) {
-                Log.d(TAG, "STT recognized [${language.code}]: \"$recognizedText\" in ${latencyMs}ms (${durationMs}ms audio)")
-                return@withContext LiveTranscript(
-                    callId = callId,
-                    speakerNodeId = speakerNodeId,
-                    text = recognizedText,
-                    language = language,
-                    latencyMs = latencyMs,
-                    speechDurationMs = durationMs,
-                )
+            val result = withTimeoutOrNull(INFERENCE_TIMEOUT_MS) {
+                sravaaniEngine.transcribe(pcmShorts, language)
             }
-            null
+
+            if (result == null) {
+                Log.w(TAG, "STT decode timed out after ${INFERENCE_TIMEOUT_MS}ms for segment ($durationMs ms audio)")
+                return@withContext null
+            }
+
+            val latencyMs = System.currentTimeMillis() - startTime
+            val rawText = result.text.trim()
+
+            // Filter noise, blank artifacts, or non-printable tokens
+            val cleanedText = sanitizeTranscript(rawText)
+            if (cleanedText.isBlank()) {
+                return@withContext null
+            }
+
+            // Suppress identical duplicate transcript within 800ms window
+            val now = System.currentTimeMillis()
+            if (cleanedText == lastRecognizedText && (now - lastRecognizedTimestampMs) < 800L) {
+                Log.d(TAG, "Deduplicated rapid identical STT transcript: \"$cleanedText\"")
+                return@withContext null
+            }
+            lastRecognizedText = cleanedText
+            lastRecognizedTimestampMs = now
+
+            Log.d(TAG, "STT recognized [${language.code}]: \"$cleanedText\" in ${latencyMs}ms (${durationMs}ms audio)")
+            LiveTranscript(
+                callId = callId,
+                speakerNodeId = speakerNodeId,
+                text = cleanedText,
+                language = language,
+                latencyMs = latencyMs,
+                speechDurationMs = durationMs,
+            )
         } catch (e: Exception) {
             Log.e(TAG, "Error in SraVaani 1.0 speech decoding: ${e.message}", e)
             null
         }
+    }
+
+    private fun sanitizeTranscript(raw: String): String {
+        return raw
+            .replace("<blank>", "")
+            .replace("<unk>", "")
+            .replace("<pad>", "")
+            .replace(Regex("^[\\p{Punct}\\s]+$"), "")
+            .trim()
     }
 }

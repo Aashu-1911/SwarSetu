@@ -120,12 +120,38 @@ class SttModelManager(
 
     fun loadedCount(): Int = loadedModels.size
 
+    @Volatile
+    private var cachedAssetList: Set<String>? = null
+
+    private fun getAssetList(): Set<String> {
+        val cached = cachedAssetList
+        if (cached != null) return cached
+        val list = try {
+            context.assets.list(SRAVAANI_ASSET_DIR)?.toSet().orEmpty()
+        } catch (_: Exception) {
+            emptySet()
+        }
+        cachedAssetList = list
+        return list
+    }
+
     /**
-     * Checks if SraVaani 1.0 model files exist and are valid.
+     * Checks if SraVaani 1.0 model files exist and are ready.
+     * Operates in O(1) without blocking disk hashing.
      */
     fun isSraVaaniAvailable(version: String = "1.0"): Boolean {
         val dir = getModelDir(version)
-        return verifyModelFiles(version) is ValidationResult.Valid || hasExtractedModelFiles(dir)
+        val enc = File(dir, SravaaniGraphNames.ENCODER)
+        val dec = File(dir, SravaaniGraphNames.DECODER_JOINT)
+        val tbl = File(dir, SravaaniGraphNames.TABLES)
+        val tok = File(dir, SravaaniGraphNames.TOKENS)
+
+        val hasExtracted = enc.isFile && enc.length() > 0 &&
+            dec.isFile && dec.length() > 0 &&
+            (tbl.isFile || isAssetPresent(SravaaniGraphNames.TABLES)) &&
+            (tok.isFile || isAssetPresent(SravaaniGraphNames.TOKENS))
+
+        return hasExtracted || hasPackagedAssetFiles()
     }
 
     /**
@@ -146,8 +172,9 @@ class SttModelManager(
 
     /**
      * Verifies the model files in `filesDir/stt/sravaani/1.0/` against the pinned manifest.
+     * [checkSha256] controls whether cryptographic hashes are re-computed (expensive, background only).
      */
-    fun verifyModelFiles(version: String = "1.0"): ValidationResult {
+    fun verifyModelFiles(version: String = "1.0", checkSha256: Boolean = false): ValidationResult {
         val dir = getModelDir(version)
         val manifest = SRAVAANI_10_MANIFEST
 
@@ -162,7 +189,7 @@ class SttModelManager(
                 return ValidationResult.InvalidSize(item.name, file.length(), item.expectedBytes)
             }
 
-            if (item.sha256.isNotBlank()) {
+            if (checkSha256 && item.sha256.isNotBlank()) {
                 val actualHash = computeSha256(file)
                 if (!actualHash.equals(item.sha256, ignoreCase = true)) {
                     Log.e(TAG, "SHA-256 mismatch for ${item.name}: actual=$actualHash, expected=${item.sha256}")
@@ -221,20 +248,17 @@ class SttModelManager(
     private fun hasExtractedModelFiles(dir: File): Boolean {
         val enc = File(dir, SravaaniGraphNames.ENCODER).isFile
         val dec = File(dir, SravaaniGraphNames.DECODER_JOINT).isFile
-        val tbl = File(dir, SravaaniGraphNames.TABLES).isFile ||
-            context.assets.list(SRAVAANI_ASSET_DIR)?.contains(SravaaniGraphNames.TABLES) == true
-        val tok = File(dir, SravaaniGraphNames.TOKENS).isFile ||
-            context.assets.list(SRAVAANI_ASSET_DIR)?.contains(SravaaniGraphNames.TOKENS) == true
+        val tbl = File(dir, SravaaniGraphNames.TABLES).isFile || isAssetPresent(SravaaniGraphNames.TABLES)
+        val tok = File(dir, SravaaniGraphNames.TOKENS).isFile || isAssetPresent(SravaaniGraphNames.TOKENS)
         return enc && dec && tbl && tok
     }
 
-    private fun hasPackagedAssetFiles(): Boolean =
-        try {
-            val list = context.assets.list(SRAVAANI_ASSET_DIR).orEmpty()
-            list.contains(SravaaniGraphNames.ENCODER) && list.contains(SravaaniGraphNames.DECODER_JOINT)
-        } catch (_: Exception) {
-            false
-        }
+    private fun isAssetPresent(name: String): Boolean = getAssetList().contains(name)
+
+    fun hasPackagedAssetFiles(): Boolean {
+        val list = getAssetList()
+        return list.contains(SravaaniGraphNames.ENCODER) && list.contains(SravaaniGraphNames.DECODER_JOINT)
+    }
 
     /**
      * Ensures all SraVaani 1.0 model files are available in `filesDir/stt/sravaani/1.0/`, downloading as needed.
@@ -246,7 +270,7 @@ class SttModelManager(
     ): Boolean = withContext(Dispatchers.IO) {
         mutex.withLock {
             val dir = getModelDir(version)
-            if (verifyModelFiles(version) is ValidationResult.Valid || hasExtractedModelFiles(dir)) {
+            if (verifyModelFiles(version, checkSha256 = false) is ValidationResult.Valid || hasExtractedModelFiles(dir)) {
                 val state = ModelDownloadState.Ready
                 _downloadState.value = state
                 onStateChange?.invoke(state)
@@ -446,8 +470,8 @@ class SttModelManager(
             while (redirects < maxRedirects) {
                 val url = URL(currentUrl)
                 val conn = url.openConnection() as HttpURLConnection
-                conn.connectTimeout = 30_000
-                conn.readTimeout = 60_000
+                conn.connectTimeout = 10_000
+                conn.readTimeout = 30_000
                 conn.instanceFollowRedirects = false
                 conn.setRequestProperty("User-Agent", "SwarSetu-Sravaani10-Android")
                 if (!hfToken.isNullOrBlank()) {

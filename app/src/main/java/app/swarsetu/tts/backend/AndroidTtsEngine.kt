@@ -42,18 +42,15 @@ class AndroidTtsEngine(
 
             try {
                 // Prefer Google TTS engine if available for full 10-language Indic support
-                var chosenEngine: String? = null
-                val tempTts = TextToSpeech(context.applicationContext, null)
-                val engines = tempTts.engines.orEmpty()
-                try { tempTts.shutdown() } catch (_: Exception) {}
-
-                if (engines.any { it.name == "com.google.android.tts" }) {
-                    chosenEngine = "com.google.android.tts"
+                val isGoogleTtsInstalled = try {
+                    context.packageManager.getPackageInfo("com.google.android.tts", 0) != null
+                } catch (_: Exception) {
+                    false
                 }
 
-                if (chosenEngine != null) {
-                    android.util.Log.d("AndroidTtsEngine", "Initializing with Google TTS engine ($chosenEngine)")
-                    tts = TextToSpeech(context.applicationContext, this@AndroidTtsEngine, chosenEngine)
+                if (isGoogleTtsInstalled) {
+                    android.util.Log.d("AndroidTtsEngine", "Initializing with Google TTS engine (com.google.android.tts)")
+                    tts = TextToSpeech(context.applicationContext, this@AndroidTtsEngine, "com.google.android.tts")
                 } else {
                     android.util.Log.d("AndroidTtsEngine", "Initializing with default TTS engine")
                     tts = TextToSpeech(context.applicationContext, this@AndroidTtsEngine)

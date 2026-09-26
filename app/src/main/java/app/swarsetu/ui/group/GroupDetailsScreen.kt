@@ -60,6 +60,8 @@ import app.swarsetu.TextLimits
 import app.swarsetu.ui.components.Avatar
 import app.swarsetu.ui.components.FullscreenImageViewer
 import app.swarsetu.ui.components.GroupAvatar
+import app.swarsetu.ui.i18n.UiTextKey
+import app.swarsetu.ui.i18n.uiText
 import app.swarsetu.ui.image.BlobImage
 import app.swarsetu.ui.preview.SwarSetuPreview
 import app.swarsetu.ui.profile.AvatarCropDialog
@@ -135,12 +137,12 @@ internal fun GroupDetailsScreenContent(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.group_details_title)) },
+                title = { Text(uiText(UiTextKey.CHAT_VIEW_GROUP_INFO)) },
                 navigationIcon = {
                     IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.action_back),
+                            contentDescription = uiText(UiTextKey.CD_BACK),
                         )
                     }
                 },
@@ -149,13 +151,13 @@ internal fun GroupDetailsScreenContent(
                         IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(48.dp)) {
                             Icon(
                                 Icons.Filled.MoreVert,
-                                contentDescription = stringResource(R.string.chat_more_options),
+                                contentDescription = uiText(UiTextKey.CD_MORE_OPTIONS),
                             )
                         }
                         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                             DropdownMenuItem(
                                 modifier = Modifier.testTag("group_set_photo"),
-                                text = { Text(stringResource(R.string.chat_group_set_photo)) },
+                                text = { Text(uiText(UiTextKey.PROFILE_PHOTO_CHANGE)) },
                                 leadingIcon = { Icon(Icons.Filled.AddPhotoAlternate, contentDescription = null) },
                                 onClick = {
                                     menuOpen = false
@@ -164,7 +166,7 @@ internal fun GroupDetailsScreenContent(
                             )
                             DropdownMenuItem(
                                 modifier = Modifier.testTag("group_rename"),
-                                text = { Text(stringResource(R.string.chat_group_rename)) },
+                                text = { Text(uiText(UiTextKey.ACTION_EDIT)) },
                                 leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
                                 onClick = {
                                     menuOpen = false
@@ -173,7 +175,7 @@ internal fun GroupDetailsScreenContent(
                             )
                             DropdownMenuItem(
                                 modifier = Modifier.testTag("group_leave"),
-                                text = { Text(stringResource(R.string.chat_group_leave)) },
+                                text = { Text(uiText(UiTextKey.ACTION_REMOVE)) },
                                 leadingIcon = { Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null) },
                                 onClick = {
                                     menuOpen = false
@@ -202,7 +204,7 @@ internal fun GroupDetailsScreenContent(
                 photoHash = state.photoHash,
                 size = 96.dp,
                 contentDescription = if (state.photoHash != null) state.title else null,
-                onClickLabel = stringResource(R.string.group_details_view_photo),
+                onClickLabel = uiText(UiTextKey.CHAT_VIEW_PHOTO),
                 onClick = if (state.photoHash != null) ({ showPhotoFullscreen = true }) else null,
             )
 
@@ -243,7 +245,7 @@ internal fun GroupDetailsScreenContent(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text(
-                    text = stringResource(R.string.group_details_members),
+                    text = uiText(UiTextKey.CONTACTS),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -257,7 +259,7 @@ internal fun GroupDetailsScreenContent(
     if (showPhotoFullscreen && state.photoHash != null) {
         FullscreenImageViewer(
             model = BlobImage(state.photoHash!!),
-            contentDescription = stringResource(R.string.chat_image_viewer_desc),
+            contentDescription = uiText(UiTextKey.CHAT_PHOTO_ATTACHMENT),
             title = state.title,
             onDismiss = { showPhotoFullscreen = false },
         )
@@ -277,22 +279,22 @@ internal fun GroupDetailsScreenContent(
     if (showLeaveConfirm) {
         AlertDialog(
             onDismissRequest = { showLeaveConfirm = false },
-            title = { Text(stringResource(R.string.chat_group_leave_confirm_title)) },
-            text = { Text(stringResource(R.string.chat_group_leave_confirm_body)) },
+            title = { Text(uiText(UiTextKey.ACTION_REMOVE)) },
+            text = { Text(uiText(UiTextKey.ACTION_REMOVE)) },
             confirmButton = {
                 TextButton(onClick = {
                     showLeaveConfirm = false
                     onLeave()
                 }) {
                     Text(
-                        text = stringResource(R.string.chat_group_leave_confirm_action),
+                        text = uiText(UiTextKey.ACTION_REMOVE),
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showLeaveConfirm = false }) {
-                    Text(stringResource(android.R.string.cancel))
+                    Text(uiText(UiTextKey.ACTION_CANCEL))
                 }
             },
         )
@@ -330,7 +332,7 @@ private fun MemberRow(
         )
         if (member.isSelf) {
             Text(
-                text = stringResource(R.string.chat_self_name),
+                text = uiText(UiTextKey.CHAT_YOU),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -357,13 +359,13 @@ private fun RenameGroupDialog(
     var name by remember { mutableStateOf(currentName) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.chat_group_rename)) },
+        title = { Text(uiText(UiTextKey.ACTION_EDIT)) },
         text = {
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it.take(TextLimits.GROUP_NAME) },
                 singleLine = true,
-                label = { Text(stringResource(R.string.chat_group_name_label)) },
+                label = { Text(uiText(UiTextKey.PROFILE_DISPLAY_NAME_LABEL)) },
                 supportingText = {
                     Text(
                         text = "${name.length} / ${TextLimits.GROUP_NAME}",
@@ -380,12 +382,12 @@ private fun RenameGroupDialog(
                 onClick = { onRename(name) },
                 enabled = name.isNotBlank(),
             ) {
-                Text(stringResource(R.string.chat_group_rename_action))
+                Text(uiText(UiTextKey.ACTION_SAVE))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(stringResource(android.R.string.cancel))
+                Text(uiText(UiTextKey.ACTION_CANCEL))
             }
         },
     )

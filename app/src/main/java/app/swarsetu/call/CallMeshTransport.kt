@@ -37,8 +37,8 @@ class CallMeshTransport(
     companion object {
         private const val TAG = "CallMeshTransport"
         const val DEFAULT_PORT = 42424
-        private const val HEARTBEAT_INTERVAL_MS = 1000L
-        private const val CONNECTION_TIMEOUT_MS = 6000L
+        private const val HEARTBEAT_INTERVAL_MS = 1500L
+        private const val CONNECTION_TIMEOUT_MS = 7500L
     }
 
     private var serverSocket: ServerSocket? = null
@@ -68,6 +68,7 @@ class CallMeshTransport(
         try {
             val server = ServerSocket()
             server.reuseAddress = true
+            server.receiveBufferSize = 64 * 1024
             server.bind(InetSocketAddress(port))
             serverSocket = server
             val actualPort = server.localPort
@@ -78,7 +79,9 @@ class CallMeshTransport(
                     Log.d(TAG, "Wi-Fi Aware Call Server listening on port $actualPort...")
                     val socket = server.accept()
                     socket.tcpNoDelay = true
-                    socket.soTimeout = 10000
+                    socket.sendBufferSize = 64 * 1024
+                    socket.receiveBufferSize = 64 * 1024
+                    socket.soTimeout = 12000
                     clientSocket = socket
                     setupSocketStreams(socket)
                 } catch (e: Exception) {
@@ -96,23 +99,33 @@ class CallMeshTransport(
     }
 
     /**
-     * Connects to the remote peer's Wi-Fi Aware server at [host]:[port].
+     * Connects to the remote peer's Wi-Fi Aware server at [host]:[port] with automatic retry.
      */
-    suspend fun connect(host: String, port: Int = DEFAULT_PORT): Boolean = withContext(Dispatchers.IO) {
-        try {
-            Log.d(TAG, "Connecting to remote peer Wi-Fi Aware at $host:$port...")
-            val socket = Socket()
-            socket.tcpNoDelay = true
-            socket.connect(InetSocketAddress(host, port), 8000)
-            socket.soTimeout = 10000
-            clientSocket = socket
-            isRunning.set(true)
-            setupSocketStreams(socket)
-            true
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed connecting to $host:$port: ${e.message}", e)
-            false
+    suspend fun connect(host: String, port: Int = DEFAULT_PORT, maxRetries: Int = 2): Boolean = withContext(Dispatchers.IO) {
+        isRunning.set(true)
+        var attempt = 0
+        while (attempt <= maxRetries && isRunning.get()) {
+            attempt++
+            try {
+                Log.d(TAG, "Connecting to remote peer Wi-Fi Aware at $host:$port (attempt $attempt)...")
+                val socket = Socket()
+                socket.tcpNoDelay = true
+                socket.sendBufferSize = 64 * 1024
+                socket.receiveBufferSize = 64 * 1024
+                socket.connect(InetSocketAddress(host, port), 5000)
+                socket.soTimeout = 12000
+                clientSocket = socket
+                setupSocketStreams(socket)
+                return@withContext true
+            } catch (e: Exception) {
+                Log.w(TAG, "Attempt $attempt failed connecting to $host:$port: ${e.message}")
+                if (attempt <= maxRetries && isRunning.get()) {
+                    delay(600L)
+                }
+            }
         }
+        Log.e(TAG, "Failed connecting to $host:$port after $attempt attempts")
+        false
     }
 
     private fun setupSocketStreams(socket: Socket) {

@@ -62,14 +62,15 @@ class ProfileViewModel(
     val installedLanguages: StateFlow<Set<SttLanguage>> = _installedLanguages.asStateFlow()
 
     fun checkInstalledLanguages() {
-        viewModelScope.launch {
-            val installed = SttLanguage.entries.filter { sttModelManager.isAvailable(it) }.toSet()
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val available = sttModelManager.isSraVaaniAvailable()
+            val installed = if (available) SttLanguage.entries.toSet() else emptySet()
             _installedLanguages.value = installed
         }
     }
 
     fun setPreferredLanguage(language: SttLanguage) {
-        viewModelScope.launch {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             settings.setSttLanguageCode(language.code)
             // All 10 languages are served by the one packaged SraVaani model — selecting a
             // language never triggers a download (fresh-install-offline contract).
@@ -124,21 +125,19 @@ class ProfileViewModel(
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
     fun setThemePreference(theme: String) {
-        viewModelScope.launch {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             settings.setThemePreference(theme)
         }
     }
 
     fun setAutoPlayTts(enabled: Boolean) {
-        viewModelScope.launch {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             settings.setAutoPlayTts(enabled)
         }
     }
 
-
-
     init {
-        viewModelScope.launch {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val id = identity.nodeId()
             nodeId.value = id
             alias.value = Alias.aliasFor(id)
@@ -148,7 +147,8 @@ class ProfileViewModel(
             _status.value = status
             lastSavedName.value = name
             lastSavedStatus.value = status
-            checkInstalledLanguages()
+            val available = sttModelManager.isSraVaaniAvailable()
+            _installedLanguages.value = if (available) SttLanguage.entries.toSet() else emptySet()
         }
     }
 

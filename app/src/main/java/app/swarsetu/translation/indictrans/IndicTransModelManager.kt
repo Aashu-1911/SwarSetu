@@ -202,8 +202,8 @@ class IndicTransModelManager(
             while (redirects < maxRedirects) {
                 val url = URL(currentUrl)
                 val conn = url.openConnection() as HttpURLConnection
-                conn.connectTimeout = 30_000
-                conn.readTimeout = 60_000
+                conn.connectTimeout = 10_000
+                conn.readTimeout = 30_000
                 conn.instanceFollowRedirects = false
                 conn.setRequestProperty("User-Agent", "SwarSetu-IndicTrans2-Android")
 

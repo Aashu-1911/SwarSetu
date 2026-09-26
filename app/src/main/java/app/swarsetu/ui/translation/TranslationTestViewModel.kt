@@ -64,8 +64,10 @@ class TranslationTestViewModel(
 
     init {
         updateAutoSelectedBundle()
-        refreshModelStatus()
-        refreshSttModelStatus()
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            refreshModelStatus()
+            refreshSttModelStatus()
+        }
 
         viewModelScope.launch {
             sttPipeline.state.collect { state ->
@@ -111,25 +113,27 @@ class TranslationTestViewModel(
     }
 
     fun refreshModelStatus() {
-        val bundle = _uiState.value.selectedBundle
-        val downloaded = modelManager.isModelDownloaded(bundle)
-        val bytes = modelManager.getDownloadedBytes(bundle)
-        val total = bundle.totalExpectedBytes
-        val pct = if (total > 0) ((bytes * 100) / total).toInt().coerceIn(0, 100) else 0
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val bundle = _uiState.value.selectedBundle
+            val downloaded = modelManager.isModelDownloaded(bundle)
+            val bytes = modelManager.getDownloadedBytes(bundle)
+            val total = bundle.totalExpectedBytes
+            val pct = if (total > 0) ((bytes * 100) / total).toInt().coerceIn(0, 100) else 0
 
-        val downloadedSet = IndicTransModelBundle.entries
-            .filter { modelManager.isModelDownloaded(it) }
-            .toSet()
+            val downloadedSet = IndicTransModelBundle.entries
+                .filter { modelManager.isModelDownloaded(it) }
+                .toSet()
 
-        _uiState.update {
-            it.copy(
-                isModelDownloaded = downloaded,
-                downloadedBytes = bytes,
-                totalBytes = total,
-                downloadPercent = if (downloaded) 100 else pct,
-                downloadedBundles = downloadedSet,
-                errorMessage = null,
-            )
+            _uiState.update {
+                it.copy(
+                    isModelDownloaded = downloaded,
+                    downloadedBytes = bytes,
+                    totalBytes = total,
+                    downloadPercent = if (downloaded) 100 else pct,
+                    downloadedBundles = downloadedSet,
+                    errorMessage = null,
+                )
+            }
         }
     }
 
@@ -296,18 +300,20 @@ class TranslationTestViewModel(
     }
 
     fun refreshSttModelStatus() {
-        val isDownloaded = sttModelManager.isSraVaaniAvailable()
-        val bytes = sttModelManager.getDownloadedBytes()
-        val total = sttModelManager.totalExpectedBytes
-        val pct = if (total > 0) ((bytes * 100) / total).toInt().coerceIn(0, 100) else 0
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val isDownloaded = sttModelManager.isSraVaaniAvailable()
+            val bytes = sttModelManager.getDownloadedBytes()
+            val total = sttModelManager.totalExpectedBytes
+            val pct = if (total > 0) ((bytes * 100) / total).toInt().coerceIn(0, 100) else 0
 
-        _uiState.update {
-            it.copy(
-                isSttModelDownloaded = isDownloaded,
-                sttDownloadedBytes = bytes,
-                sttTotalBytes = total,
-                sttDownloadPercent = if (isDownloaded) 100 else pct,
-            )
+            _uiState.update {
+                it.copy(
+                    isSttModelDownloaded = isDownloaded,
+                    sttDownloadedBytes = bytes,
+                    sttTotalBytes = total,
+                    sttDownloadPercent = if (isDownloaded) 100 else pct,
+                )
+            }
         }
     }
 

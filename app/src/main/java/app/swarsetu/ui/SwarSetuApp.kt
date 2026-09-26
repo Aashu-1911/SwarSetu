@@ -1,10 +1,13 @@
 package app.swarsetu.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import app.swarsetu.stt.SttLanguage
+import app.swarsetu.ui.i18n.LocalAppLanguage
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -113,6 +116,8 @@ fun SwarSetuApp(startRoute: String? = null) {
     val settingsStore = koinInject<app.swarsetu.data.settings.SettingsStore>()
     val isLanguageInitComplete by settingsStore.isLanguageInitComplete.collectAsStateWithLifecycle(initialValue = false)
     val isProfileSetupComplete by settingsStore.isProfileSetupComplete.collectAsStateWithLifecycle(initialValue = false)
+    val sttLanguageCode by settingsStore.sttLanguageCode.collectAsStateWithLifecycle(initialValue = "en")
+    val currentLanguage = remember(sttLanguageCode) { SttLanguage.fromCode(sttLanguageCode) ?: SttLanguage.ENGLISH }
 
     // Demo-screenshot mode skips the permission gate (and an optional [startRoute] jumps straight to a
     // screen for deterministic capture); otherwise gate on permissions as usual.
@@ -192,14 +197,15 @@ fun SwarSetuApp(startRoute: String? = null) {
         routeInbox.consume()
     }
 
-    NavHost(
-        navController = navController,
-        startDestination = start,
-        // Surface Compose testTags as uiautomator resource-ids across the whole screen graph, so an
-        // automation agent can locate elements (send button, message input, conversation rows) by a
-        // stable id instead of pixel bounds. Set once at the root; the whole subtree inherits it.
-        modifier = Modifier.semantics { testTagsAsResourceId = true },
-    ) {
+    CompositionLocalProvider(LocalAppLanguage provides currentLanguage) {
+        NavHost(
+            navController = navController,
+            startDestination = start,
+            // Surface Compose testTags as uiautomator resource-ids across the whole screen graph, so an
+            // automation agent can locate elements (send button, message input, conversation rows) by a
+            // stable id instead of pixel bounds. Set once at the root; the whole subtree inherits it.
+            modifier = Modifier.semantics { testTagsAsResourceId = true },
+        ) {
         composable(Routes.ONBOARDING) {
             OnboardingScreen(
                 onReady = {
@@ -410,17 +416,18 @@ fun SwarSetuApp(startRoute: String? = null) {
     // The rate/review prompt floats over whichever screen is showing (ReviewPrompter offered it from the
     // chat-list route). Positive → rate (Play listing or repo, per install source); "Not really" → private
     // feedback on the issue tracker; dismiss → just close. The attempt was already recorded when shown.
-    if (showReviewPrompt) {
-        RateReviewDialog(
-            onPositive = {
-                openUrl(context, reviewPrompter.rateUrl())
-                reviewInbox.consume()
-            },
-            onNegative = {
-                openUrl(context, reviewPrompter.feedbackUrl)
-                reviewInbox.consume()
-            },
-            onDismiss = { reviewInbox.consume() },
-        )
+        if (showReviewPrompt) {
+            RateReviewDialog(
+                onPositive = {
+                    openUrl(context, reviewPrompter.rateUrl())
+                    reviewInbox.consume()
+                },
+                onNegative = {
+                    openUrl(context, reviewPrompter.feedbackUrl)
+                    reviewInbox.consume()
+                },
+                onDismiss = { reviewInbox.consume() },
+            )
+        }
     }
 }

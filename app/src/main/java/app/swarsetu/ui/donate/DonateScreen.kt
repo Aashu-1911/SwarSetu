@@ -43,6 +43,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.swarsetu.R
 import app.swarsetu.ui.PLAY_LISTING_URL
+import app.swarsetu.ui.i18n.UiTextKey
+import app.swarsetu.ui.i18n.uiText
 import app.swarsetu.ui.openUrl
 import app.swarsetu.ui.preview.SwarSetuPreview
 import app.swarsetu.ui.shareText
@@ -72,11 +74,11 @@ fun DonateScreen(
                     IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.action_back),
+                            contentDescription = uiText(UiTextKey.CD_BACK),
                         )
                     }
                 },
-                title = { Text(stringResource(R.string.donate_title)) },
+                title = { Text(uiText(UiTextKey.DONATE)) },
             )
         },
     ) { padding ->

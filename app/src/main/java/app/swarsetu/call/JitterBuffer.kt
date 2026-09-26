@@ -9,13 +9,16 @@ import kotlin.math.abs
  * Handles out-of-order delivery, packet loss tracking, and jitter smoothing.
  */
 class JitterBuffer(
-    private val targetDelayMs: Long = 80L,
+    private val minTargetDelayMs: Long = 40L,
+    private val maxTargetDelayMs: Long = 300L,
+    private val targetDelayMs: Long = 60L,
     private val maxBufferCapacity: Int = 100,
 ) {
     private val queue = PriorityQueue<CallPacket>(compareBy { it.sequenceNumber })
     private val lock = Any()
 
     private var lastPlayedSeq: Long = -1L
+    private var lastReceivedSeq: Long = -1L
     private val packetsReceived = AtomicLong(0)
     private val packetsDropped = AtomicLong(0)
     private val packetsLost = AtomicLong(0)
@@ -29,6 +32,12 @@ class JitterBuffer(
 
     val jitterMs: Double
         get() = synchronized(lock) { estimatedJitterMs }
+
+    val effectiveTargetDelayMs: Long
+        get() = synchronized(lock) {
+            val dynamic = (estimatedJitterMs * 2.0).toLong() + targetDelayMs
+            dynamic.coerceIn(minTargetDelayMs, maxTargetDelayMs)
+        }
 
     val lossRatePercent: Float
         get() {
@@ -52,6 +61,15 @@ class JitterBuffer(
                 estimatedJitterMs += (diff - estimatedJitterMs) / 16.0
             }
             lastTransitTimeMs = transitTime
+
+            // Track missing sequence gaps
+            if (lastReceivedSeq != -1L && packet.sequenceNumber > lastReceivedSeq + 1) {
+                val gap = packet.sequenceNumber - lastReceivedSeq - 1
+                packetsLost.addAndGet(gap)
+            }
+            if (packet.sequenceNumber > lastReceivedSeq) {
+                lastReceivedSeq = packet.sequenceNumber
+            }
 
             if (lastPlayedSeq != -1L && packet.sequenceNumber <= lastPlayedSeq) {
                 // Late packet arriving after already played sequence
@@ -79,8 +97,10 @@ class JitterBuffer(
         synchronized(lock) {
             val peek = queue.peek() ?: return null
             val age = nowMs - peek.timestampMs
+            val requiredDelay = effectiveTargetDelayMs
 
-            if (age >= targetDelayMs || queue.size >= maxBufferCapacity / 2) {
+            // If packet has aged past target delay OR queue is backing up (> 4 items), release immediately
+            if (age >= requiredDelay || queue.size >= 4) {
                 val packet = queue.poll()
                 if (packet != null) {
                     lastPlayedSeq = packet.sequenceNumber
@@ -98,6 +118,7 @@ class JitterBuffer(
         synchronized(lock) {
             queue.clear()
             lastPlayedSeq = -1L
+            lastReceivedSeq = -1L
             lastTransitTimeMs = -1L
             estimatedJitterMs = 0.0
             packetsReceived.set(0)

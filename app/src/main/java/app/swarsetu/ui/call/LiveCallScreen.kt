@@ -77,6 +77,8 @@ import app.swarsetu.R
 import app.swarsetu.call.CallSession
 import app.swarsetu.call.CallState
 import app.swarsetu.call.CallTranscriptItem
+import app.swarsetu.ui.i18n.UiTextKey
+import app.swarsetu.ui.i18n.uiText
 import org.koin.androidx.compose.koinViewModel
 
 @Composable
@@ -156,7 +158,7 @@ fun LiveCallScreen(
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
+                        contentDescription = uiText(UiTextKey.CD_BACK),
                         tint = Color.White,
                     )
                 }
@@ -172,13 +174,13 @@ fun LiveCallScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Lock,
-                            contentDescription = "Encrypted",
+                            contentDescription = null,
                             tint = Color(0xFF10B981),
                             modifier = Modifier.size(14.dp),
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "AES-256 Offline Call",
+                            text = uiText(UiTextKey.CALL_TITLE),
                             color = Color(0xFF94A3B8),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
@@ -254,15 +256,15 @@ fun LiveCallScreen(
                 }
                 Text(
                     text = when (callState) {
-                        CallState.IDLE -> stringResource(R.string.call_state_idle)
-                        CallState.OUTGOING -> stringResource(R.string.call_state_outgoing)
-                        CallState.INCOMING -> stringResource(R.string.call_state_incoming)
-                        CallState.CONNECTING -> stringResource(R.string.call_state_connecting)
-                        CallState.RINGING -> stringResource(R.string.call_state_ringing)
+                        CallState.IDLE -> uiText(UiTextKey.CALL_ENDED)
+                        CallState.OUTGOING -> uiText(UiTextKey.CALL_OUTGOING)
+                        CallState.INCOMING -> uiText(UiTextKey.CALL_INCOMING)
+                        CallState.CONNECTING -> uiText(UiTextKey.CALL_CONNECTING)
+                        CallState.RINGING -> uiText(UiTextKey.CALL_CALLING)
                         CallState.CONNECTED -> callDuration
-                        CallState.ENDING -> stringResource(R.string.call_state_ending)
-                        CallState.ENDED -> stringResource(R.string.call_state_ended)
-                        CallState.FAILED -> stringResource(R.string.call_state_failed)
+                        CallState.ENDING -> uiText(UiTextKey.CALL_ENDED)
+                        CallState.ENDED -> uiText(UiTextKey.CALL_ENDED)
+                        CallState.FAILED -> uiText(UiTextKey.CALL_FAILED)
                     },
                     color = if (callState == CallState.CONNECTED) Color(0xFF34D399) else Color(0xFF94A3B8),
                     fontSize = 16.sp,
@@ -295,13 +297,6 @@ fun LiveCallScreen(
                             color = Color(0xFFE2E8F0),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold,
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "• Live",
-                            color = Color(0xFF10B981),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
                         )
                     }
                 }
@@ -373,8 +368,8 @@ fun LiveCallScreen(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = if (callState == CallState.CONNECTED) "Speak naturally. Live translation is active."
-                                else "Waiting for audio connection…",
+                                text = if (callState == CallState.CONNECTED) uiText(UiTextKey.CALL_LIVE_TRANSLATION_ACTIVE)
+                                else uiText(UiTextKey.CALL_CONNECTING),
                                 color = Color(0xFF64748B),
                                 fontSize = 13.sp,
                                 textAlign = TextAlign.Center,
@@ -406,14 +401,14 @@ fun LiveCallScreen(
                 ) {
                     CallActionButton(
                         icon = Icons.Filled.CallEnd,
-                        label = stringResource(R.string.call_action_reject),
+                        label = uiText(UiTextKey.ACTION_REJECT),
                         backgroundColor = Color(0xFFEF4444),
                         onClick = { viewModel.rejectCall() },
                         size = 64.dp,
                     )
                     CallActionButton(
                         icon = Icons.Filled.Call,
-                        label = stringResource(R.string.call_action_accept),
+                        label = uiText(UiTextKey.ACTION_ACCEPT),
                         backgroundColor = Color(0xFF10B981),
                         onClick = { viewModel.acceptCall() },
                         size = 64.dp,
@@ -428,7 +423,7 @@ fun LiveCallScreen(
                 ) {
                     CallActionButton(
                         icon = if (isMuted) Icons.Filled.MicOff else Icons.Filled.Mic,
-                        label = if (isMuted) stringResource(R.string.call_action_unmute) else stringResource(R.string.call_action_mute),
+                        label = if (isMuted) uiText(UiTextKey.CALL_UNMUTE) else uiText(UiTextKey.CALL_MUTE),
                         backgroundColor = if (isMuted) Color(0xFFEF4444) else Color(0xFF334155),
                         tint = Color.White,
                         onClick = { viewModel.toggleMute() },
@@ -436,7 +431,7 @@ fun LiveCallScreen(
 
                     CallActionButton(
                         icon = Icons.Filled.CallEnd,
-                        label = stringResource(R.string.call_action_end),
+                        label = uiText(UiTextKey.CALL_END),
                         backgroundColor = Color(0xFFDC2626),
                         tint = Color.White,
                         onClick = { viewModel.endCall() },
@@ -445,7 +440,7 @@ fun LiveCallScreen(
 
                     CallActionButton(
                         icon = if (isSpeakerOn) Icons.Filled.VolumeUp else Icons.Filled.VolumeOff,
-                        label = if (isSpeakerOn) stringResource(R.string.call_action_earpiece) else stringResource(R.string.call_action_speaker),
+                        label = if (isSpeakerOn) uiText(UiTextKey.CALL_EARPIECE) else uiText(UiTextKey.CALL_SPEAKER),
                         backgroundColor = if (isSpeakerOn) Color(0xFF3B82F6) else Color(0xFF334155),
                         tint = Color.White,
                         onClick = { viewModel.toggleSpeaker() },

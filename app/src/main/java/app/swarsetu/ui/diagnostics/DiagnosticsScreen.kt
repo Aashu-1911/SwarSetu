@@ -61,6 +61,8 @@ import app.swarsetu.mesh.MeshMetrics
 import app.swarsetu.mesh.TransportHealth
 import app.swarsetu.mesh.TransportKind
 import app.swarsetu.mesh.TransportStatus
+import app.swarsetu.ui.i18n.UiTextKey
+import app.swarsetu.ui.i18n.uiText
 import app.swarsetu.ui.preview.PREVIEW_NOW
 import app.swarsetu.ui.preview.SwarSetuPreview
 import app.swarsetu.ui.util.compactTimeAgo
@@ -147,11 +149,11 @@ internal fun DiagnosticsScreenContent(
                     IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.action_back),
+                            contentDescription = uiText(app.swarsetu.ui.i18n.UiTextKey.CD_BACK),
                         )
                     }
                 },
-                title = { Text(stringResource(R.string.diagnostics_title)) },
+                title = { Text(uiText(app.swarsetu.ui.i18n.UiTextKey.DIAGNOSTICS)) },
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -171,7 +173,7 @@ internal fun DiagnosticsScreenContent(
                 item { CrashRow(crash = lastCrash, now = now, onClick = onOpenCrashLog) }
             }
 
-            item { SectionHeader(stringResource(R.string.diagnostics_controls)) }
+            item { SectionHeader(uiText(app.swarsetu.ui.i18n.UiTextKey.DIAGNOSTICS_CONTROLS)) }
             item {
                 MeshControlsSection(
                     health = health,
@@ -205,35 +207,35 @@ internal fun DiagnosticsScreenContent(
                             onClick = onOpenLanguageInit,
                             modifier = Modifier.weight(1f),
                         ) {
-                            Text("Language Packs")
+                            Text(uiText(app.swarsetu.ui.i18n.UiTextKey.LANGUAGE_PACKS))
                         }
                     }
                 }
             }
 
-            item { SectionHeader(stringResource(R.string.diagnostics_transports)) }
+            item { SectionHeader(uiText(app.swarsetu.ui.i18n.UiTextKey.DIAGNOSTICS_TRANSPORTS)) }
             item { TransportsSection(state.transports) }
 
-            item { SectionHeader(stringResource(R.string.diagnostics_metrics)) }
+            item { SectionHeader(uiText(app.swarsetu.ui.i18n.UiTextKey.DIAGNOSTICS_METRICS)) }
             item { MetricsSection(state.metrics) }
 
 
             item {
                 SectionHeader(
-                    stringResource(R.string.diagnostics_directly_connected, state.directNodes.size),
+                    uiText(app.swarsetu.ui.i18n.UiTextKey.DIAGNOSTICS_DIRECT_NODES, state.directNodes.size),
                 )
             }
             if (state.directNodes.isEmpty()) {
-                item { EmptyLine(stringResource(R.string.diagnostics_none_direct)) }
+                item { EmptyLine(uiText(app.swarsetu.ui.i18n.UiTextKey.DIAGNOSTICS_NO_DIRECT)) }
             } else {
                 items(state.directNodes, key = { it.nodeId }) { NodeRow(it, now) }
             }
 
             item {
-                SectionHeader(stringResource(R.string.diagnostics_via_relay, state.relayNodes.size))
+                SectionHeader(uiText(app.swarsetu.ui.i18n.UiTextKey.DIAGNOSTICS_RELAY_NODES, state.relayNodes.size))
             }
             if (state.relayNodes.isEmpty()) {
-                item { EmptyLine(stringResource(R.string.diagnostics_none_relay)) }
+                item { EmptyLine(uiText(app.swarsetu.ui.i18n.UiTextKey.DIAGNOSTICS_NO_RELAY)) }
             } else {
                 items(state.relayNodes, key = { it.nodeId }) { NodeRow(it, now) }
             }
@@ -246,11 +248,11 @@ private fun SelfSection(
     name: String,
     nodeId: String,
 ) {
-    SectionHeader(stringResource(R.string.diagnostics_self))
+    SectionHeader(uiText(app.swarsetu.ui.i18n.UiTextKey.DIAGNOSTICS_SELF))
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
         Text(text = name, style = MaterialTheme.typography.titleMedium)
         Text(
-            text = stringResource(R.string.profile_node_id, nodeId),
+            text = uiText(app.swarsetu.ui.i18n.UiTextKey.PROFILE_NODE_ID_LABEL, nodeId),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -299,13 +301,13 @@ private fun MeshControlsSection(
         Button(onClick = onRestart, modifier = Modifier.fillMaxWidth()) {
             Icon(Icons.Filled.RestartAlt, contentDescription = null)
             Spacer(Modifier.width(8.dp))
-            Text(stringResource(R.string.diagnostics_restart_mesh))
+            Text(uiText(app.swarsetu.ui.i18n.UiTextKey.DIAGNOSTICS_RESTART))
         }
         Spacer(Modifier.height(8.dp))
         OutlinedButton(onClick = onScan, modifier = Modifier.fillMaxWidth()) {
             Icon(Icons.Filled.Sync, contentDescription = null)
             Spacer(Modifier.width(8.dp))
-            Text(stringResource(R.string.diagnostics_scan_now))
+            Text(uiText(app.swarsetu.ui.i18n.UiTextKey.DIAGNOSTICS_SCAN))
         }
     }
 }

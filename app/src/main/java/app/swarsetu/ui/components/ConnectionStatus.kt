@@ -28,9 +28,9 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import app.swarsetu.R
-
 import app.swarsetu.mesh.TransportHealth
+import app.swarsetu.ui.i18n.UiTextKey
+import app.swarsetu.ui.i18n.uiText
 import app.swarsetu.ui.preview.SwarSetuPreview
 
 
@@ -85,7 +85,6 @@ fun ConnectionStatusRow(
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-
     }
 }
 
@@ -97,25 +96,24 @@ private fun connectionLabel(
     return when (health) {
         TransportHealth.Unavailable -> {
             when {
-                isAirplaneModeOn() -> stringResource(R.string.chat_connection_airplane)
-                else -> stringResource(R.string.chat_connection_radio_off)
+                isAirplaneModeOn() -> uiText(UiTextKey.RADIO_AIRPLANE_MODE)
+                else -> uiText(UiTextKey.RADIO_ALL_OFF)
             }
         }
 
         TransportHealth.Degraded -> {
-            stringResource(R.string.chat_connection_degraded)
+            uiText(UiTextKey.RADIO_DEGRADED)
         }
 
         TransportHealth.Healthy -> {
             when {
-                count > 0 -> pluralStringResource(R.plurals.chat_connection_count, count, count)
-                else -> stringResource(R.string.chat_connection_none)
+                count == 1 -> uiText(UiTextKey.CONNECTED_TO_ONE_NODE)
+                count > 1 -> uiText(UiTextKey.CONNECTED_TO_NODES, count)
+                else -> uiText(UiTextKey.NO_NODES_CONNECTED)
             }
         }
     }
 }
-
-
 
 /**
  * Whether airplane mode is currently on, read from [Settings.Global] (no permission needed). Read at

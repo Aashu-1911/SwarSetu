@@ -47,6 +47,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.swarsetu.R
 import app.swarsetu.ui.components.Avatar
+import app.swarsetu.ui.i18n.UiTextKey
+import app.swarsetu.ui.i18n.uiText
 import app.swarsetu.ui.preview.SwarSetuPreview
 import org.koin.androidx.compose.koinViewModel
 
@@ -108,11 +110,11 @@ internal fun ContactsScreenContent(
                     IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.action_back),
+                            contentDescription = uiText(UiTextKey.CD_BACK),
                         )
                     }
                 },
-                title = { Text(stringResource(R.string.contacts_title)) },
+                title = { Text(uiText(UiTextKey.CONTACTS)) },
             )
         },
         floatingActionButton = {
@@ -129,7 +131,7 @@ internal fun ContactsScreenContent(
                 ) {
                     Icon(
                         Icons.Filled.Check,
-                        contentDescription = stringResource(R.string.contacts_start_chat),
+                        contentDescription = uiText(UiTextKey.ACTION_START),
                     )
                 }
             }
@@ -141,7 +143,7 @@ internal fun ContactsScreenContent(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = stringResource(R.string.contacts_empty),
+                    text = uiText(UiTextKey.NO_NODES_CONNECTED),
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -215,7 +215,12 @@ class CallManager(
         sendCallSignal(offer.callerNodeId, answer)
 
         // Start Audio & Processors
-        startCallEnginesAndProcessors(session)
+        val enginesStarted = startCallEnginesAndProcessors(session)
+        if (!enginesStarted) {
+            Log.e(TAG, "Failed starting call engines for accepted call $callId")
+            cleanupSession(CallEndReason.AUDIO_DEVICE_ERROR)
+            return@withLock false
+        }
         _callState.value = CallState.CONNECTED
         session.updateState(CallState.CONNECTED)
 
@@ -287,19 +292,31 @@ class CallManager(
 
     private fun handleIncomingOffer(offer: CallSignal.Offer, fromPeerId: String) {
         if (_callState.value.isActive) {
-            // Already in a call: send busy reject
-            val reject = CallSignal.Answer(
-                callId = offer.callId,
-                calleeNodeId = fromPeerId,
-                calleeName = "Me",
-                calleeSourceLanguage = offer.callerTargetLanguage,
-                calleeTargetLanguage = offer.callerSourceLanguage,
-                accepted = false,
-                sessionNonce = "",
-                rejectReason = "BUSY",
-            )
-            sendCallSignal(fromPeerId, reject)
-            return
+            val current = _currentSession.value
+            if (_callState.value == CallState.OUTGOING && current != null && current.peerId == fromPeerId) {
+                // Concurrent outgoing call glare: deterministic tie-breaker on callId/nodeId
+                if (offer.callerNodeId < (current.peerId)) {
+                    Log.d(TAG, "Call glare resolved: remote peer ${offer.callerNodeId} wins tie-breaker")
+                    current.updateState(CallState.ENDED)
+                } else {
+                    Log.d(TAG, "Call glare resolved: local peer wins tie-breaker, maintaining outgoing offer")
+                    return
+                }
+            } else {
+                // Already in a call: send busy reject
+                val reject = CallSignal.Answer(
+                    callId = offer.callId,
+                    calleeNodeId = fromPeerId,
+                    calleeName = "Me",
+                    calleeSourceLanguage = offer.callerTargetLanguage,
+                    calleeTargetLanguage = offer.callerSourceLanguage,
+                    accepted = false,
+                    sessionNonce = "",
+                    rejectReason = "BUSY",
+                )
+                sendCallSignal(fromPeerId, reject)
+                return
+            }
         }
 
         val session = CallSession(
@@ -335,8 +352,9 @@ class CallManager(
         callTimeoutJob?.cancel()
 
         if (!answer.accepted) {
+            val endReason = if (answer.rejectReason == "BUSY") CallEndReason.BUSY else CallEndReason.REMOTE_REJECTED
             Log.d(TAG, "Call offer declined by remote peer: ${answer.rejectReason}")
-            cleanupSession(CallEndReason.REMOTE_REJECTED)
+            cleanupSession(endReason)
             return
         }
 
@@ -350,7 +368,13 @@ class CallManager(
         _callState.value = CallState.CONNECTED
         session.updateState(CallState.CONNECTED)
 
-        startCallEnginesAndProcessors(session)
+        val enginesStarted = startCallEnginesAndProcessors(session)
+        if (!enginesStarted) {
+            Log.e(TAG, "Failed starting call engines for ${session.callId}")
+            cleanupSession(CallEndReason.AUDIO_DEVICE_ERROR)
+            return
+        }
+
         updateCallServiceNotification(session.callId, session.peerName, "Connected")
         Log.d(TAG, "Call ${session.callId} connected successfully with ${session.peerName}")
     }
@@ -372,13 +396,17 @@ class CallManager(
         }
     }
 
-    private suspend fun startCallEnginesAndProcessors(session: CallSession) {
+    private suspend fun startCallEnginesAndProcessors(session: CallSession): Boolean {
         // 1. Prepare STT for local source language
         val sttLang = SttLanguage.fromCode(session.localSourceLanguage) ?: SttLanguage.HINDI
         sttProcessor?.prepare(sttLang)
 
-        // 2. Setup VAD endpoint detector
+        // 2. Setup VAD endpoint detector with local barge-in trigger
         val vad = CallVadEndpointDetector(
+            onSpeechStarted = {
+                // Local speech started: barge-in interrupt remote TTS
+                ttsProcessor?.interrupt()
+            },
             onSpeechSegmentFinalized = { pcmChunk, durationMs ->
                 onLocalSpeechSegmentCaptured(session, pcmChunk, durationMs, sttLang)
             }
@@ -394,7 +422,7 @@ class CallManager(
             }
         )
         audioEngine = audio
-        audio.start(speakerphone = true)
+        return audio.start(speakerphone = true)
     }
 
     private fun onLocalSpeechSegmentCaptured(

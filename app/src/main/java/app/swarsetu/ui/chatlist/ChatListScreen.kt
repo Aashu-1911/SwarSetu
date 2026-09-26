@@ -97,6 +97,10 @@ import app.swarsetu.ui.chat.resolve
 import app.swarsetu.ui.components.Avatar
 import app.swarsetu.ui.components.ConnectionStatusRow
 import app.swarsetu.ui.components.RoomAvatar
+import app.swarsetu.ui.i18n.AppStrings
+import app.swarsetu.ui.i18n.LocalAppLanguage
+import app.swarsetu.ui.i18n.UiTextKey
+import app.swarsetu.ui.i18n.uiText
 import app.swarsetu.ui.image.BlobImage
 import app.swarsetu.ui.invite.ShareKnitDialog
 import app.swarsetu.ui.invite.ShareStorageException
@@ -220,7 +224,7 @@ internal fun ChatListScreenContent(
                 title = {
                     Column {
                         Text(
-                            text = stringResource(R.string.app_name),
+                            text = uiText(UiTextKey.APP_NAME),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.primary,
@@ -243,21 +247,21 @@ internal fun ChatListScreenContent(
                             ) {
                                 Icon(
                                     Icons.Filled.MarkChatUnread,
-                                    contentDescription = stringResource(R.string.message_requests_title),
+                                    contentDescription = uiText(UiTextKey.MESSAGE_REQUESTS_TITLE),
                                 )
                             }
                         }
                     }
                     Box {
                         IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(48.dp)) {
-                            Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.chat_more_options))
+                            Icon(Icons.Filled.MoreVert, contentDescription = uiText(UiTextKey.CD_MORE_OPTIONS))
                         }
                         DropdownMenu(
                             expanded = menuOpen,
                             onDismissRequest = { menuOpen = false },
                         ) {
                             DropdownMenuItem(
-                                text = { Text(stringResource(R.string.settings_title)) },
+                                text = { Text(uiText(UiTextKey.SETTINGS_TITLE)) },
                                 leadingIcon = { Icon(Icons.Filled.Settings, contentDescription = null) },
                                 onClick = {
                                     menuOpen = false
@@ -265,7 +269,7 @@ internal fun ChatListScreenContent(
                                 },
                             )
                             DropdownMenuItem(
-                                text = { Text(stringResource(R.string.verify_contact_title)) },
+                                text = { Text(uiText(UiTextKey.VERIFY_TITLE)) },
                                 leadingIcon = { Icon(Icons.Filled.QrCodeScanner, contentDescription = null) },
                                 onClick = {
                                     menuOpen = false
@@ -273,7 +277,7 @@ internal fun ChatListScreenContent(
                                 },
                             )
                             DropdownMenuItem(
-                                text = { Text(stringResource(R.string.diagnostics_title)) },
+                                text = { Text(uiText(UiTextKey.DIAGNOSTICS_TITLE)) },
                                 leadingIcon = { Icon(Icons.Filled.NetworkCheck, contentDescription = null) },
                                 onClick = {
                                     menuOpen = false
@@ -281,7 +285,7 @@ internal fun ChatListScreenContent(
                                 },
                             )
                             DropdownMenuItem(
-                                text = { Text(stringResource(R.string.blocked_users_title)) },
+                                text = { Text(uiText(UiTextKey.BLOCKED_USERS_TITLE)) },
                                 leadingIcon = { Icon(Icons.Filled.Block, contentDescription = null) },
                                 onClick = {
                                     menuOpen = false
@@ -289,7 +293,7 @@ internal fun ChatListScreenContent(
                                 },
                             )
                             DropdownMenuItem(
-                                text = { Text(stringResource(R.string.share_app_menu)) },
+                                text = { Text(uiText(UiTextKey.SHARE_APP)) },
                                 leadingIcon = { Icon(Icons.Filled.DownloadForOffline, contentDescription = null) },
                                 onClick = {
                                     menuOpen = false
@@ -308,7 +312,7 @@ internal fun ChatListScreenContent(
             ) {
                 Icon(
                     Icons.AutoMirrored.Filled.Message,
-                    contentDescription = stringResource(R.string.contacts_new_message),
+                    contentDescription = uiText(UiTextKey.CHAT_NEW_MESSAGE),
                 )
             }
         },
@@ -458,7 +462,7 @@ internal fun ConversationListItem(
     // The row is a single accessible target: collapse its children (avatar, title, preview, time,
     // unread badge) into one labelled Button node so a screen reader reads the whole conversation as
     // one summary with a spoken timestamp, and surface the long-press delete as a custom action.
-    val preview = row.lastPreview ?: stringResource(R.string.chat_list_empty_preview)
+    val preview = row.lastPreview ?: uiText(UiTextKey.CHAT_EMPTY_TITLE)
     val spokenTime =
         row.lastMessageAt?.let {
             DateUtils.getRelativeTimeSpanString(it, now, DateUtils.MINUTE_IN_MILLIS).toString()
@@ -477,7 +481,7 @@ internal fun ConversationListItem(
         row.lastStatus?.let { deliveryLabel(it, row.lastDeliveredVia, mine = true).resolve() }
     val rowDescription =
         listOfNotNull(row.title, preview, spokenTime, spokenStatus, spokenUnread).joinToString(", ")
-    val deleteLabel = stringResource(R.string.chat_list_delete_action)
+    val deleteLabel = uiText(UiTextKey.ACTION_DELETE)
 
     Box {
         Row(
@@ -569,7 +573,7 @@ internal fun ConversationListItem(
                 DropdownMenuItem(
                     text = {
                         Text(
-                            text = stringResource(R.string.chat_list_delete_action),
+                            text = uiText(UiTextKey.ACTION_DELETE),
                             color = MaterialTheme.colorScheme.error,
                         )
                     },
@@ -592,22 +596,22 @@ internal fun ConversationListItem(
     if (showConfirm) {
         AlertDialog(
             onDismissRequest = { showConfirm = false },
-            title = { Text(stringResource(R.string.chat_list_delete_confirm_title)) },
-            text = { Text(stringResource(R.string.chat_list_delete_confirm_body)) },
+            title = { Text(uiText(UiTextKey.CHAT_DELETE_CHAT_TITLE)) },
+            text = { Text(uiText(UiTextKey.CHAT_DELETE_CHAT_BODY)) },
             confirmButton = {
                 TextButton(onClick = {
                     onDelete(row.id)
                     showConfirm = false
                 }) {
                     Text(
-                        text = stringResource(R.string.chat_list_delete_action),
+                        text = uiText(UiTextKey.ACTION_DELETE),
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showConfirm = false }) {
-                    Text(stringResource(android.R.string.cancel))
+                    Text(uiText(UiTextKey.ACTION_CANCEL))
                 }
             },
         )
