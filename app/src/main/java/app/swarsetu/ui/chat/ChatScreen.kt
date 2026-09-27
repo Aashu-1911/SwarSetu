@@ -565,7 +565,7 @@ internal fun ChatScreenContent(
         topBar = {
             TopAppBar(
                 navigationIcon = {
-                    IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
+                    IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.action_back),
@@ -575,18 +575,17 @@ internal fun ChatScreenContent(
                 title = {
                     when {
                         state.isRoom -> {
-                            // Nearby room: the Knit mesh mark (same glyph as the chat-list row) + title +
-                            // live connection status. The avatar is decorative — the visible title names it
-                            // and the room has nothing to open — so it carries no separate label or tap.
+                            // Nearby room: the Knit mesh mark + title + live connection status
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 RoomAvatar(size = 36.dp)
-                                Spacer(Modifier.width(10.dp))
+                                Spacer(Modifier.width(8.dp))
                                 Column {
                                     Text(
                                         text = stringResource(R.string.nearby_title),
-                                        style = MaterialTheme.typography.titleLarge,
+                                        style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.SemiBold,
                                         color = MaterialTheme.colorScheme.primary,
+                                        maxLines = 1,
                                     )
                                     ConnectionStatusRow(state.neighborCount, state.transportHealth)
                                 }
@@ -594,9 +593,13 @@ internal fun ChatScreenContent(
                         }
 
                         state.isGroup -> {
-                            // Group: its photo (or a people glyph when unset) + name + member count.
-                            // Tapping the avatar opens the group details / settings screen.
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            // Group: photo + name + member count
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onOpenGroupDetails(conversationId) },
+                            ) {
                                 GroupAvatar(
                                     photoHash = state.avatarHash,
                                     size = 36.dp,
@@ -604,19 +607,20 @@ internal fun ChatScreenContent(
                                     contentDescription = stringResource(R.string.chat_view_group_info),
                                     onClick = { onOpenGroupDetails(conversationId) },
                                 )
-                                Spacer(Modifier.width(10.dp))
-                                // Weight (fill = false) lets a long group name ellipsize while the
-                                // fixed-size badge — measured first as a non-weighted child — always
-                                // keeps its room. Short names stay snug against the icon.
+                                Spacer(Modifier.width(8.dp))
                                 Column(modifier = Modifier.weight(1f, fill = false)) {
-                                    Text(
-                                        text = state.title,
-                                        style = MaterialTheme.typography.titleLarge,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        maxLines = 1,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = state.title,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            maxLines = 1,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                        )
+                                        Spacer(Modifier.width(4.dp))
+                                        EncryptionBadge { showEncryptionInfo = true }
+                                    }
                                     Text(
                                         text =
                                             pluralStringResource(
@@ -624,17 +628,21 @@ internal fun ChatScreenContent(
                                                 state.memberCount,
                                                 state.memberCount,
                                             ),
-                                        style = MaterialTheme.typography.labelMedium,
+                                        style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
-                                EncryptionBadge { showEncryptionInfo = true }
                             }
                         }
 
                         else -> {
-                            // 1:1 DM: peer avatar + name, Signal-style.
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            // 1:1 DM: peer avatar + name + status, Signal/WhatsApp style
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onOpenProfile(conversationId) },
+                            ) {
                                 Avatar(
                                     avatarHash = state.avatarHash,
                                     name = state.title,
@@ -642,27 +650,33 @@ internal fun ChatScreenContent(
                                     contentDescription = stringResource(R.string.chat_view_profile, state.title),
                                     onClick = { onOpenProfile(conversationId) },
                                 )
-                                Spacer(Modifier.width(10.dp))
-                                Text(
-                                    text = state.title,
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    maxLines = 1,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                    // Weight (fill = false) lets a long name ellipsize while the
-                                    // fixed-size badges — measured first as non-weighted children —
-                                    // always keep their room. Short names stay snug against the icons.
-                                    modifier = Modifier.weight(1f, fill = false),
-                                )
-                                EncryptionBadge { showEncryptionInfo = true }
-                                if (state.verified) {
-                                    Spacer(Modifier.width(6.dp))
-                                    Icon(
-                                        imageVector = Icons.Filled.VerifiedUser,
-                                        contentDescription = stringResource(R.string.verify_verified),
-                                        tint = MaterialTheme.colorScheme.tertiary,
-                                        modifier = Modifier.size(18.dp),
+                                Spacer(Modifier.width(8.dp))
+                                Column(modifier = Modifier.weight(1f, fill = false)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = state.title,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            maxLines = 1,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                        )
+                                        if (state.verified) {
+                                            Spacer(Modifier.width(4.dp))
+                                            Icon(
+                                                imageVector = Icons.Filled.VerifiedUser,
+                                                contentDescription = stringResource(R.string.verify_verified),
+                                                tint = MaterialTheme.colorScheme.tertiary,
+                                                modifier = Modifier.size(15.dp),
+                                            )
+                                        }
+                                        Spacer(Modifier.width(4.dp))
+                                        EncryptionBadge { showEncryptionInfo = true }
+                                    }
+                                    Text(
+                                        text = "Mesh Connected",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                                     )
                                 }
                             }
@@ -672,74 +686,82 @@ internal fun ChatScreenContent(
                 actions = {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(end = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(0.dp),
                     ) {
                         if (!state.isRoom && !state.isGroup) {
-                            IconButton(onClick = { onStartCall(conversationId, state.title) }) {
+                            IconButton(
+                                onClick = { onStartCall(conversationId, state.title) },
+                                modifier = Modifier.size(36.dp),
+                            ) {
                                 Icon(
                                     Icons.Filled.Call,
                                     contentDescription = stringResource(R.string.call_start_title),
                                     tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp),
                                 )
                             }
                         }
-                        IconButton(onClick = { showSosConfirmDialog = true }) {
+                        IconButton(
+                            onClick = { showSosConfirmDialog = true },
+                            modifier = Modifier.size(36.dp),
+                        ) {
                             Icon(
                                 Icons.Filled.Warning,
                                 contentDescription = uiText(UiTextKey.SOS_TITLE),
                                 tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(20.dp),
                             )
                         }
-                    }
-
-                    // The overflow lives on DM and group threads (the broadcast room has no actions).
-                    // A DM offers Block/Unblock; a group offers Settings, which opens the same
-                    // group-details screen as tapping the group avatar (the avatar tap stays too).
-                    if (!state.isRoom) {
-                        Box {
-                            IconButton(onClick = { headerMenuOpen = true }, modifier = Modifier.size(48.dp)) {
-                                Icon(
-                                    Icons.Filled.MoreVert,
-                                    contentDescription = stringResource(R.string.chat_more_options),
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = headerMenuOpen,
-                                onDismissRequest = { headerMenuOpen = false },
-                            ) {
-                                if (state.isGroup) {
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.chat_group_settings)) },
-                                        leadingIcon = { Icon(Icons.Filled.Settings, contentDescription = null) },
-                                        modifier = Modifier.testTag("chat_group_settings"),
-                                        onClick = {
-                                            headerMenuOpen = false
-                                            onOpenGroupDetails(conversationId)
-                                        },
+                        if (!state.isRoom) {
+                            Box {
+                                IconButton(
+                                    onClick = { headerMenuOpen = true },
+                                    modifier = Modifier.size(36.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Filled.MoreVert,
+                                        contentDescription = stringResource(R.string.chat_more_options),
+                                        modifier = Modifier.size(20.dp),
                                     )
-                                } else {
-                                    DropdownMenuItem(
-                                        text = {
-                                            Text(
-                                                stringResource(
-                                                    if (state.isBlocked) {
-                                                        R.string.chat_action_unblock
-                                                    } else {
-                                                        R.string.chat_action_block
-                                                    },
-                                                ),
-                                            )
-                                        },
-                                        leadingIcon = { Icon(Icons.Filled.Block, contentDescription = null) },
-                                        onClick = {
-                                            headerMenuOpen = false
-                                            if (state.isBlocked) {
-                                                onUnblock(conversationId)
-                                            } else {
-                                                onBlock(conversationId)
-                                            }
-                                        },
-                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = headerMenuOpen,
+                                    onDismissRequest = { headerMenuOpen = false },
+                                ) {
+                                    if (state.isGroup) {
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(R.string.chat_group_settings)) },
+                                            leadingIcon = { Icon(Icons.Filled.Settings, contentDescription = null) },
+                                            modifier = Modifier.testTag("chat_group_settings"),
+                                            onClick = {
+                                                headerMenuOpen = false
+                                                onOpenGroupDetails(conversationId)
+                                            },
+                                        )
+                                    } else {
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    stringResource(
+                                                        if (state.isBlocked) {
+                                                            R.string.chat_action_unblock
+                                                        } else {
+                                                            R.string.chat_action_block
+                                                        },
+                                                    ),
+                                                )
+                                            },
+                                            leadingIcon = { Icon(Icons.Filled.Block, contentDescription = null) },
+                                            onClick = {
+                                                headerMenuOpen = false
+                                                if (state.isBlocked) {
+                                                    onUnblock(conversationId)
+                                                } else {
+                                                    onBlock(conversationId)
+                                                }
+                                            },
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -2217,159 +2239,178 @@ private fun MessageInput(
                 ReplyPreview(replyTo = replyingTo, myNodeId = myNodeId, onCancel = onCancelReply)
                 Spacer(Modifier.height(8.dp))
             }
-            Row(
-                verticalAlignment = Alignment.Bottom,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                // The field container holds the text field base layer and the floating push-to-talk mic.
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(top = 44.dp), // Clearance so the floating mic is placed above the input bar without clipping
-                    contentAlignment = Alignment.TopCenter,
+            if (voiceRecording != null) {
+                // Active Voice Recording Mode: Recording bar + Stop/Lock button
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
-                    // Base Layer: Pill-shaped text input bar
                     Surface(
                         shape = RoundedCornerShape(24.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant,
                         border = BorderStroke(1.dp, SwarSetuTheme.chatColors.composerBorder),
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 48.dp),
+                            .weight(1f)
+                            .heightIn(min = 46.dp),
                     ) {
-                        if (voiceRecording != null) {
-                            VoiceRecordingBar(
-                                elapsedMs = voiceRecording.elapsedMs,
-                                amplitude = voiceRecording.amplitude,
-                                locked = voiceRecording.locked,
-                                onCancel = onCancelVoice,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(
-                                        start = 18.dp,
-                                        end = 18.dp,
-                                        top = 13.dp,
-                                        bottom = 13.dp,
-                                    ),
-                                contentAlignment = Alignment.CenterStart,
-                            ) {
-                                val messageHint = stringResource(R.string.chat_message_hint)
-                                if (state.text.isEmpty()) {
-                                    Text(
-                                        messageHint,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        modifier = Modifier.clearAndSetSemantics {},
-                                    )
-                                }
-                                BasicTextField(
-                                    state = state,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .contentReceiver(receiveContentListener)
-                                        .testTag("chat_input")
-                                        .semantics { contentDescription = messageHint },
-                                    inputTransformation = InputTransformation.maxLength(TextLimits.MESSAGE),
-                                    textStyle = MaterialTheme.typography.bodyLarge.copy(
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                    ),
-                                    lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 4),
-                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                                    onKeyboardAction = { onSend() },
-                                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                                )
-                            }
-                        }
+                        VoiceRecordingBar(
+                            elapsedMs = voiceRecording.elapsedMs,
+                            amplitude = voiceRecording.amplitude,
+                            locked = voiceRecording.locked,
+                            onCancel = onCancelVoice,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
                     }
 
-                    // Floating Push-to-Talk Microphone Button (Horizontally centered & floating ~75% above the input bar)
-                    if (voiceEnabled) {
+                    if (voiceRecording.locked) {
+                        VoiceStopButton(
+                            onClick = onStopVoice,
+                            modifier = Modifier.size(46.dp),
+                        )
+                    } else {
                         MicButton(
                             onStart = onStartVoice,
                             onLock = onLockVoice,
                             onStop = onStopVoice,
                             onCancel = onCancelVoice,
-                            recording = voiceRecording != null,
-                            modifier = Modifier
-                                .align(Alignment.TopCenter)
-                                .offset(y = (-40).dp),
+                            recording = true,
+                            modifier = Modifier.size(46.dp),
                         )
                     }
                 }
-
-                Spacer(Modifier.width(8.dp))
-
-                if (voiceRecording != null) {
-                    if (voiceRecording.locked) {
-                        VoiceStopButton(
-                            onClick = onStopVoice,
-                            modifier = Modifier
-                                .size(48.dp)
-                                .align(Alignment.Bottom),
-                        )
-                    } else {
-                        Spacer(Modifier.size(48.dp))
-                    }
-                } else {
-                    val takePhotoLabel = stringResource(R.string.action_take_photo)
+            } else {
+                // Standard Composer Mode: Perfectly aligned row [Share Image] [Text Box Pill] [Mic / Send]
+                Row(
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    // 1. Share / Attach Image Action Button
                     Surface(
                         shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                        shadowElevation = 2.dp,
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        border = BorderStroke(1.dp, SwarSetuTheme.chatColors.composerBorder),
                         modifier = Modifier
-                            .size(48.dp)
+                            .size(46.dp)
                             .align(Alignment.Bottom)
-                            .testTag("chat_send")
+                            .clip(CircleShape)
+                            .testTag(if (canSend) "chat_attach" else "chat_send")
                             .combinedClickable(
                                 role = Role.Button,
-                                onClick = {
-                                    if (!showSending) {
-                                        if (canSend) {
-                                            onSend()
-                                        } else {
-                                            onAttachClick()
-                                        }
-                                    }
-                                },
-                                onLongClickLabel = takePhotoLabel.takeIf { !canSend && !showSending },
-                                onLongClick = if (!canSend && !showSending) {
-                                    { onCameraClick() }
-                                } else {
-                                    null
-                                },
+                                onClick = onAttachClick,
+                                onLongClickLabel = stringResource(R.string.action_take_photo),
+                                onLongClick = onCameraClick,
                             ),
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            if (showSending) {
-                                val sendingLabel = stringResource(R.string.chat_sending)
-                                CircularProgressIndicator(
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .semantics { contentDescription = sendingLabel },
-                                    strokeWidth = 2.dp,
-                                    color = LocalContentColor.current,
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = if (canSend) {
-                                        Icons.AutoMirrored.Filled.Send
-                                    } else {
-                                        Icons.Filled.AddPhotoAlternate
-                                    },
-                                    contentDescription = if (canSend) {
-                                        stringResource(R.string.action_send)
-                                    } else {
-                                        stringResource(R.string.action_attach_photo)
-                                    },
-                                    modifier = Modifier.size(24.dp),
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                            Icon(
+                                imageVector = Icons.Filled.AddPhotoAlternate,
+                                contentDescription = stringResource(R.string.action_attach_photo),
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(22.dp),
+                            )
+                        }
+                    }
+
+                    // 2. Text Input Box (Pill Shape)
+                    Surface(
+                        shape = RoundedCornerShape(24.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        border = BorderStroke(1.dp, SwarSetuTheme.chatColors.composerBorder),
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 46.dp)
+                            .align(Alignment.Bottom),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(
+                                    start = 16.dp,
+                                    end = 16.dp,
+                                    top = 11.dp,
+                                    bottom = 11.dp,
+                                ),
+                            contentAlignment = Alignment.CenterStart,
+                        ) {
+                            val messageHint = stringResource(R.string.chat_message_hint)
+                            if (state.text.isEmpty()) {
+                                Text(
+                                    messageHint,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.clearAndSetSemantics {},
                                 )
                             }
+                            BasicTextField(
+                                state = state,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .contentReceiver(receiveContentListener)
+                                    .testTag("chat_input")
+                                    .semantics { contentDescription = messageHint },
+                                inputTransformation = InputTransformation.maxLength(TextLimits.MESSAGE),
+                                textStyle = MaterialTheme.typography.bodyLarge.copy(
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                ),
+                                lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 4),
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                                onKeyboardAction = { onSend() },
+                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            )
                         }
+                    }
+
+                    // 3. Right Action Button: Send (when canSend) OR Push-to-Talk Mic (when empty)
+                    if (canSend) {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                            shadowElevation = 2.dp,
+                            modifier = Modifier
+                                .size(46.dp)
+                                .align(Alignment.Bottom)
+                                .clip(CircleShape)
+                                .testTag("chat_send")
+                                .combinedClickable(
+                                    role = Role.Button,
+                                    onClick = { if (!showSending) onSend() },
+                                    onLongClick = if (!showSending) { { onSend() } } else null,
+                                ),
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                if (showSending) {
+                                    val sendingLabel = stringResource(R.string.chat_sending)
+                                    CircularProgressIndicator(
+                                        modifier = Modifier
+                                            .size(22.dp)
+                                            .semantics { contentDescription = sendingLabel },
+                                        strokeWidth = 2.dp,
+                                        color = LocalContentColor.current,
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.Send,
+                                        contentDescription = stringResource(R.string.action_send),
+                                        modifier = Modifier.size(22.dp),
+                                    )
+                                }
+                            }
+                        }
+                    } else if (voiceEnabled) {
+                        MicButton(
+                            onStart = onStartVoice,
+                            onLock = onLockVoice,
+                            onStop = onStopVoice,
+                            onCancel = onCancelVoice,
+                            recording = false,
+                            modifier = Modifier
+                                .size(46.dp)
+                                .align(Alignment.Bottom),
+                        )
                     }
                 }
             }
@@ -2378,9 +2419,8 @@ private fun MessageInput(
 }
 
 /**
- * The Push-to-Talk floating microphone button:
- * - Horizontally centered above the input bar with ~75% floating above and ~25% subtle overlap.
- * - Circular with rich gradient (blue-indigo gradient at rest, vibrant recording pulse when active).
+ * The Push-to-Talk microphone button:
+ * - Circular action button with rich gradient and glowing halo on record.
  * - Hold to talk, slide up to lock hands-free, slide left to cancel, tap for accessible hands-free toggle.
  */
 @Composable
@@ -2426,7 +2466,7 @@ private fun MicButton(
     Box(
         modifier =
             modifier
-                .size(64.dp)
+                .size(46.dp)
                 .testTag("chat_voice_record")
                 .semantics(mergeDescendants = true) {
                     contentDescription = holdLabel
@@ -2471,22 +2511,22 @@ private fun MicButton(
                 },
         contentAlignment = Alignment.Center,
     ) {
-        // Outer soft glowing halo
-        Box(
-            modifier = Modifier
-                .size(64.dp)
-                .clip(CircleShape)
-                .background(haloColor),
-        )
+        if (recording) {
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(CircleShape)
+                    .background(haloColor),
+            )
+        }
 
-        // Floating Mic circular action button
         Surface(
             shape = CircleShape,
             color = Color.Transparent,
-            shadowElevation = 6.dp,
-            border = BorderStroke(1.5.dp, Color.White.copy(alpha = 0.35f)),
+            shadowElevation = 3.dp,
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
             modifier = Modifier
-                .size(54.dp)
+                .size(46.dp)
                 .clip(CircleShape)
                 .background(micGradient),
         ) {
@@ -2498,7 +2538,7 @@ private fun MicButton(
                     imageVector = Icons.Filled.Mic,
                     contentDescription = null,
                     tint = Color.White,
-                    modifier = Modifier.size(28.dp),
+                    modifier = Modifier.size(22.dp),
                 )
             }
         }
