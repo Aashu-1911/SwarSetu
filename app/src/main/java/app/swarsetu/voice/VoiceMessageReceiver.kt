@@ -41,9 +41,22 @@ class VoiceMessageReceiver(
 
             var textToSpeak = entity.translatedText ?: entity.body
             var languageToSpeak = entity.targetLanguage ?: originalLanguage
+            val isAlertMessage = entity.isAlert || entity.body.startsWith("[SOS:", ignoreCase = true)
 
-            // If the message has not been translated to receiver's preferred language, translate now
-            if (originalLanguage != preferredLanguage && (languageToSpeak != preferredLanguage || entity.translatedText == null)) {
+            if (isAlertMessage) {
+                val sosType = app.swarsetu.sos.SosType.parseFromText(entity.body)
+                val targetLangEnum = app.swarsetu.stt.SttLanguage.fromCode(preferredLanguage) ?: app.swarsetu.stt.SttLanguage.ENGLISH
+                val localizedAlert = app.swarsetu.ui.i18n.AppStrings.get(sosType.messageKey, targetLangEnum)
+                textToSpeak = localizedAlert
+                languageToSpeak = preferredLanguage
+                val updatedEntity = entity.copy(
+                    isAlert = true,
+                    sourceText = entity.sourceText ?: entity.body,
+                    translatedText = localizedAlert,
+                    targetLanguage = languageToSpeak,
+                )
+                runCatching { messageRepository.save(updatedEntity) }
+            } else if (originalLanguage != preferredLanguage && (languageToSpeak != preferredLanguage || entity.translatedText == null)) {
                 if (inputToTranslate.isNotBlank()) {
                     android.util.Log.d("SW_RECEIVER", "RECEIVER_TRANSLATION_START ($originalLanguage -> $preferredLanguage)")
                     val myName = runCatching { settingsStore.displayName.first() }.getOrNull()
@@ -83,9 +96,9 @@ class VoiceMessageReceiver(
                 }
             }
 
-            // Speak aloud automatically if it was sent as a voice message/note or auto-play TTS is enabled
+            // Speak aloud automatically if it was sent as an alert, voice message/note, or auto-play TTS is enabled
             val autoPlayEnabled = runCatching { settingsStore.autoPlayTts.first() }.getOrDefault(false)
-            if (isVoice || autoPlayEnabled) {
+            if (isAlertMessage || isVoice || autoPlayEnabled) {
                 val finalLanguage = parseLanguage(languageToSpeak, textToSpeak)
                 android.util.Log.d("VoiceMessageReceiver", "Playing inbound message ${entity.id} in $finalLanguage: \"$textToSpeak\"")
 

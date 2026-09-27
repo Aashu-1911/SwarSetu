@@ -8,11 +8,19 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -32,9 +40,11 @@ import app.swarsetu.ui.i18n.uiText
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LanguageInitScreen(
     onInitializationComplete: () -> Unit,
+    onBack: (() -> Unit)? = null,
     settingsStore: SettingsStore = koinInject(),
     translatorEngine: TranslatorEngine = koinInject(),
     sttModelManager: SttModelManager = koinInject(),
@@ -94,72 +104,94 @@ fun LanguageInitScreen(
         }
     }
 
-    Column(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text(
-            text = uiText(UiTextKey.LANGUAGE_INIT_TITLE),
-            style = MaterialTheme.typography.headlineSmall,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = uiText(UiTextKey.LANGUAGE_INIT_DESC),
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(modifier = Modifier.height(32.dp))
-
-        if (!isDownloading && !isError) {
-            Button(onClick = { downloadModels() }) {
-                Text(uiText(UiTextKey.MODEL_DOWNLOAD_BTN))
+    Scaffold(
+        topBar = {
+            if (onBack != null) {
+                TopAppBar(
+                    title = { },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = uiText(UiTextKey.ACTION_BACK),
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background,
+                    ),
+                )
             }
-            Spacer(modifier = Modifier.height(12.dp))
-            OutlinedButton(onClick = { skipInit() }) {
-                Text(uiText(UiTextKey.ACTION_SKIP))
-            }
-        } else if (isError) {
+        },
+    ) { paddingValues ->
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
             Text(
-                text = errorMessage.ifBlank { errorDefault },
-                color = MaterialTheme.colorScheme.error,
+                text = uiText(UiTextKey.LANGUAGE_INIT_TITLE),
+                style = MaterialTheme.typography.headlineSmall,
                 textAlign = TextAlign.Center,
             )
             Spacer(modifier = Modifier.height(16.dp))
-            Row {
+            Text(
+                text = uiText(UiTextKey.LANGUAGE_INIT_DESC),
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(32.dp))
+
+            if (!isDownloading && !isError) {
                 Button(onClick = { downloadModels() }) {
-                    Text(uiText(UiTextKey.ACTION_RETRY))
+                    Text(uiText(UiTextKey.MODEL_DOWNLOAD_BTN))
                 }
-                Spacer(modifier = Modifier.width(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
                 OutlinedButton(onClick = { skipInit() }) {
                     Text(uiText(UiTextKey.ACTION_SKIP))
                 }
-            }
-        } else {
-            LinearProgressIndicator(progress = { progressFraction.coerceIn(0f, 1f) })
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "$downloadStage (${(progressFraction * 100).toInt()}%)...",
-                style = MaterialTheme.typography.titleMedium,
-                textAlign = TextAlign.Center,
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            if (currentDownloading.isNotBlank()) {
+            } else if (isError) {
                 Text(
-                    text = currentDownloading,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = errorMessage.ifBlank { errorDefault },
+                    color = MaterialTheme.colorScheme.error,
                     textAlign = TextAlign.Center,
                 )
-            }
-            Spacer(modifier = Modifier.height(24.dp))
-            OutlinedButton(onClick = { skipInit() }) {
-                Text(uiText(UiTextKey.ACTION_SKIP))
+                Spacer(modifier = Modifier.height(16.dp))
+                Row {
+                    Button(onClick = { downloadModels() }) {
+                        Text(uiText(UiTextKey.ACTION_RETRY))
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    OutlinedButton(onClick = { skipInit() }) {
+                        Text(uiText(UiTextKey.ACTION_SKIP))
+                    }
+                }
+            } else {
+                LinearProgressIndicator(progress = { progressFraction.coerceIn(0f, 1f) })
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "$downloadStage (${(progressFraction * 100).toInt()}%)...",
+                    style = MaterialTheme.typography.titleMedium,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                if (currentDownloading.isNotBlank()) {
+                    Text(
+                        text = currentDownloading,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+                OutlinedButton(onClick = { skipInit() }) {
+                    Text(uiText(UiTextKey.ACTION_SKIP))
+                }
             }
         }
     }

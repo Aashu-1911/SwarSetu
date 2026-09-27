@@ -12,6 +12,8 @@ import app.swarsetu.ui.chat.components.ChatBackground
 import app.swarsetu.ui.chat.components.EmptyChatState
 import app.swarsetu.ui.chat.components.DateSeparator
 import app.swarsetu.ui.chat.components.TranslatedVoiceMessageBubble
+import app.swarsetu.ui.i18n.UiTextKey
+import app.swarsetu.ui.i18n.uiText
 import app.swarsetu.ui.theme.SwarSetuTheme
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -48,6 +50,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -59,6 +62,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.InputTransformation
 import androidx.compose.foundation.text.input.TextFieldLineLimits
@@ -427,7 +432,8 @@ fun ChatScreen(
         onLockVoice = viewModel::lockVoiceRecording,
         onStopVoice = viewModel::stopVoiceRecordingAndStage,
         onCancelVoice = viewModel::cancelVoiceRecording,
-        onSendAlert = viewModel::sendAlert,
+        onSendAlert = { type -> viewModel.sendAlert(type) },
+        cooldownRemainingSeconds = viewModel.getCooldownRemainingSeconds(),
         onVoicePlay = viewModel::playVoice,
         onVoiceSeek = viewModel::seekVoice,
     )
@@ -499,11 +505,13 @@ internal fun ChatScreenContent(
     onLockVoice: () -> Unit = {},
     onStopVoice: () -> Unit = {},
     onCancelVoice: () -> Unit = {},
-    onSendAlert: () -> Unit = {},
+    onSendAlert: (app.swarsetu.sos.SosType) -> Unit = {},
+    cooldownRemainingSeconds: Int = 0,
     onVoicePlay: (hash: String, key: String?) -> Unit = { _, _ -> },
     onVoiceSeek: (hash: String, positionMs: Int) -> Unit = { _, _ -> },
 ) {
     var fullscreenImage by remember { mutableStateOf<FullscreenImage?>(null) }
+    var showSosConfirmDialog by remember { mutableStateOf(false) }
     // The message a tapped quote scrolled to, briefly highlighted then cleared (see the LaunchedEffect
     // below and MessageBubble). Null when nothing is highlighted.
     var highlightedMessageId by remember { mutableStateOf<String?>(null) }
@@ -675,10 +683,10 @@ internal fun ChatScreenContent(
                                 )
                             }
                         }
-                        IconButton(onClick = onSendAlert) {
+                        IconButton(onClick = { showSosConfirmDialog = true }) {
                             Icon(
                                 Icons.Filled.Warning,
-                                contentDescription = "Send Emergency Alert",
+                                contentDescription = uiText(UiTextKey.SOS_TITLE),
                                 tint = MaterialTheme.colorScheme.error,
                             )
                         }
@@ -850,6 +858,17 @@ internal fun ChatScreenContent(
             now = now,
             onDismiss = { fullscreenImage = null },
             onSave = { onSaveAttachment(fs.image.hash, fs.image.key, fs.image.mime) },
+        )
+    }
+
+    if (showSosConfirmDialog) {
+        app.swarsetu.ui.chat.components.SosConfirmationDialog(
+            cooldownRemainingSeconds = cooldownRemainingSeconds,
+            onDismiss = { showSosConfirmDialog = false },
+            onConfirmSend = { type ->
+                showSosConfirmDialog = false
+                onSendAlert(type)
+            },
         )
     }
 
@@ -1048,13 +1067,41 @@ private fun MessageBubble(
                             if (hasText) Spacer(Modifier.height(4.dp))
                         }
                         
+                        val sosType = if (row.isAlert) app.swarsetu.sos.SosType.parseFromText(row.body) else null
                         val displayText =
-                            if (row.mine) {
+                            if (row.isAlert && sosType != null) {
+                                uiText(sosType.messageKey)
+                            } else if (row.mine) {
                                 row.sourceText ?: row.translatedText ?: row.body
                             } else {
                                 row.translatedText ?: row.sourceText ?: row.body
                             }
                         if (displayText.isNotBlank()) {
+                            if (row.isAlert && sosType != null) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .padding(bottom = 6.dp)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(MaterialTheme.colorScheme.errorContainer)
+                                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Warning,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        text = uiText(sosType.titleKey),
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onErrorContainer,
+                                        ),
+                                    )
+                                }
+                            }
                             if (row.moderationFlagged && !revealed) {
                                 Text(
                                     text = stringResource(R.string.moderation_text_hidden),
@@ -2170,142 +2217,116 @@ private fun MessageInput(
                 ReplyPreview(replyTo = replyingTo, myNodeId = myNodeId, onCancel = onCancelReply)
                 Spacer(Modifier.height(8.dp))
             }
-            // The mic is offered when the composer is otherwise idle, and *kept* for as long as a recording
-            // it started is running — until it locks, at which point the stop button takes over the trailing
-            // slot and an inline mic beside a running bar would be a second, inert control.
-            val showMic =
-                voiceEnabled &&
-                    if (voiceRecording != null) !voiceRecording.locked else !canSend && !showSending
-            Row(verticalAlignment = Alignment.Bottom) {
-                // The field container holds the text field *and* the mic, the way Signal does: sharing the
-                // field's background makes the mic read as part of it rather than as a third button
-                // competing with send. It stays a control of its own rather than another gesture on the
-                // trailing button — that one already spends its tap on send-or-attach and its long-press on
-                // the camera (ADR 029), so hold-to-talk would collide head-on.
-                //
-                // While recording, only the *left half* of this container is replaced — never the container.
-                // The mic owns the hold gesture, and a composable that leaves composition has its
-                // `pointerInput` coroutine cancelled: taking the whole thing away the instant recording began
-                // deleted the very node the finger was resting on, so the release never arrived and every
-                // recording ended one frame after it started. The button has to stay under the finger for
-                // the whole press.
-                //
-                // `heightIn` pins the resting height. The hint goes on the first keystroke and the mic on the
-                // first non-blank draft, and both measure taller than the bare line of text left behind, so
-                // without a floor the field would visibly shrink under the caret as it lost them. It is a
-                // floor and not a fixed height: the field still grows as the draft wraps, and with the font
-                // scale.
-                Row(
-                    modifier =
-                        Modifier
-                            .weight(1f)
-                            .heightIn(min = 48.dp)
-                            .clip(RoundedCornerShape(24.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .border(BorderStroke(1.dp, SwarSetuTheme.chatColors.composerBorder), RoundedCornerShape(24.dp)),
-                    verticalAlignment = Alignment.Bottom,
+            Row(
+                verticalAlignment = Alignment.Bottom,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                // The field container holds the text field base layer and the floating push-to-talk mic.
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(top = 44.dp), // Clearance so the floating mic is placed above the input bar without clipping
+                    contentAlignment = Alignment.TopCenter,
                 ) {
-                    if (voiceRecording != null) {
-                        VoiceRecordingBar(
-                            elapsedMs = voiceRecording.elapsedMs,
-                            amplitude = voiceRecording.amplitude,
-                            locked = voiceRecording.locked,
-                            onCancel = onCancelVoice,
-                            modifier = Modifier.weight(1f),
-                        )
-                    } else {
-                        Box(
-                            modifier =
-                                Modifier
-                                    .weight(1f)
+                    // Base Layer: Pill-shaped text input bar
+                    Surface(
+                        shape = RoundedCornerShape(24.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        border = BorderStroke(1.dp, SwarSetuTheme.chatColors.composerBorder),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp),
+                    ) {
+                        if (voiceRecording != null) {
+                            VoiceRecordingBar(
+                                elapsedMs = voiceRecording.elapsedMs,
+                                amplitude = voiceRecording.amplitude,
+                                locked = voiceRecording.locked,
+                                onCancel = onCancelVoice,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
                                     .padding(
-                                        start = 16.dp,
-                                        // The mic carries 12dp of its own inset around the icon, so the text
-                                        // only has to clear it rather than keep the full edge margin.
-                                        end = if (showMic) 4.dp else 16.dp,
-                                        top = 12.dp,
-                                        bottom = 12.dp,
+                                        start = 18.dp,
+                                        end = 18.dp,
+                                        top = 13.dp,
+                                        bottom = 13.dp,
                                     ),
-                            contentAlignment = Alignment.CenterStart,
-                        ) {
-                            // The hint is a sibling overlay, so wire it onto the field as its accessibility
-                            // label (the field would otherwise be an unnamed edit box); the visible hint is
-                            // then marked decorative to avoid TalkBack reading it twice.
-                            val messageHint = stringResource(R.string.chat_message_hint)
-                            if (state.text.isEmpty()) {
-                                Text(
-                                    messageHint,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.clearAndSetSemantics {},
-                                )
-                            }
-                            BasicTextField(
-                                state = state,
-                                modifier =
-                                    Modifier
+                                contentAlignment = Alignment.CenterStart,
+                            ) {
+                                val messageHint = stringResource(R.string.chat_message_hint)
+                                if (state.text.isEmpty()) {
+                                    Text(
+                                        messageHint,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        modifier = Modifier.clearAndSetSemantics {},
+                                    )
+                                }
+                                BasicTextField(
+                                    state = state,
+                                    modifier = Modifier
                                         .fillMaxWidth()
                                         .contentReceiver(receiveContentListener)
                                         .testTag("chat_input")
                                         .semantics { contentDescription = messageHint },
-                                inputTransformation = InputTransformation.maxLength(TextLimits.MESSAGE),
-                                textStyle =
-                                    MaterialTheme.typography.bodyLarge.copy(
+                                    inputTransformation = InputTransformation.maxLength(TextLimits.MESSAGE),
+                                    textStyle = MaterialTheme.typography.bodyLarge.copy(
                                         color = MaterialTheme.colorScheme.onSurface,
                                     ),
-                                lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 4),
-                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                                onKeyboardAction = { onSend() },
-                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                            )
+                                    lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 4),
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                                    onKeyboardAction = { onSend() },
+                                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                )
+                            }
                         }
                     }
-                    if (showMic) {
+
+                    // Floating Push-to-Talk Microphone Button (Horizontally centered & floating ~75% above the input bar)
+                    if (voiceEnabled) {
                         MicButton(
                             onStart = onStartVoice,
                             onLock = onLockVoice,
                             onStop = onStopVoice,
                             onCancel = onCancelVoice,
                             recording = voiceRecording != null,
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .offset(y = (-40).dp),
                         )
                     }
                 }
+
                 Spacer(Modifier.width(8.dp))
+
                 if (voiceRecording != null) {
-                    // No send button mid-recording: there is nothing to send yet, and the note stages for
-                    // review when the finger lifts. Once the recording is *locked* the finger has already
-                    // lifted and the gesture has ended, so this slot becomes the stop button — the control
-                    // lands where the thumb already is. Until then it holds an empty slot of the same width,
-                    // because collapsing it would widen the field and slide the mic out from under the
-                    // finger still holding it.
                     if (voiceRecording.locked) {
                         VoiceStopButton(
                             onClick = onStopVoice,
-                            modifier = Modifier.align(Alignment.CenterVertically),
+                            modifier = Modifier
+                                .size(48.dp)
+                                .align(Alignment.Bottom),
                         )
                     } else {
                         Spacer(Modifier.size(48.dp))
                     }
-                    return@Row
-                }
-                // Deliberately a Surface + combinedClickable rather than a FilledIconButton: the
-                // latter wraps Surface(onClick = ...), whose own `clickable` sits inside whatever
-                // modifier we pass and consumes the gesture, so an outer long-press never fires.
-                // The colours and shape below are FilledIconButton's own defaults, so it looks the same.
-                val takePhotoLabel = stringResource(R.string.action_take_photo)
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    modifier =
-                        Modifier
+                } else {
+                    val takePhotoLabel = stringResource(R.string.action_take_photo)
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        shadowElevation = 2.dp,
+                        modifier = Modifier
                             .size(48.dp)
-                            .align(Alignment.CenterVertically)
+                            .align(Alignment.Bottom)
                             .testTag("chat_send")
                             .combinedClickable(
                                 role = Role.Button,
-                                // Swallow taps while a send is in flight (the ViewModel guard also drops
-                                // re-entrant sends, but suppressing the click keeps the button from
-                                // feeling dead-but-pressable).
                                 onClick = {
                                     if (!showSending) {
                                         if (canSend) {
@@ -2315,46 +2336,39 @@ private fun MessageInput(
                                         }
                                     }
                                 },
-                                // Only in attach mode: long-pressing *Send* to open a camera would be
-                                // surprising, and could interrupt the send it looks like it triggers.
                                 onLongClickLabel = takePhotoLabel.takeIf { !canSend && !showSending },
-                                onLongClick =
-                                    if (!canSend && !showSending) {
-                                        { onCameraClick() }
-                                    } else {
-                                        null
-                                    },
+                                onLongClick = if (!canSend && !showSending) {
+                                    { onCameraClick() }
+                                } else {
+                                    null
+                                },
                             ),
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        if (showSending) {
-                            val sendingLabel = stringResource(R.string.chat_sending)
-                            CircularProgressIndicator(
-                                modifier =
-                                    Modifier
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            if (showSending) {
+                                val sendingLabel = stringResource(R.string.chat_sending)
+                                CircularProgressIndicator(
+                                    modifier = Modifier
                                         .size(24.dp)
                                         .semantics { contentDescription = sendingLabel },
-                                strokeWidth = 2.dp,
-                                // LocalContentColor is the Surface's onPrimary content colour, so the
-                                // spinner reads against the filled container.
-                                color = LocalContentColor.current,
-                            )
-                        } else {
-                            Icon(
-                                imageVector =
-                                    if (canSend) {
+                                    strokeWidth = 2.dp,
+                                    color = LocalContentColor.current,
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = if (canSend) {
                                         Icons.AutoMirrored.Filled.Send
                                     } else {
                                         Icons.Filled.AddPhotoAlternate
                                     },
-                                contentDescription =
-                                    if (canSend) {
+                                    contentDescription = if (canSend) {
                                         stringResource(R.string.action_send)
                                     } else {
                                         stringResource(R.string.action_attach_photo)
                                     },
-                                modifier = Modifier.size(24.dp),
-                            )
+                                    modifier = Modifier.size(24.dp),
+                                )
+                            }
                         }
                     }
                 }
@@ -2364,21 +2378,10 @@ private fun MessageInput(
 }
 
 /**
- * The record-a-voice-note button: hold to talk, slide up to lock hands-free, slide away to cancel.
- *
- * A press-and-hold gesture is unreachable under TalkBack — an accessibility service consumes the raw touch
- * stream, so the pointer events this relies on never arrive. The button therefore carries a **tap** path as
- * well (`onClick` starts a locked recording, and the recording bar's own stop button ends it), which is what
- * the ATF/a11y suite exercises. That is not a lesser fallback: tap-to-toggle is the better interaction for
- * anyone who can't hold a button steady, and it costs one extra state.
- *
- * Recording only begins once `RECORD_AUDIO` is granted. The permission request is fired on the press that
- * finds it missing, and deliberately does **not** auto-start when the grant lands: the user's finger left
- * the button seconds ago, and recording then would capture the wrong moment. They press again.
- *
- * (The gesture loop is suppressed for multiple jumps deliberately: press, lock, cancel and release are four
- * distinct outcomes of one gesture, and collapsing them into a single exit would make which one actually
- * happened impossible to read.)
+ * The Push-to-Talk floating microphone button:
+ * - Horizontally centered above the input bar with ~75% floating above and ~25% subtle overlap.
+ * - Circular with rich gradient (blue-indigo gradient at rest, vibrant recording pulse when active).
+ * - Hold to talk, slide up to lock hands-free, slide left to cancel, tap for accessible hands-free toggle.
  */
 @Composable
 @Suppress("LoopWithTooManyJumpStatements")
@@ -2388,8 +2391,6 @@ private fun MicButton(
     onStop: () -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
-    // True while a recording this button started is live. It stays composed throughout (that is what keeps
-    // the gesture's pointer stream alive), so it fills in to show the press is being held.
     recording: Boolean = false,
 ) {
     val context = LocalContext.current
@@ -2399,18 +2400,34 @@ private fun MicButton(
 
     val holdLabel = stringResource(R.string.chat_voice_record)
     val tapLabel = stringResource(R.string.chat_voice_record_start)
+
+    val micGradient = if (recording) {
+        Brush.verticalGradient(
+            listOf(
+                Color(0xFFFF3B30),
+                Color(0xFFE02424),
+            ),
+        )
+    } else {
+        Brush.verticalGradient(
+            listOf(
+                Color(0xFF3860FF),
+                Color(0xFF5A35EB),
+            ),
+        )
+    }
+
+    val haloColor = if (recording) {
+        Color(0xFFFF3B30).copy(alpha = 0.22f)
+    } else {
+        Color(0xFF3860FF).copy(alpha = 0.16f)
+    }
+
     Box(
         modifier =
             modifier
-                .size(48.dp)
+                .size(64.dp)
                 .testTag("chat_voice_record")
-                // The accessible path is a semantics *action*, not a `clickable`. A `clickable` would install
-                // a second pointer handler on the same node, and both would fire on one press: the gesture
-                // below starts an unlocked recording on DOWN, the click starts a locked one on UP, and the
-                // second would run with nothing left to stop it. TalkBack's double-tap invokes this action
-                // directly rather than replaying pointer events, so the two paths stay disjoint by
-                // construction. It starts a *locked* recording — nobody is holding anything — which the
-                // recording bar's own stop button ends.
                 .semantics(mergeDescendants = true) {
                     contentDescription = holdLabel
                     role = Role.Button
@@ -2422,8 +2439,6 @@ private fun MicButton(
                     awaitPointerEventScope {
                         while (true) {
                             val down = awaitFirstDown(requireUnconsumed = false)
-                            // Ask (or refuse) before any recording state exists, so a denied press simply
-                            // does nothing rather than leaving a half-armed recorder behind.
                             if (!gate.runOrRequest { onStart(false) }) {
                                 waitForUpOrCancellation()
                                 continue
@@ -2446,13 +2461,6 @@ private fun MicButton(
                                 }
                                 if (!change.pressed) break
                             }
-                            // Three ways out, and only one of them still has a finger on the glass:
-                            //  - cancelled: the slide crossed the threshold while still pressed, so the
-                            //    release has to be swallowed or it would open the next cycle immediately;
-                            //  - unlocked release: the loop broke *because* the finger lifted, so waiting
-                            //    for an up here would swallow the NEXT press instead;
-                            //  - locked: the finger has lifted too, and the recording deliberately outlives
-                            //    it — the recording bar's stop button ends it.
                             if (cancelled) {
                                 waitForUpOrCancellation()
                             } else if (!locked) {
@@ -2463,29 +2471,34 @@ private fun MicButton(
                 },
         contentAlignment = Alignment.Center,
     ) {
-        // The disc is inset inside the touch target rather than filling it: the target stays a full 48dp
-        // (it is a gesture surface as much as a button), but a 48dp disc in a 48dp-tall field would meet
-        // the field's own rounded edge with no gap and read as a button wedged into it.
+        // Outer soft glowing halo
+        Box(
+            modifier = Modifier
+                .size(64.dp)
+                .clip(CircleShape)
+                .background(haloColor),
+        )
+
+        // Floating Mic circular action button
         Surface(
             shape = CircleShape,
-            // Nothing at rest — inline in the field the mic is *part of* it, and a container of its own
-            // would make it a third button competing with send. While recording it fills to solid coral
-            // (the tint the user's own bubbles and the send button already use), so the held button reads
-            // as active rather than idle.
-            color = if (recording) MaterialTheme.colorScheme.primary else Color.Transparent,
-            contentColor =
-                if (recording) {
-                    MaterialTheme.colorScheme.onPrimary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-            modifier = Modifier.size(40.dp),
+            color = Color.Transparent,
+            shadowElevation = 6.dp,
+            border = BorderStroke(1.5.dp, Color.White.copy(alpha = 0.35f)),
+            modifier = Modifier
+                .size(54.dp)
+                .clip(CircleShape)
+                .background(micGradient),
         ) {
-            Box(contentAlignment = Alignment.Center) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.fillMaxSize(),
+            ) {
                 Icon(
-                    Icons.Filled.Mic,
+                    imageVector = Icons.Filled.Mic,
                     contentDescription = null,
-                    modifier = Modifier.size(24.dp),
+                    tint = Color.White,
+                    modifier = Modifier.size(28.dp),
                 )
             }
         }

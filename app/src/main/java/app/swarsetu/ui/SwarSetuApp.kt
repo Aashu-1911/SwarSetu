@@ -48,8 +48,6 @@ import app.swarsetu.ui.profile.ProfileDetailsScreen
 import app.swarsetu.ui.profile.ProfileScreen
 
 import app.swarsetu.ui.requests.MessageRequestsScreen
-import app.swarsetu.ui.review.RateReviewDialog
-import app.swarsetu.ui.review.ReviewPromptInbox
 import app.swarsetu.ui.share.ShareInbox
 import app.swarsetu.ui.share.ShareTargetScreen
 import app.swarsetu.ui.translation.TranslationTestScreen
@@ -109,8 +107,6 @@ fun SwarSetuApp(startRoute: String? = null) {
     val routeInbox = koinInject<RouteInbox>()
     val pendingRoute by routeInbox.pending.collectAsStateWithLifecycle()
     val reviewPrompter = koinInject<ReviewPrompter>()
-    val reviewInbox = koinInject<ReviewPromptInbox>()
-    val showReviewPrompt by reviewInbox.pending.collectAsStateWithLifecycle()
     // Past onboarding once mesh permissions are granted (demo builds skip the gate).
     val onboarded = BuildConfig.SEED_DEMO || hasAllMeshPermissions(context)
     val settingsStore = koinInject<app.swarsetu.data.settings.SettingsStore>()
@@ -218,8 +214,17 @@ fun SwarSetuApp(startRoute: String? = null) {
         composable(Routes.LANGUAGE_INIT) {
             LanguageInitScreen(
                 onInitializationComplete = {
-                    navController.navigate(Routes.PROFILE_SETUP) { popUpTo(0) }
+                    if (isProfileSetupComplete) {
+                        if (!navController.popBackStack()) {
+                            navController.navigate(Routes.CHAT_LIST) { popUpTo(0) }
+                        }
+                    } else {
+                        navController.navigate(Routes.PROFILE_SETUP) {
+                            popUpTo(Routes.LANGUAGE_INIT) { inclusive = true }
+                        }
+                    }
                 },
+                onBack = if (isProfileSetupComplete) { { navController.popBackStack() } } else null,
             )
         }
 
@@ -231,11 +236,6 @@ fun SwarSetuApp(startRoute: String? = null) {
             )
         }
         composable(Routes.CHAT_LIST) {
-            // Rate/review prompt: evaluated on each landing on the chat list — including returning from a
-            // thread, right after the mesh visibly worked — and never mid-conversation. ReviewPrompter
-            // self-gates (engagement policy, once per process, demo builds) and signals ReviewPromptInbox,
-            // which surfaces RateReviewDialog at the app root below.
-            LaunchedEffect(Unit) { reviewPrompter.maybePrompt() }
             ChatListScreen(
                 onOpenConversation = { id -> navController.navigate(Routes.chat(id)) },
                 onNewMessage = { navController.navigate(Routes.CONTACTS) },
@@ -412,22 +412,7 @@ fun SwarSetuApp(startRoute: String? = null) {
             )
         }
     }
-
-    // The rate/review prompt floats over whichever screen is showing (ReviewPrompter offered it from the
-    // chat-list route). Positive → rate (Play listing or repo, per install source); "Not really" → private
-    // feedback on the issue tracker; dismiss → just close. The attempt was already recorded when shown.
-        if (showReviewPrompt) {
-            RateReviewDialog(
-                onPositive = {
-                    openUrl(context, reviewPrompter.rateUrl())
-                    reviewInbox.consume()
-                },
-                onNegative = {
-                    openUrl(context, reviewPrompter.feedbackUrl)
-                    reviewInbox.consume()
-                },
-                onDismiss = { reviewInbox.consume() },
-            )
-        }
-    }
 }
+}
+
+

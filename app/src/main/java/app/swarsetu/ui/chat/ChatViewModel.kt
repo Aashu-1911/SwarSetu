@@ -599,34 +599,39 @@ class ChatViewModel(
             ?: replyTo
     }
 
-    fun sendAlert() {
-        if (_isSending.value) return
+    fun getCooldownRemainingSeconds(): Int {
+        val elapsed = System.currentTimeMillis() - globalLastAlertSentTimeMs
+        val remaining = 30 - (elapsed / 1000).toInt()
+        return if (remaining > 0) remaining else 0
+    }
+
+    fun sendAlert(type: app.swarsetu.sos.SosType = app.swarsetu.sos.SosType.GENERAL) {
+        if (_isSending.value || getCooldownRemainingSeconds() > 0) return
         _isSending.value = true
+        globalLastAlertSentTimeMs = System.currentTimeMillis()
         viewModelScope.launch {
             try {
                 val loc = locationProvider.getFreshOrCachedLocation(5000L)
-                val langCode = selectedSttLanguage.value.code
-                val locale = java.util.Locale(langCode)
-                val conf = android.content.res.Configuration(context.resources.configuration)
-                conf.setLocale(locale)
-                val localizedContext = context.createConfigurationContext(conf)
-                val localizedAlertText = localizedContext.getString(R.string.emergency_alert_text)
-                
+                val senderLang = selectedSttLanguage.value
+                val senderLocalizedText = app.swarsetu.ui.i18n.AppStrings.get(type.messageKey, senderLang)
+                val wireEnglishText = app.swarsetu.ui.i18n.AppStrings.get(type.messageKey, app.swarsetu.stt.SttLanguage.ENGLISH)
+                val wireBody = app.swarsetu.sos.SosType.formatWireText(type, wireEnglishText)
+
                 val sent =
                     meshManager.sendChat(
-                        text = context.getString(R.string.emergency_alert_text),
+                        text = wireBody,
                         recipientId = null,
                         isAlert = true,
                         messageType = app.swarsetu.data.message.MessageEntity.TYPE_TRANSLATED_VOICE,
-                        sourceLanguage = selectedSttLanguage.value.toTtsLanguage()?.name,
-                        sourceText = localizedAlertText,
-                        translatedText = localizedAlertText,
+                        sourceLanguage = senderLang.toTtsLanguage()?.name,
+                        sourceText = senderLocalizedText,
+                        translatedText = senderLocalizedText,
                         location = loc,
                     )
                 if (!sent) {
                     android.util.Log.w("ChatViewModel", "ALERT_BROADCAST_FAILED")
                 } else {
-                    android.util.Log.d("ChatViewModel", "ALERT_BROADCAST_SENT")
+                    android.util.Log.d("ChatViewModel", "ALERT_BROADCAST_SENT (type=${type.code})")
                 }
             } finally {
                 _isSending.value = false
@@ -906,7 +911,10 @@ class ChatViewModel(
         super.onCleared()
     }
 
-    private companion object {
+    companion object {
+        @Volatile
+        private var globalLastAlertSentTimeMs: Long = 0L
+
         /** Send a typing cue at most this often while actively editing (< the receiver's ~12 s hold, so a peer
          *  who keeps typing re-cues before their indicator would expire). */
         const val TYPING_SEND_INTERVAL_MS = 8_000L
