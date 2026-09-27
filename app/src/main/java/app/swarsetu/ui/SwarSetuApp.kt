@@ -158,8 +158,8 @@ fun SwarSetuApp(startRoute: String? = null) {
     val currentSession by callManager.currentSession.collectAsStateWithLifecycle()
 
     LaunchedEffect(callState, currentSession) {
-        if (callState == CallState.INCOMING && currentSession != null) {
-            val s = currentSession!!
+        val s = currentSession
+        if (callState == CallState.INCOMING && s != null) {
             navController.navigate(Routes.liveCall(s.peerId, s.peerName)) {
                 launchSingleTop = true
             }

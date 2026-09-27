@@ -104,14 +104,14 @@ class CallAudioEngine(
             }
 
             if (record.state != AudioRecord.STATE_INITIALIZED) {
-                Log.e(TAG, "AudioRecord initialization failed with all audio sources!")
+                Log.w(TAG, "AudioRecord initialization failed (microphone busy or permission missing). Proceeding in playback-only mode.")
                 record.release()
-                return@withContext false
+                audioRecord = null
+            } else {
+                audioRecord = record
+                // Attach Acoustic Echo Canceler and Noise Suppressor if supported
+                attachAudioEffects(record.audioSessionId)
             }
-            audioRecord = record
-
-            // Attach Acoustic Echo Canceler and Noise Suppressor if supported
-            attachAudioEffects(record.audioSessionId)
 
             // 3. Initialize AudioTrack (16kHz 16-bit Mono)
             val minTrackBufferSize = AudioTrack.getMinBufferSize(
@@ -152,31 +152,38 @@ class CallAudioEngine(
             isPlaying.set(true)
             Log.i(TAG, "CALL_AUDIO_PLAYBACK_START: AudioTrack initialized and playing")
 
-            // 4. Start Continuous Capture Loop
-            record.startRecording()
-            isCapturing.set(true)
-            Log.i(TAG, "CALL_AUDIO_CAPTURE_START: AudioRecord recording started at $sampleRate Hz")
+            // 4. Start Continuous Capture Loop if record is initialized
+            val activeRecord = audioRecord
+            if (activeRecord != null && activeRecord.state == AudioRecord.STATE_INITIALIZED) {
+                try {
+                    activeRecord.startRecording()
+                    isCapturing.set(true)
+                    Log.i(TAG, "CALL_AUDIO_CAPTURE_START: AudioRecord recording started at $sampleRate Hz")
 
-            captureJob = scope.launch(Dispatchers.IO) {
-                val pcmBuffer = ShortArray(CHUNK_SIZE_SAMPLES)
-                while (isActive && isCapturing.get()) {
-                    val currentRecord = audioRecord ?: break
-                    val readCount = currentRecord.read(pcmBuffer, 0, CHUNK_SIZE_SAMPLES)
-                    if (readCount > 0) {
-                        if (!_isMuted.value) {
-                            onPcmCaptured(pcmBuffer, readCount)
-                        } else {
-                            // Muted: pass silent chunk so VAD resets/stays quiet
-                            val silentChunk = ShortArray(readCount)
-                            onPcmCaptured(silentChunk, readCount)
+                    captureJob = scope.launch(Dispatchers.IO) {
+                        val pcmBuffer = ShortArray(CHUNK_SIZE_SAMPLES)
+                        while (isActive && isCapturing.get()) {
+                            val currentRecord = audioRecord ?: break
+                            val readCount = currentRecord.read(pcmBuffer, 0, CHUNK_SIZE_SAMPLES)
+                            if (readCount > 0) {
+                                if (!_isMuted.value) {
+                                    onPcmCaptured(pcmBuffer, readCount)
+                                } else {
+                                    // Muted: pass silent chunk so VAD resets/stays quiet
+                                    val silentChunk = ShortArray(readCount)
+                                    onPcmCaptured(silentChunk, readCount)
+                                }
+                            } else if (readCount == AudioRecord.ERROR_INVALID_OPERATION || readCount == AudioRecord.ERROR_BAD_VALUE) {
+                                Log.w(TAG, "AudioRecord read non-fatal status: $readCount")
+                                kotlinx.coroutines.delay(20)
+                            } else if (readCount == AudioRecord.ERROR_DEAD_OBJECT) {
+                                Log.e(TAG, "AudioRecord dead object encountered! Breaking capture loop.")
+                                break
+                            }
                         }
-                    } else if (readCount == AudioRecord.ERROR_INVALID_OPERATION || readCount == AudioRecord.ERROR_BAD_VALUE) {
-                        Log.w(TAG, "AudioRecord read non-fatal status: $readCount")
-                        kotlinx.coroutines.delay(20)
-                    } else if (readCount == AudioRecord.ERROR_DEAD_OBJECT) {
-                        Log.e(TAG, "AudioRecord dead object encountered! Breaking capture loop.")
-                        break
                     }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Could not start audio capture: ${e.message}")
                 }
             }
 

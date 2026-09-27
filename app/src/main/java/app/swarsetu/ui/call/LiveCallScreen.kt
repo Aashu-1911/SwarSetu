@@ -74,6 +74,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.swarsetu.R
+import app.swarsetu.call.CallEndReason
 import app.swarsetu.call.CallSession
 import app.swarsetu.call.CallState
 import app.swarsetu.call.CallTranscriptItem
@@ -101,12 +102,32 @@ fun LiveCallScreen(
         }
     }
 
-    // Close screen when call ends
-    LaunchedEffect(callState) {
+    // Track whether the remote side ended the call (for "ended the call" banner)
+    var remoteHungUp by remember { mutableStateOf(false) }
+    val prevCallState = remember { mutableStateOf(callState) }
+
+    // Close screen when call ends; detect remote hangup
+    LaunchedEffect(callState, session?.endReason) {
+        if (session?.endReason == CallEndReason.REMOTE_HANGUP ||
+            (prevCallState.value == CallState.CONNECTED && callState == CallState.ENDED)
+        ) {
+            remoteHungUp = true
+        }
+        prevCallState.value = callState
         if (callState == CallState.ENDED || callState == CallState.FAILED) {
-            kotlinx.coroutines.delay(1200)
+            kotlinx.coroutines.delay(1500)
             onBack()
         }
+    }
+
+    // Show full-screen WhatsApp-style incoming call UI for callee
+    if (callState == CallState.INCOMING) {
+        IncomingCallScreen(
+            callerName = session?.peerName ?: peerName,
+            onAccept = { viewModel.acceptCall() },
+            onReject = { viewModel.rejectCall() },
+        )
+        return
     }
 
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
@@ -396,30 +417,8 @@ fun LiveCallScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Bottom Call Action Controls
-            if (callState == CallState.INCOMING) {
-                // Incoming Call Actions: Accept / Reject
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    CallActionButton(
-                        icon = Icons.Filled.CallEnd,
-                        label = uiText(UiTextKey.ACTION_REJECT),
-                        backgroundColor = Color(0xFFEF4444),
-                        onClick = { viewModel.rejectCall() },
-                        size = 64.dp,
-                    )
-                    CallActionButton(
-                        icon = Icons.Filled.Call,
-                        label = uiText(UiTextKey.ACTION_ACCEPT),
-                        backgroundColor = Color(0xFF10B981),
-                        onClick = { viewModel.acceptCall() },
-                        size = 64.dp,
-                    )
-                }
-            } else {
+            // Bottom Call Action Controls (INCOMING is shown as full-screen via IncomingCallScreen)
+            if (callState != CallState.INCOMING) {
                 // Active / Outgoing Call Controls: Mute, Speaker, Hangup
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -450,6 +449,233 @@ fun LiveCallScreen(
                         tint = Color.White,
                         onClick = { viewModel.toggleSpeaker() },
                     )
+                }
+            }
+        }
+
+        // "X ended the call" overlay when remote peer hangs up
+        if (remoteHungUp && (callState == CallState.ENDED || callState == CallState.ENDING)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xCC000000)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color(0xFF1E293B),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.6f)),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 36.dp, vertical = 28.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.CallEnd,
+                            contentDescription = null,
+                            tint = Color(0xFFEF4444),
+                            modifier = Modifier.size(44.dp),
+                        )
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Text(
+                            text = session?.peerName ?: peerName,
+                            color = Color.White,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "ended the call",
+                            color = Color(0xFF94A3B8),
+                            fontSize = 15.sp,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun IncomingCallScreen(
+    callerName: String,
+    onAccept: () -> Unit,
+    onReject: () -> Unit,
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "incoming_ring")
+    val ringScale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.18f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(700, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "ringScale",
+    )
+    val ringAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.2f,
+        targetValue = 0.65f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(700, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "ringAlpha",
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(Color(0xFF0B1A2C), Color(0xFF0F2744), Color(0xFF0B1A2C))
+                )
+            )
+            .statusBarsPadding()
+            .navigationBarsPadding(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Spacer(modifier = Modifier.height(64.dp))
+
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color(0xFF10B981).copy(alpha = 0.12f),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Lock,
+                            contentDescription = null,
+                            tint = Color(0xFF10B981),
+                            modifier = Modifier.size(12.dp),
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "SwarSetu Encrypted Call",
+                            color = Color(0xFF34D399),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+                Text(
+                    text = "Incoming Call",
+                    color = Color(0xFF64748B),
+                    fontSize = 15.sp,
+                    letterSpacing = 2.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+                Spacer(modifier = Modifier.height(28.dp))
+
+                Box(contentAlignment = Alignment.Center) {
+                    Box(
+                        modifier = Modifier
+                            .size(180.dp)
+                            .scale(ringScale)
+                            .clip(CircleShape)
+                            .background(Color(0xFF10B981).copy(alpha = ringAlpha * 0.18f)),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(148.dp)
+                            .scale(ringScale * 0.92f)
+                            .clip(CircleShape)
+                            .background(Color(0xFF10B981).copy(alpha = ringAlpha * 0.28f)),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(110.dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.radialGradient(
+                                    colors = listOf(Color(0xFF10B981), Color(0xFF047857))
+                                )
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = callerName.take(1).uppercase(),
+                            color = Color.White,
+                            fontSize = 44.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(22.dp))
+                Text(
+                    text = callerName,
+                    color = Color.White,
+                    fontSize = 30.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                )
+            }
+
+            Column(
+                modifier = Modifier.padding(bottom = 52.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        FloatingActionButton(
+                            onClick = onReject,
+                            modifier = Modifier.size(76.dp),
+                            shape = CircleShape,
+                            containerColor = Color(0xFFDC2626),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.CallEnd,
+                                contentDescription = "Decline call",
+                                tint = Color.White,
+                                modifier = Modifier.size(34.dp),
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = "Decline",
+                            color = Color(0xFF94A3B8),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        FloatingActionButton(
+                            onClick = onAccept,
+                            modifier = Modifier.size(76.dp),
+                            shape = CircleShape,
+                            containerColor = Color(0xFF10B981),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Call,
+                                contentDescription = "Accept call",
+                                tint = Color.White,
+                                modifier = Modifier.size(34.dp),
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = "Accept",
+                            color = Color(0xFF94A3B8),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    }
                 }
             }
         }

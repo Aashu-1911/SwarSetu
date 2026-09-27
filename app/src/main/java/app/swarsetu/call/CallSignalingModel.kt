@@ -75,6 +75,18 @@ sealed interface CallSignal {
         val host: String,
         val port: Int,
     ) : CallSignal
+
+    @Serializable
+    data class VoiceSegment(
+        override val callId: String,
+        override val timestampMs: Long = System.currentTimeMillis(),
+        val senderNodeId: String,
+        val text: String,
+        val originalText: String = "",
+        val sourceLanguage: String = "",
+        val targetLanguage: String = "",
+        val sequenceNumber: Long = 0L,
+    ) : CallSignal
 }
 
 object CallSignalCodec {

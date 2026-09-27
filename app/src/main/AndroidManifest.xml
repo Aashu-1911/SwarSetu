@@ -59,6 +59,7 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- Restart the mesh foreground service after a device reboot (see .mesh.BootReceiver). -->
@@ -114,6 +115,18 @@
             android:name=".call.LiveCallActionReceiver"
             android:exported="false" />
 
+        <receiver
+            android:name=".call.DebugCallReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="app.swarsetu.debug.SIMULATE_INCOMING_CALL" />
+                <action android:name="app.swarsetu.debug.ACCEPT_CALL" />
+                <action android:name="app.swarsetu.debug.SIMULATE_VOICE" />
+                <action android:name="app.swarsetu.debug.SIMULATE_HANGUP" />
+                <action android:name="app.swarsetu.debug.END_CALL" />
+            </intent-filter>
+        </receiver>
+
         <!-- Restart the always-on mesh after a device reboot, unless the user manually stopped it
              (mesh_enabled=false). BOOT_COMPLETED is delivered post-unlock, so the credential-encrypted
              settings DataStore is readable, and its receipt is an exemption to the background
@@ -148,3 +161,4 @@
     </application>
 
 </manifest>
+

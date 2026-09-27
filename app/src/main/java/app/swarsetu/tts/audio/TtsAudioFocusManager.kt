@@ -40,9 +40,10 @@ class TtsAudioFocusManager(
      * @return true if focus was granted, false otherwise.
      */
     fun requestFocus(): Boolean {
+        val req = focusRequest
         val result =
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && focusRequest != null) {
-                audioManager.requestAudioFocus(focusRequest!!)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && req != null) {
+                audioManager.requestAudioFocus(req)
             } else {
                 @Suppress("DEPRECATION")
                 audioManager.requestAudioFocus(
@@ -58,8 +59,9 @@ class TtsAudioFocusManager(
      * Abandons audio focus after speech completes.
      */
     fun abandonFocus() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && focusRequest != null) {
-            audioManager.abandonAudioFocusRequest(focusRequest!!)
+        val req = focusRequest
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && req != null) {
+            audioManager.abandonAudioFocusRequest(req)
         } else {
             @Suppress("DEPRECATION")
             audioManager.abandonAudioFocus(this)

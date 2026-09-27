@@ -242,8 +242,9 @@ class Sravaani10Engine(
             tokenizer = SravaaniTokenizer(lines)
         }
 
-        if (featurizer == null && tables != null) {
-            featurizer = SravaaniFeaturizer(tables!!)
+        val tbl = tables
+        if (featurizer == null && tbl != null) {
+            featurizer = SravaaniFeaturizer(tbl)
         }
     }
 

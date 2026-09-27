@@ -282,9 +282,10 @@ internal fun ProfileDetailsScreenContent(
         }
     }
 
-    if (showAvatarFullscreen && state.avatarHash != null) {
+    val avatar = state.avatarHash
+    if (showAvatarFullscreen && avatar != null) {
         FullscreenImageViewer(
-            model = BlobImage(state.avatarHash!!),
+            model = BlobImage(avatar),
             contentDescription = uiText(UiTextKey.CHAT_PHOTO_ATTACHMENT),
             title = state.displayName,
             onDismiss = { showAvatarFullscreen = false },

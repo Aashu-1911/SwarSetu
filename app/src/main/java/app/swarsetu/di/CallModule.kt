@@ -19,6 +19,7 @@ val callModule = module {
             translatorEngine = get(),
             ttsManager = get(),
             meshController = get(),
+            identity = get(),
         )
     }
 

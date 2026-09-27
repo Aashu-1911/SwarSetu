@@ -57,6 +57,32 @@ class LiveCallTestSuite {
     }
 
     @Test
+    fun testCallSignalingCodec_VoiceSegment() {
+        val voice = CallSignal.VoiceSegment(
+            callId = "call_voice_test_001",
+            senderNodeId = "node_alice_1234",
+            text = "आप कैसे हैं?",
+            originalText = "How are you?",
+            sourceLanguage = "en",
+            targetLanguage = "hi",
+            sequenceNumber = 1L,
+        )
+
+        val encoded = CallSignalCodec.encode(voice)
+        assertTrue(encoded.isNotEmpty())
+
+        val decoded = CallSignalCodec.decode(encoded) as? CallSignal.VoiceSegment
+        assertNotNull(decoded)
+        assertEquals("call_voice_test_001", decoded?.callId)
+        assertEquals("node_alice_1234", decoded?.senderNodeId)
+        assertEquals("आप कैसे हैं?", decoded?.text)
+        assertEquals("How are you?", decoded?.originalText)
+        assertEquals("en", decoded?.sourceLanguage)
+        assertEquals("hi", decoded?.targetLanguage)
+        assertEquals(1L, decoded?.sequenceNumber)
+    }
+
+    @Test
     fun testCallSecurity_EncryptionDecryptionAndReplayProtection() {
         val callId = "test_call_1001"
         val nonceA = "alice_nonce_abc"

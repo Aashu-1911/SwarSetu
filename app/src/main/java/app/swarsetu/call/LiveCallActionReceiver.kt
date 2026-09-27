@@ -25,6 +25,12 @@ class LiveCallActionReceiver : BroadcastReceiver(), KoinComponent {
                 scope.launch {
                     callManager.acceptCall()
                 }
+                try {
+                    val launchIntent = Intent(context, app.swarsetu.MainActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    }
+                    context.startActivity(launchIntent)
+                } catch (_: Exception) {}
             }
             ACTION_REJECT -> {
                 scope.launch {

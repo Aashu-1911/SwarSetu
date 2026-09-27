@@ -256,9 +256,10 @@ internal fun GroupDetailsScreenContent(
         }
     }
 
-    if (showPhotoFullscreen && state.photoHash != null) {
+    val photo = state.photoHash
+    if (showPhotoFullscreen && photo != null) {
         FullscreenImageViewer(
-            model = BlobImage(state.photoHash!!),
+            model = BlobImage(photo),
             contentDescription = uiText(UiTextKey.CHAT_PHOTO_ATTACHMENT),
             title = state.title,
             onDismiss = { showPhotoFullscreen = false },

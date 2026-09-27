@@ -3,6 +3,7 @@ package app.swarsetu.call
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import app.swarsetu.identity.Identity
 import app.swarsetu.mesh.MeshController
 import app.swarsetu.stt.SttLanguage
 import app.swarsetu.stt.sravaani.Sravaani10Engine
@@ -33,6 +34,7 @@ class CallManager(
     private val translatorEngine: TranslatorEngine,
     private val ttsManager: TtsManager,
     private val meshController: MeshController,
+    private val identity: Identity,
 ) {
     companion object {
         private const val TAG = "CallManager"
@@ -40,6 +42,9 @@ class CallManager(
         private const val INCOMING_TIMEOUT_MS = 45_000L
         private const val RECONNECT_TIMEOUT_MS = 10_000L
     }
+
+    /** Returns this device's genuine mesh node ID. */
+    fun localNodeId(): String = identity.nodeIdSync()
 
     private val mutex = Mutex()
 
@@ -140,22 +145,24 @@ class CallManager(
         _callState.value = CallState.OUTGOING
         session.updateState(CallState.OUTGOING)
 
-        localCallerNonce = CallSecurity.generateNonce()
+        val callerNonce = CallSecurity.generateNonce()
+        localCallerNonce = callerNonce
 
         // 1. Initialize JitterBuffer and Transport as Server
         val jb = JitterBuffer()
         jitterBuffer = jb
 
-        val dummyKey = CallSecurity.deriveSessionKey(callId, localCallerNonce!!, "provisional")
-        security = CallSecurity(dummyKey)
+        val dummyKey = CallSecurity.deriveSessionKey(callId, callerNonce, "provisional")
+        val sec = CallSecurity(dummyKey)
+        security = sec
 
-        val myNodeId = meshController.neighborCount.value.toString()
+        val myNodeId = localNodeId()
         val trans = CallMeshTransport(
             scope = sessionScope,
             callId = callId,
             localPeerId = myNodeId,
             remotePeerId = peerId,
-            security = security!!,
+            security = sec,
             jitterBuffer = jb,
             onPacketReceived = { packet -> handleInboundCallPacket(packet) },
             onConnectionClosed = { reason -> handleTransportClosed(reason) },
@@ -163,9 +170,10 @@ class CallManager(
         transport = trans
 
         val port = trans.startServer()
+        val localIp = CallNetworkUtils.getLocalIpAddress()
 
         // 2. Send Call Offer Signal over Mesh
-        Log.i(TAG, "CALL_SIGNALING_START: Sending Offer to $peerId on port $port")
+        Log.i(TAG, "CALL_SIGNALING_START: Sending Offer to $peerId on port $port, ip=$localIp")
         val offer = CallSignal.Offer(
             callId = callId,
             callerNodeId = myNodeId,
@@ -173,7 +181,8 @@ class CallManager(
             callerSourceLanguage = localSourceLangCode,
             callerTargetLanguage = localTargetLangCode,
             wifiAwarePort = port,
-            sessionNonce = localCallerNonce!!,
+            wifiAwareIpv6 = localIp,
+            sessionNonce = callerNonce,
         )
         sendCallSignal(peerId, offer)
         Log.i(TAG, "CALL_SIGNALING_SUCCESS: Offer signal transmitted")
@@ -224,12 +233,12 @@ class CallManager(
         val jb = JitterBuffer()
         jitterBuffer = jb
 
-        val myNodeId = meshController.neighborCount.value.toString()
+        val myNodeId = localNodeId()
         val trans = CallMeshTransport(
             scope = sessionScope,
             callId = callId,
             localPeerId = myNodeId,
-            remotePeerId = offer.callerNodeId,
+            remotePeerId = session.peerId,
             security = sec,
             jitterBuffer = jb,
             onPacketReceived = { packet -> handleInboundCallPacket(packet) },
@@ -237,11 +246,17 @@ class CallManager(
         )
         transport = trans
 
-        // Connect to caller's Wi-Fi Aware server
-        val targetHost = offer.wifiAwareIpv6 ?: "127.0.0.1"
-        trans.connect(targetHost, offer.wifiAwarePort)
+        val localIp = CallNetworkUtils.getLocalIpAddress()
+        val targetHost = offer.wifiAwareIpv6
 
-        // Send Answer Signal back to caller
+        // Connect asynchronously so mutex is not held if host is unreachable
+        if (!targetHost.isNullOrBlank()) {
+            sessionScope.launch(Dispatchers.IO) {
+                trans.connect(targetHost, offer.wifiAwarePort)
+            }
+        }
+
+        // Send Answer Signal back to caller immediately
         val answer = CallSignal.Answer(
             callId = callId,
             calleeNodeId = myNodeId,
@@ -250,9 +265,10 @@ class CallManager(
             calleeTargetLanguage = session.localTargetLanguage,
             accepted = true,
             wifiAwarePort = offer.wifiAwarePort,
+            wifiAwareIpv6 = localIp,
             sessionNonce = calleeNonce,
         )
-        sendCallSignal(offer.callerNodeId, answer)
+        sendCallSignal(session.peerId, answer)
 
         // Start Audio & Processors
         val enginesStarted = startCallEnginesAndProcessors(session)
@@ -276,10 +292,11 @@ class CallManager(
     suspend fun rejectCall(callId: String, reason: CallEndReason = CallEndReason.USER_REJECTED) = mutex.withLock {
         Log.i(TAG, "CALL_END_REQUEST: Rejecting call $callId (reason=$reason)")
         val offer = _incomingOffer.value
-        if (offer != null && offer.callId == callId) {
+        val targetPeerId = _currentSession.value?.peerId ?: offer?.callerNodeId
+        if (offer != null && targetPeerId != null && offer.callId == callId) {
             val answer = CallSignal.Answer(
                 callId = callId,
-                calleeNodeId = offer.callerNodeId,
+                calleeNodeId = localNodeId(),
                 calleeName = "Me",
                 calleeSourceLanguage = offer.callerTargetLanguage,
                 calleeTargetLanguage = offer.callerSourceLanguage,
@@ -287,7 +304,7 @@ class CallManager(
                 sessionNonce = "",
                 rejectReason = reason.name,
             )
-            sendCallSignal(offer.callerNodeId, answer)
+            sendCallSignal(targetPeerId, answer)
         }
         _incomingOffer.value = null
         cleanupSession(reason)
@@ -314,7 +331,7 @@ class CallManager(
         if (session != null) {
             val hangup = CallSignal.Hangup(
                 callId = session.callId,
-                senderNodeId = session.peerId,
+                senderNodeId = localNodeId(),
                 reason = reason.name,
             )
             sendCallSignal(session.peerId, hangup)
@@ -334,6 +351,7 @@ class CallManager(
                     is CallSignal.Answer -> handleIncomingAnswer(signal, fromPeerId)
                     is CallSignal.Ringing -> handleIncomingRinging(signal)
                     is CallSignal.Hangup -> handleIncomingHangup(signal)
+                    is CallSignal.VoiceSegment -> handleIncomingVoiceSegment(signal)
                     is CallSignal.Heartbeat -> {}
                     is CallSignal.TransportCandidate -> {}
                 }
@@ -341,13 +359,55 @@ class CallManager(
         }
     }
 
+    private fun handleIncomingVoiceSegment(voice: CallSignal.VoiceSegment) {
+        val session = _currentSession.value ?: return
+        if (session.callId != voice.callId) return
+        val segmentKey = "${session.callId}_mesh_${voice.timestampMs}_${voice.text.hashCode()}"
+        if (!session.recordProcessedSegment(segmentKey)) {
+            Log.d(TAG, "CALL_PACKET_DUPLICATE: Voice segment $segmentKey already processed")
+            return
+        }
+
+        val srcLang = IndicLanguage.fromCode(voice.sourceLanguage) ?: IndicLanguage.HINDI
+        val tgtLang = IndicLanguage.fromCode(voice.targetLanguage) ?: IndicLanguage.MARATHI
+
+        val remoteTranslation = LiveTranslation(
+            callId = session.callId,
+            speakerNodeId = session.peerId,
+            sourceText = voice.originalText,
+            translatedText = voice.text,
+            sourceLanguage = srcLang,
+            targetLanguage = tgtLang,
+            latencyMs = 0L,
+        )
+
+        ttsProcessor?.enqueue(remoteTranslation)
+        session.addTranscript(
+            CallTranscriptItem(
+                id = UUID.randomUUID().toString(),
+                speakerName = session.peerName,
+                isLocal = false,
+                originalText = voice.originalText,
+                translatedText = voice.text,
+                originalLanguage = voice.sourceLanguage,
+                translatedLanguage = voice.targetLanguage,
+            )
+        )
+    }
+
     private fun handleIncomingOffer(offer: CallSignal.Offer, fromPeerId: String) {
+        val authoritativeCallerId = if (offer.callerNodeId.isNotBlank() && offer.callerNodeId != "0" && offer.callerNodeId != "1" && offer.callerNodeId.length >= 8) {
+            offer.callerNodeId
+        } else {
+            fromPeerId
+        }
+
         if (_callState.value.isActive) {
             val current = _currentSession.value
-            if (_callState.value == CallState.OUTGOING && current != null && current.peerId == fromPeerId) {
+            if (_callState.value == CallState.OUTGOING && current != null && (current.peerId == fromPeerId || current.peerId == authoritativeCallerId)) {
                 // Concurrent outgoing call glare: deterministic tie-breaker on callerNodeId
-                if (offer.callerNodeId < current.peerId) {
-                    Log.d(TAG, "Call glare resolved: remote peer ${offer.callerNodeId} wins tie-breaker")
+                if (authoritativeCallerId < current.peerId) {
+                    Log.d(TAG, "Call glare resolved: remote peer $authoritativeCallerId wins tie-breaker")
                     current.updateState(CallState.ENDED)
                 } else {
                     Log.d(TAG, "Call glare resolved: local peer wins tie-breaker, maintaining outgoing offer")
@@ -358,7 +418,7 @@ class CallManager(
                 Log.w(TAG, "Rejecting offer ${offer.callId} as BUSY (active state=${_callState.value})")
                 val reject = CallSignal.Answer(
                     callId = offer.callId,
-                    calleeNodeId = fromPeerId,
+                    calleeNodeId = localNodeId(),
                     calleeName = "Me",
                     calleeSourceLanguage = offer.callerTargetLanguage,
                     calleeTargetLanguage = offer.callerSourceLanguage,
@@ -366,15 +426,16 @@ class CallManager(
                     sessionNonce = "",
                     rejectReason = "BUSY",
                 )
-                sendCallSignal(fromPeerId, reject)
+                sendCallSignal(authoritativeCallerId, reject)
                 return
             }
         }
 
+        val peerDisplayName = if (offer.callerName.isNotBlank() && offer.callerName != "Me") offer.callerName else "Peer"
         val session = CallSession(
             callId = offer.callId,
-            peerId = offer.callerNodeId,
-            peerName = offer.callerName,
+            peerId = authoritativeCallerId,
+            peerName = peerDisplayName,
             direction = CallDirection.INCOMING,
             localSourceLanguage = offer.callerTargetLanguage,
             localTargetLanguage = offer.callerSourceLanguage,
@@ -388,14 +449,14 @@ class CallManager(
         session.updateState(CallState.INCOMING)
 
         // Send Ringing acknowledgment back to caller
-        val ringing = CallSignal.Ringing(callId = offer.callId, calleeNodeId = fromPeerId)
-        sendCallSignal(fromPeerId, ringing)
+        val ringing = CallSignal.Ringing(callId = offer.callId, calleeNodeId = localNodeId())
+        sendCallSignal(authoritativeCallerId, ringing)
 
         // Start Foreground Service with Incoming Call notification
-        startCallService(offer.callId, offer.callerName, "Incoming Call...")
+        startCallService(offer.callId, peerDisplayName, "Incoming Call...")
         startCallTimeout(offer.callId, INCOMING_TIMEOUT_MS)
 
-        Log.i(TAG, "Received incoming call offer ${offer.callId} from ${offer.callerName}")
+        Log.i(TAG, "Received incoming call offer ${offer.callId} from $peerDisplayName ($authoritativeCallerId)")
     }
 
     private suspend fun handleIncomingAnswer(answer: CallSignal.Answer, fromPeerId: String) {
@@ -538,9 +599,20 @@ class CallManager(
                 )
             )
 
-            // Send encrypted translated segment packet over Wi-Fi Aware to remote peer
+            // 1. Send encrypted translated segment packet over Wi-Fi Aware to remote peer
             val payloadBytes = translation.translatedText.toByteArray(Charsets.UTF_8)
             transport?.sendPayload(CallPayloadType.TRANSLATED_SEGMENT, payloadBytes)
+
+            // 2. Also send VoiceSegment signal over Mesh so it is guaranteed to reach the peer even without TCP socket
+            val voiceSignal = CallSignal.VoiceSegment(
+                callId = session.callId,
+                senderNodeId = localNodeId(),
+                text = translation.translatedText,
+                originalText = transcript.text,
+                sourceLanguage = session.localSourceLanguage,
+                targetLanguage = session.localTargetLanguage,
+            )
+            sendCallSignal(session.peerId, voiceSignal)
         }
     }
 
@@ -765,6 +837,7 @@ class CallManager(
                     is CallSignal.Hangup -> "HANGUP"
                     is CallSignal.Heartbeat -> "HEARTBEAT"
                     is CallSignal.TransportCandidate -> "CANDIDATE"
+                    is CallSignal.VoiceSegment -> "VOICE_SEGMENT"
                 }
                 Log.d(TAG, "Sent CallSignal $signalType for call ${signal.callId} to $targetPeerId")
             } catch (e: Exception) {

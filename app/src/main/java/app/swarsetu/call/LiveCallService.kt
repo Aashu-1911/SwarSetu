@@ -47,16 +47,80 @@ class LiveCallService : LifecycleService() {
         return START_NOT_STICKY
     }
 
+    private var ringtone: android.media.Ringtone? = null
+    private var isRinging = false
+
+    private fun startRinging() {
+        if (isRinging) return
+        isRinging = true
+        try {
+            val uri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_RINGTONE)
+            ringtone = android.media.RingtoneManager.getRingtone(applicationContext, uri)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                ringtone?.isLooping = true
+            }
+            ringtone?.play()
+        } catch (_: Exception) {}
+
+        try {
+            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val vm = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? android.os.VibratorManager
+                vm?.defaultVibrator
+            } else {
+                @Suppress("DEPRECATION")
+                getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+            }
+            val pattern = longArrayOf(0, 1000, 1000)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator?.vibrate(android.os.VibrationEffect.createWaveform(pattern, 0))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(pattern, 0)
+            }
+        } catch (_: Exception) {}
+    }
+
+    private fun stopRinging() {
+        if (!isRinging) return
+        isRinging = false
+        try {
+            ringtone?.stop()
+        } catch (_: Exception) {} finally {
+            ringtone = null
+        }
+        try {
+            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val vm = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? android.os.VibratorManager
+                vm?.defaultVibrator
+            } else {
+                @Suppress("DEPRECATION")
+                getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+            }
+            vibrator?.cancel()
+        } catch (_: Exception) {}
+    }
+
+    override fun onDestroy() {
+        stopRinging()
+        super.onDestroy()
+    }
+
     private fun observeCallLifecycle() {
         lifecycleScope.launch {
             callManager.state.collectLatest { state ->
                 when (state) {
+                    CallState.INCOMING -> {
+                        startRinging()
+                        updateNotification(state)
+                    }
                     CallState.IDLE,
                     CallState.ENDED,
                     CallState.FAILED -> {
+                        stopRinging()
                         stopSelf()
                     }
                     else -> {
+                        stopRinging()
                         updateNotification(state)
                     }
                 }
@@ -157,6 +221,7 @@ class LiveCallService : LifecycleService() {
         }
 
         if (state == CallState.INCOMING) {
+            builder.setFullScreenIntent(openApp, true)
             builder.addAction(0, getString(R.string.call_action_accept), acceptIntent)
             builder.addAction(0, getString(R.string.call_action_reject), rejectIntent)
         } else if (state == CallState.CONNECTED || state == CallState.OUTGOING || state == CallState.OUTGOING_REQUESTED ||
@@ -178,20 +243,39 @@ class LiveCallService : LifecycleService() {
     }
 
     private fun postForeground(notification: Notification) {
-        val foregroundType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+        val hasMicPermission = ContextCompat.checkSelfPermission(
+            this,
+            android.Manifest.permission.RECORD_AUDIO
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+        val foregroundType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            if (hasMicPermission) {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+            } else {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+            }
         } else {
             0
         }
 
-        ServiceCompat.startForeground(
-            this,
-            NOTIFICATION_ID,
-            notification,
-            foregroundType,
-        )
+        try {
+            ServiceCompat.startForeground(
+                this,
+                NOTIFICATION_ID,
+                notification,
+                foregroundType,
+            )
+        } catch (e: Exception) {
+            // Fallback to basic foreground if specific type is disallowed
+            try {
+                ServiceCompat.startForeground(
+                    this,
+                    NOTIFICATION_ID,
+                    notification,
+                    0,
+                )
+            } catch (_: Exception) {}
+        }
     }
 
     companion object {
@@ -217,3 +301,4 @@ class LiveCallService : LifecycleService() {
         }
     }
 }
+

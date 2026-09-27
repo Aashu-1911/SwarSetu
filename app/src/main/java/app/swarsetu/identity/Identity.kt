@@ -25,8 +25,11 @@ class Identity(
     @Volatile
     private var cachedDeviceTag: String? = null
 
+    /** This device's node id — the self-certifying hash of its [publicKeyBundle] (synchronous). */
+    fun nodeIdSync(): String = cachedNodeId ?: NodeId.fromPublicKeyBundle(publicKeyBundle()).also { cachedNodeId = it }
+
     /** This device's node id — the self-certifying hash of its [publicKeyBundle]. */
-    override suspend fun nodeId(): String = cachedNodeId ?: NodeId.fromPublicKeyBundle(publicKeyBundle()).also { cachedNodeId = it }
+    override suspend fun nodeId(): String = nodeIdSync()
 
     /** The base64 public-key bundle this device advertises in its profile (`ProfileContent.pubKey`). */
     override fun publicKeyBundle(): String = keyStore.keys().publicBundle.encoded
