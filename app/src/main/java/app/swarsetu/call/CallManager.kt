@@ -12,17 +12,19 @@ import app.swarsetu.tts.TtsManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.UUID
 
 /**
- * High-level orchestrator for SwarSetu Live Translated VoIP Calls.
+ * Authoritative Application/Service-scoped Call Runtime for SwarSetu Live Translated VoIP.
+ * Manages the single active CallSession, hard state machine, full-duplex audio pipeline,
+ * live STT/Translation/TTS workers, and idempotent lifecycle cleanup.
  */
 class CallManager(
     private val context: Context,
@@ -34,10 +36,14 @@ class CallManager(
 ) {
     companion object {
         private const val TAG = "CallManager"
+        private const val OUTGOING_TIMEOUT_MS = 30_000L
+        private const val INCOMING_TIMEOUT_MS = 45_000L
+        private const val RECONNECT_TIMEOUT_MS = 10_000L
     }
 
     private val mutex = Mutex()
 
+    // Exactly ONE authoritative active CallSession
     private val _currentSession = MutableStateFlow<CallSession?>(null)
     val currentSession: StateFlow<CallSession?> = _currentSession.asStateFlow()
 
@@ -57,7 +63,11 @@ class CallManager(
     private var localCallerNonce: String? = null
     private var remoteNonce: String? = null
 
-    // Processors & Engines
+    // Call-scoped coroutine hierarchy
+    private var callJob: Job? = null
+    private var callScope: CoroutineScope? = null
+
+    // Media & Transport Engines
     private var audioEngine: CallAudioEngine? = null
     private var vadDetector: CallVadEndpointDetector? = null
     private var sttProcessor: LiveSttProcessor? = null
@@ -83,20 +93,34 @@ class CallManager(
 
     /**
      * Starts an outgoing Live Translated Call to [peerId].
+     * Idempotent: returns existing callId if call is already in progress with this peer.
      */
     suspend fun initiateCall(
         peerId: String,
         peerName: String,
-        localSourceLangCode: String = "hi",
-        localTargetLangCode: String = "mr",
+        localSourceLangCode: String = "en",
+        localTargetLangCode: String = "hi",
     ): String = mutex.withLock {
+        Log.i(TAG, "CALL_START_REQUEST: Initiate outgoing call to $peerName ($peerId), langs: $localSourceLangCode -> $localTargetLangCode")
+
         if (_callState.value.isActive) {
-            Log.w(TAG, "Cannot start call: another call is already active (${_callState.value})")
+            val current = _currentSession.value
+            if (current != null && current.peerId == peerId) {
+                Log.i(TAG, "CALL_DUPLICATE_START_IGNORED: Active call session already exists for peer $peerId (callId=${current.callId})")
+                return@withLock current.callId
+            }
+            Log.w(TAG, "CALL_DUPLICATE_START_IGNORED: Cannot start call to $peerId because another call (${current?.callId}) is in state ${_callState.value}")
             return@withLock ""
         }
 
         val callId = UUID.randomUUID().toString()
-        val myNodeId = meshController.neighborCount.value.toString() // or resolved node ID
+        Log.i(TAG, "CALL_CREATE: Created unique callId=$callId")
+
+        // Create dedicated child job for this call session
+        val parentJob = SupervisorJob(scope.coroutineContext[Job])
+        callJob = parentJob
+        val sessionScope = CoroutineScope(Dispatchers.Default + parentJob)
+        callScope = sessionScope
 
         val session = CallSession(
             callId = callId,
@@ -107,23 +131,27 @@ class CallManager(
             localTargetLanguage = localTargetLangCode,
             remoteSourceLanguage = localTargetLangCode,
             remoteTargetLanguage = localSourceLangCode,
+            initialState = CallState.OUTGOING_REQUESTED,
         )
         _currentSession.value = session
+        _callState.value = CallState.OUTGOING_REQUESTED
+
+        // Transition to OUTGOING
         _callState.value = CallState.OUTGOING
         session.updateState(CallState.OUTGOING)
 
         localCallerNonce = CallSecurity.generateNonce()
 
-        // 1. Initialize Transport as Server (awaiting connection from callee on accepted answer)
+        // 1. Initialize JitterBuffer and Transport as Server
         val jb = JitterBuffer()
         jitterBuffer = jb
 
-        // Derive provisional security or prepare session
         val dummyKey = CallSecurity.deriveSessionKey(callId, localCallerNonce!!, "provisional")
         security = CallSecurity(dummyKey)
 
-        transport = CallMeshTransport(
-            scope = scope,
+        val myNodeId = meshController.neighborCount.value.toString()
+        val trans = CallMeshTransport(
+            scope = sessionScope,
             callId = callId,
             localPeerId = myNodeId,
             remotePeerId = peerId,
@@ -132,10 +160,12 @@ class CallManager(
             onPacketReceived = { packet -> handleInboundCallPacket(packet) },
             onConnectionClosed = { reason -> handleTransportClosed(reason) },
         )
+        transport = trans
 
-        val port = transport?.startServer() ?: CallMeshTransport.DEFAULT_PORT
+        val port = trans.startServer()
 
         // 2. Send Call Offer Signal over Mesh
+        Log.i(TAG, "CALL_SIGNALING_START: Sending Offer to $peerId on port $port")
         val offer = CallSignal.Offer(
             callId = callId,
             callerNodeId = myNodeId,
@@ -146,14 +176,14 @@ class CallManager(
             sessionNonce = localCallerNonce!!,
         )
         sendCallSignal(peerId, offer)
+        Log.i(TAG, "CALL_SIGNALING_SUCCESS: Offer signal transmitted")
 
         // 3. Start Foreground Service
         startCallService(callId, peerName, "Calling...")
 
-        // 4. Set call timeout (e.g. 30 seconds ringing timeout)
-        startCallTimeout(callId, 30_000L)
+        // 4. Set Call Timeout
+        startCallTimeout(callId, OUTGOING_TIMEOUT_MS)
 
-        Log.d(TAG, "Initiated outgoing call $callId to $peerName ($peerId)")
         callId
     }
 
@@ -161,6 +191,7 @@ class CallManager(
      * Accepts an incoming call offer.
      */
     suspend fun acceptCall(callId: String): Boolean = mutex.withLock {
+        Log.i(TAG, "CALL_CONNECTING: Accepting call $callId")
         val offer = _incomingOffer.value
         if (offer == null || offer.callId != callId) {
             Log.e(TAG, "No matching incoming call offer found for $callId")
@@ -169,8 +200,17 @@ class CallManager(
 
         val session = _currentSession.value ?: return@withLock false
         _incomingOffer.value = null
+
+        _callState.value = CallState.ACCEPTING
+        session.updateState(CallState.ACCEPTING)
+
         _callState.value = CallState.CONNECTING
         session.updateState(CallState.CONNECTING)
+
+        val parentJob = SupervisorJob(scope.coroutineContext[Job])
+        callJob = parentJob
+        val sessionScope = CoroutineScope(Dispatchers.Default + parentJob)
+        callScope = sessionScope
 
         val calleeNonce = CallSecurity.generateNonce()
         localCallerNonce = offer.sessionNonce
@@ -186,7 +226,7 @@ class CallManager(
 
         val myNodeId = meshController.neighborCount.value.toString()
         val trans = CallMeshTransport(
-            scope = scope,
+            scope = sessionScope,
             callId = callId,
             localPeerId = myNodeId,
             remotePeerId = offer.callerNodeId,
@@ -199,7 +239,7 @@ class CallManager(
 
         // Connect to caller's Wi-Fi Aware server
         val targetHost = offer.wifiAwareIpv6 ?: "127.0.0.1"
-        val connected = trans.connect(targetHost, offer.wifiAwarePort)
+        trans.connect(targetHost, offer.wifiAwarePort)
 
         // Send Answer Signal back to caller
         val answer = CallSignal.Answer(
@@ -221,11 +261,12 @@ class CallManager(
             cleanupSession(CallEndReason.AUDIO_DEVICE_ERROR)
             return@withLock false
         }
+
         _callState.value = CallState.CONNECTED
         session.updateState(CallState.CONNECTED)
+        Log.i(TAG, "CALL_CONNECTED: Call $callId connected with ${offer.callerName}")
 
         updateCallServiceNotification(callId, session.peerName, "Connected")
-        Log.d(TAG, "Accepted call $callId from ${offer.callerName}")
         true
     }
 
@@ -233,6 +274,7 @@ class CallManager(
      * Declines / Rejects an incoming call offer.
      */
     suspend fun rejectCall(callId: String, reason: CallEndReason = CallEndReason.USER_REJECTED) = mutex.withLock {
+        Log.i(TAG, "CALL_END_REQUEST: Rejecting call $callId (reason=$reason)")
         val offer = _incomingOffer.value
         if (offer != null && offer.callId == callId) {
             val answer = CallSignal.Answer(
@@ -252,28 +294,37 @@ class CallManager(
     }
 
     /**
-     * Ends the currently active call.
+     * Ends the currently active call idempotently.
      */
     suspend fun endCall(reason: CallEndReason = CallEndReason.USER_HANGUP) = mutex.withLock {
-        val session = _currentSession.value ?: return@withLock
-        Log.d(TAG, "Ending call ${session.callId}: $reason")
+        val state = _callState.value
+        if (state == CallState.IDLE || state == CallState.ENDED || state == CallState.ENDING) {
+            Log.d(TAG, "CALL_END_ALREADY_IN_PROGRESS: endCall ignored in state $state")
+            return@withLock
+        }
+
+        val session = _currentSession.value
+        val callId = session?.callId ?: "unknown"
+        Log.i(TAG, "CALL_END_REQUEST: Ending call $callId: $reason")
 
         _callState.value = CallState.ENDING
-        session.updateState(CallState.ENDING)
+        session?.updateState(CallState.ENDING)
 
-        // Send Hangup signal to peer
-        val hangup = CallSignal.Hangup(
-            callId = session.callId,
-            senderNodeId = session.peerId,
-            reason = reason.name,
-        )
-        sendCallSignal(session.peerId, hangup)
+        // Send Hangup signal to peer over mesh
+        if (session != null) {
+            val hangup = CallSignal.Hangup(
+                callId = session.callId,
+                senderNodeId = session.peerId,
+                reason = reason.name,
+            )
+            sendCallSignal(session.peerId, hangup)
+        }
 
         cleanupSession(reason)
     }
 
     /**
-     * Handles an incoming call signal from the mesh network.
+     * Handles incoming call signals received from the mesh network.
      */
     fun onSignalReceived(signal: CallSignal, fromPeerId: String) {
         scope.launch {
@@ -294,8 +345,8 @@ class CallManager(
         if (_callState.value.isActive) {
             val current = _currentSession.value
             if (_callState.value == CallState.OUTGOING && current != null && current.peerId == fromPeerId) {
-                // Concurrent outgoing call glare: deterministic tie-breaker on callId/nodeId
-                if (offer.callerNodeId < (current.peerId)) {
+                // Concurrent outgoing call glare: deterministic tie-breaker on callerNodeId
+                if (offer.callerNodeId < current.peerId) {
                     Log.d(TAG, "Call glare resolved: remote peer ${offer.callerNodeId} wins tie-breaker")
                     current.updateState(CallState.ENDED)
                 } else {
@@ -304,6 +355,7 @@ class CallManager(
                 }
             } else {
                 // Already in a call: send busy reject
+                Log.w(TAG, "Rejecting offer ${offer.callId} as BUSY (active state=${_callState.value})")
                 val reject = CallSignal.Answer(
                     callId = offer.callId,
                     calleeNodeId = fromPeerId,
@@ -328,6 +380,7 @@ class CallManager(
             localTargetLanguage = offer.callerSourceLanguage,
             remoteSourceLanguage = offer.callerSourceLanguage,
             remoteTargetLanguage = offer.callerTargetLanguage,
+            initialState = CallState.INCOMING,
         )
         _currentSession.value = session
         _incomingOffer.value = offer
@@ -340,9 +393,9 @@ class CallManager(
 
         // Start Foreground Service with Incoming Call notification
         startCallService(offer.callId, offer.callerName, "Incoming Call...")
-        startCallTimeout(offer.callId, 45_000L)
+        startCallTimeout(offer.callId, INCOMING_TIMEOUT_MS)
 
-        Log.d(TAG, "Received incoming call offer ${offer.callId} from ${offer.callerName}")
+        Log.i(TAG, "Received incoming call offer ${offer.callId} from ${offer.callerName}")
     }
 
     private suspend fun handleIncomingAnswer(answer: CallSignal.Answer, fromPeerId: String) {
@@ -353,7 +406,7 @@ class CallManager(
 
         if (!answer.accepted) {
             val endReason = if (answer.rejectReason == "BUSY") CallEndReason.BUSY else CallEndReason.REMOTE_REJECTED
-            Log.d(TAG, "Call offer declined by remote peer: ${answer.rejectReason}")
+            Log.i(TAG, "Call offer declined by remote peer: ${answer.rejectReason}")
             cleanupSession(endReason)
             return
         }
@@ -367,6 +420,7 @@ class CallManager(
         // Connect/bind transport
         _callState.value = CallState.CONNECTED
         session.updateState(CallState.CONNECTED)
+        Log.i(TAG, "CALL_CONNECTED: Outgoing call ${session.callId} established with ${session.peerName}")
 
         val enginesStarted = startCallEnginesAndProcessors(session)
         if (!enginesStarted) {
@@ -376,7 +430,6 @@ class CallManager(
         }
 
         updateCallServiceNotification(session.callId, session.peerName, "Connected")
-        Log.d(TAG, "Call ${session.callId} connected successfully with ${session.peerName}")
     }
 
     private fun handleIncomingRinging(ringing: CallSignal.Ringing) {
@@ -391,14 +444,16 @@ class CallManager(
     private suspend fun handleIncomingHangup(hangup: CallSignal.Hangup) {
         val session = _currentSession.value ?: return
         if (session.callId == hangup.callId) {
-            Log.d(TAG, "Remote peer hung up call ${session.callId}")
+            Log.i(TAG, "Remote peer hung up call ${session.callId}")
             cleanupSession(CallEndReason.REMOTE_HANGUP)
         }
     }
 
     private suspend fun startCallEnginesAndProcessors(session: CallSession): Boolean {
+        val activeScope = callScope ?: scope
+
         // 1. Prepare STT for local source language
-        val sttLang = SttLanguage.fromCode(session.localSourceLanguage) ?: SttLanguage.HINDI
+        val sttLang = SttLanguage.fromCode(session.localSourceLanguage) ?: SttLanguage.ENGLISH
         sttProcessor?.prepare(sttLang)
 
         // 2. Setup VAD endpoint detector with local barge-in trigger
@@ -416,13 +471,13 @@ class CallManager(
         // 3. Start AudioRecord capture and AudioTrack playback
         val audio = CallAudioEngine(
             context = context,
-            scope = scope,
+            scope = activeScope,
             onPcmCaptured = { pcmChunk, length ->
                 vad.processPcmChunk(pcmChunk, length)
             }
         )
         audioEngine = audio
-        return audio.start(speakerphone = true)
+        return audio.start(speakerphone = _isSpeakerOn.value)
     }
 
     private fun onLocalSpeechSegmentCaptured(
@@ -431,7 +486,8 @@ class CallManager(
         durationMs: Long,
         language: SttLanguage,
     ) {
-        scope.launch(Dispatchers.Default) {
+        val activeScope = callScope ?: scope
+        activeScope.launch(Dispatchers.Default) {
             val transcript = sttProcessor?.processSpeechSegment(
                 callId = session.callId,
                 speakerNodeId = "me",
@@ -446,7 +502,23 @@ class CallManager(
                 text = transcript.text,
                 sourceLangCode = session.localSourceLanguage,
                 targetLangCode = session.localTargetLanguage,
-            ) ?: return@launch
+            )
+            if (translation == null) {
+                Log.w(TAG, "CALL_TRANSLATION_ERROR: Translation failed for segment: \"${transcript.text}\". Emitting translation error and suppressing untranslated transmission.")
+                session.addTranscript(
+                    CallTranscriptItem(
+                        id = UUID.randomUUID().toString(),
+                        speakerName = "You",
+                        isLocal = true,
+                        originalText = transcript.text,
+                        translatedText = "[Translation Error]",
+                        originalLanguage = session.localSourceLanguage,
+                        translatedLanguage = session.localTargetLanguage,
+                        totalLatencyMs = transcript.latencyMs,
+                    )
+                )
+                return@launch
+            }
 
             // Update local metrics & transcript list
             session.updateMetrics(
@@ -474,11 +546,14 @@ class CallManager(
 
     private fun handleInboundCallPacket(packet: CallPacket) {
         val session = _currentSession.value ?: return
-        if (session.callId != packet.callId) return
+        if (session.callId != packet.callId) {
+            Log.w(TAG, "Ignoring packet from old/mismatched callId=${packet.callId} (current=${session.callId})")
+            return
+        }
 
         val sec = security ?: return
         if (!sec.validateAndRecordSequence(packet.sequenceNumber)) {
-            // Replay or invalid packet
+            Log.w(TAG, "CALL_PACKET_DUPLICATE: Replay/duplicate packet #${packet.sequenceNumber} rejected")
             return
         }
 
@@ -489,6 +564,12 @@ class CallManager(
             when (packet.payloadType) {
                 CallPayloadType.TRANSLATED_SEGMENT -> {
                     val translatedText = String(decrypted, Charsets.UTF_8)
+                    val segmentKey = "${session.callId}_${packet.sequenceNumber}"
+                    if (!session.recordProcessedSegment(segmentKey)) {
+                        Log.d(TAG, "CALL_PACKET_DUPLICATE: Segment $segmentKey already processed")
+                        return
+                    }
+
                     val srcLang = IndicLanguage.fromCode(session.remoteSourceLanguage) ?: IndicLanguage.HINDI
                     val tgtLang = IndicLanguage.fromCode(session.localSourceLanguage) ?: IndicLanguage.MARATHI
 
@@ -518,9 +599,7 @@ class CallManager(
                         )
                     )
                 }
-                CallPayloadType.VOICE_PCM -> {
-                    // Raw audio stream fallback
-                }
+                CallPayloadType.VOICE_PCM -> {}
                 else -> {}
             }
         } catch (e: Exception) {
@@ -531,7 +610,14 @@ class CallManager(
     private fun handleTransportClosed(reason: String) {
         scope.launch {
             mutex.withLock {
-                if (_callState.value.isActive) {
+                val session = _currentSession.value
+                if (_callState.value == CallState.CONNECTED && session != null) {
+                    Log.w(TAG, "CALL_RECONNECTING: Transport connection dropped ($reason). Reconnecting...")
+                    _callState.value = CallState.RECONNECTING
+                    session.updateState(CallState.RECONNECTING)
+                    updateCallServiceNotification(session.callId, session.peerName, "Reconnecting...")
+                    startCallTimeout(session.callId, RECONNECT_TIMEOUT_MS)
+                } else if (_callState.value.isActive) {
                     Log.w(TAG, "Call transport closed unexpectedly: $reason")
                     cleanupSession(CallEndReason.NETWORK_LOST)
                 }
@@ -573,29 +659,98 @@ class CallManager(
         }
     }
 
+    /**
+     * Strict ordered terminal cleanup (Part 6):
+     * 1. mark ENDING
+     * 2. stop microphone capture
+     * 3. stop VAD
+     * 4. reset STT
+     * 5. stop translation workers
+     * 6. stop TTS & flush queue
+     * 7. flush/stop AudioTrack & audio mode
+     * 8. close & clear jitter buffer
+     * 9. stop audio transport & sockets
+     * 10. cancel call-scoped coroutines
+     * 11. stop foreground service
+     * 12. mark ENDED
+     * 13. schedule IDLE transition & clear active session
+     */
     private suspend fun cleanupSession(reason: CallEndReason) {
+        Log.i(TAG, "CALL_CLEANUP_START: Executing ordered cleanup for reason $reason")
         callTimeoutJob?.cancel()
         callTimeoutJob = null
 
         val session = _currentSession.value
         session?.endReason = reason
-        session?.updateState(CallState.ENDED)
 
+        // 1. Stop audio capture & playback
+        try {
+            audioEngine?.stop()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error stopping CallAudioEngine: ${e.message}")
+        } finally {
+            audioEngine = null
+        }
+
+        // 2. Stop VAD
+        try {
+            vadDetector?.reset()
+        } catch (_: Exception) {} finally {
+            vadDetector = null
+        }
+
+        // 3. Reset STT
+        sttProcessor?.reset()
+
+        // 4. Stop TTS and flush queues
+        try {
+            ttsProcessor?.stopAndFlush()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error stopping LiveTtsProcessor: ${e.message}")
+        }
+
+        // 5. Clear jitter buffer
+        try {
+            jitterBuffer?.clear()
+        } catch (_: Exception) {} finally {
+            jitterBuffer = null
+        }
+
+        // 6. Close transport & Wi-Fi Aware sockets
+        try {
+            transport?.close("Call ended ($reason)")
+        } catch (e: Exception) {
+            Log.w(TAG, "Error closing CallMeshTransport: ${e.message}")
+        } finally {
+            transport = null
+        }
+
+        // 7. Cancel call-scoped coroutines
+        callJob?.cancel()
+        callJob = null
+        callScope = null
+
+        // 8. Stop Foreground Service
+        stopCallService()
+
+        // 9. Mark ENDED
+        session?.updateState(CallState.ENDED)
         _callState.value = CallState.ENDED
         _incomingOffer.value = null
+        Log.i(TAG, "CALL_CLEANUP_COMPLETE: Terminal cleanup finished for reason $reason")
+        Log.i(TAG, "CALL_ENDED: Call session ended")
 
-        audioEngine?.stop()
-        audioEngine = null
-
-        vadDetector?.reset()
-        vadDetector = null
-
-        ttsProcessor?.stopAndFlush()
-        transport?.close("Call ended ($reason)")
-        transport = null
-
-        stopCallService()
-        Log.d(TAG, "Call session cleaned up cleanly: $reason")
+        // Schedule transition back to IDLE after a short delay so observers receive ENDED
+        scope.launch(Dispatchers.Default) {
+            kotlinx.coroutines.delay(800L)
+            mutex.withLock {
+                if (_callState.value == CallState.ENDED || _callState.value == CallState.FAILED) {
+                    _callState.value = CallState.IDLE
+                    _currentSession.value = null
+                    Log.d(TAG, "CallState reset to IDLE and session cleared")
+                }
+            }
+        }
     }
 
     private fun sendCallSignal(targetPeerId: String, signal: CallSignal) {
@@ -623,8 +778,9 @@ class CallManager(
         callTimeoutJob = scope.launch(Dispatchers.Default) {
             kotlinx.coroutines.delay(timeoutMs)
             mutex.withLock {
-                if (_callState.value == CallState.OUTGOING || _callState.value == CallState.INCOMING || _callState.value == CallState.RINGING) {
-                    Log.w(TAG, "Call $callId timed out after ${timeoutMs}ms")
+                if (_callState.value == CallState.OUTGOING || _callState.value == CallState.INCOMING ||
+                    _callState.value == CallState.RINGING || _callState.value == CallState.RECONNECTING) {
+                    Log.w(TAG, "Call $callId timed out after ${timeoutMs}ms (state=${_callState.value})")
                     cleanupSession(CallEndReason.TIMEOUT)
                 }
             }

@@ -4,10 +4,9 @@ import android.util.Log
 import app.swarsetu.translation.TranslatorEngine
 import app.swarsetu.translation.indictrans.IndicLanguage
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
@@ -21,6 +20,7 @@ data class LiveTranslation(
     val sourceLanguage: IndicLanguage,
     val targetLanguage: IndicLanguage,
     val latencyMs: Long,
+    val segmentId: String = "",
     val timestampMs: Long = System.currentTimeMillis(),
 )
 
@@ -39,7 +39,7 @@ class LiveTranslationProcessor(
     private val translationMutex = Mutex()
 
     /**
-     * Translates recognized transcript text to the remote peer's target language with fallback.
+     * Translates recognized transcript text to the remote peer's target language with fallback and structured logging.
      */
     suspend fun translateSegment(
         callId: String,
@@ -56,6 +56,7 @@ class LiveTranslationProcessor(
 
         // Same language: pass through with 0ms latency
         if (srcLang == tgtLang) {
+            Log.i(TAG, "CALL_TRANSLATION_FINAL: Same language (${srcLang.code}), passing verbatim: \"$trimmed\"")
             return@withContext LiveTranslation(
                 callId = callId,
                 speakerNodeId = speakerNodeId,
@@ -69,6 +70,7 @@ class LiveTranslationProcessor(
 
         translationMutex.withLock {
             val startTime = System.currentTimeMillis()
+            Log.i(TAG, "CALL_TRANSLATION_START: [${srcLang.code} -> ${tgtLang.code}] \"$trimmed\"")
             var translated = ""
             var success = false
 
@@ -86,36 +88,43 @@ class LiveTranslationProcessor(
                     success = true
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "IndicTrans2 translation failed for \"$trimmed\": ${e.message}")
+                Log.w(TAG, "CALL_TRANSLATION_ERROR: IndicTrans2 high-level translate error for \"$trimmed\": ${e.message}")
             }
 
-            // 2. Direct model fallback if high-level translate threw
+            // 2. Bounded retry on direct IndicTrans2 engine if initial attempt failed
             if (!success) {
-                try {
-                    val directResult = withTimeoutOrNull(1500L) {
-                        translatorEngine.indicTransEngine.translate(
-                            text = trimmed,
-                            source = srcLang,
-                            target = tgtLang,
-                        )
+                var retryCount = 0
+                val maxRetries = 1
+                while (!success && retryCount <= maxRetries) {
+                    retryCount++
+                    try {
+                        val directResult = withTimeoutOrNull(1500L) {
+                            translatorEngine.indicTransEngine.translate(
+                                text = trimmed,
+                                source = srcLang,
+                                target = tgtLang,
+                            )
+                        }
+                        if (directResult != null && directResult.translatedText.isNotBlank()) {
+                            translated = directResult.translatedText.trim()
+                            success = true
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "CALL_TRANSLATION_ERROR: Direct IndicTrans2 retry $retryCount failed: ${e.message}")
                     }
-                    if (directResult != null && directResult.translatedText.isNotBlank()) {
-                        translated = directResult.translatedText.trim()
-                        success = true
-                    }
-                } catch (e: Exception) {
-                    Log.w(TAG, "Direct IndicTrans2 fallback also failed: ${e.message}")
                 }
             }
 
-            // 3. Ultimate resilient fallback: deliver verbatim original text so call never drops
+            // 3. Translation Failure Policy (Requirement 9):
+            // Do NOT fall back to verbatim/untranslated text. Return null and log failure.
             if (!success || translated.isBlank()) {
-                Log.w(TAG, "Falling back to verbatim original text for \"$trimmed\"")
-                translated = trimmed
+                Log.e(TAG, "CALL_TRANSLATION_ERROR: Translation failed for \"$trimmed\" after retries. Suppressing untranslated audio transmission.")
+                return@withLock null
             }
 
             val latencyMs = System.currentTimeMillis() - startTime
-            Log.d(TAG, "Translation [${srcLang.code} -> ${tgtLang.code}]: \"$trimmed\" -> \"$translated\" in ${latencyMs}ms")
+            Log.i(TAG, "CALL_TRANSLATION_FINAL: [${srcLang.code} -> ${tgtLang.code}] \"$trimmed\" -> \"$translated\"")
+            Log.i(TAG, "CALL_TRANSLATION_LATENCY: ${latencyMs}ms")
 
             LiveTranslation(
                 callId = callId,

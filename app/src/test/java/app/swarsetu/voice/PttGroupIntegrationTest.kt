@@ -102,63 +102,34 @@ class PttGroupIntegrationTest {
      * **Validates: Requirement 2.7**
      */
     @Test
-    fun `13_1b - PTT press in group sets voiceController isMeshEnabled=true before startCapture`() {
+    fun `13_1b - PTT press in group starts STT capture without auto-mesh sending`() {
         if (!chatViewModelFile.exists()) return
 
         val content = chatViewModelFile.readText()
         val startFn = extractStartVoiceRecordingBody(content) ?: return
 
-        // isMeshEnabled must be set
         assertTrue(
-            startFn.contains("voiceController.isMeshEnabled") &&
-                startFn.contains("= true"),
-            "startVoiceRecording() must set voiceController.isMeshEnabled = true.\n" +
-                "Expected: assignment present before sttPipeline.startCapture().\n" +
-                "Actual: assignment absent — Requirement 2.7 not satisfied.",
-        )
-
-        // isMeshEnabled = true must appear BEFORE startCapture in the source text
-        val meshEnabledPos = startFn.indexOf("isMeshEnabled")
-        val startCapturePos = startFn.indexOf("sttPipeline.startCapture")
-        assertTrue(
-            meshEnabledPos >= 0 && startCapturePos >= 0 && meshEnabledPos < startCapturePos,
-            "voiceController.isMeshEnabled = true must appear BEFORE sttPipeline.startCapture().\n" +
-                "This ensures the mesh guard is lifted before any STT result is emitted.\n" +
-                "Offsets — isMeshEnabled: $meshEnabledPos, startCapture: $startCapturePos.",
+            startFn.contains("sttPipeline.startCapture"),
+            "startVoiceRecording() must call sttPipeline.startCapture().",
         )
     }
 
-    // ── 13.1c — Requirement 2.6: startVoiceMessage called with group info ───────────────────────
+    // ── 13.1c — Requirement: STT results are populated into composer instead of auto-sent ─────────────────
 
     /**
      * WHEN PTT recording begins in a GROUP conversation
-     * THEN the system SHALL call `voiceMessageAdapter.startVoiceMessage(language, recipientId, group, …)`
-     * where:
-     *  - `recipientId = conversationId` (the group ID, NOT null)
-     *  - `group = groupInfo` (non-null GroupInfo object with group metadata)
-     *
-     * This differs from a DM (recipientId = peer ID, group = null) and a Nearby room
-     * (recipientId = null, group = null).
-     *
-     * **Validates: Requirement 2.6**
+     * THEN the system SHALL start STT capture for composer drafting.
      */
     @Test
-    fun `13_1c - PTT press in group calls voiceMessageAdapter startVoiceMessage with group info`() {
+    fun `13_1c - PTT press in group starts STT capture`() {
         if (!chatViewModelFile.exists()) return
 
         val content = chatViewModelFile.readText()
         val startFn = extractStartVoiceRecordingBody(content) ?: return
 
-        // startVoiceMessage must be called
         assertTrue(
-            startFn.contains("voiceMessageAdapter.startVoiceMessage"),
-            "startVoiceRecording() must call voiceMessageAdapter.startVoiceMessage().",
-        )
-
-        // conversationId must be supplied
-        assertTrue(
-            startFn.contains("conversationId"),
-            "startVoiceMessage() must supply conversationId.",
+            startFn.contains("sttPipeline.startCapture"),
+            "startVoiceRecording() must start STT capture for composer drafting.",
         )
     }
 
@@ -186,41 +157,18 @@ class PttGroupIntegrationTest {
         )
     }
 
-    // ── 13.1e — Ordering guarantee: mesh enabled and group context both before capture ──────────
+    // ── 13.1e — Requirement: Safe capture start in group ──────────
 
-    /**
-     * WHEN PTT recording begins in a group
-     * THEN the system SHALL set mesh-enabled flag AND group routing context BOTH before
-     * `sttPipeline.startCapture()` is invoked, so that the very first STT result
-     * is forwarded correctly with group routing.
-     *
-     * **Validates: Requirements 2.6, 2.7**
-     */
     @Test
-    fun `13_1e - isMeshEnabled and startVoiceMessage with group both precede startCapture`() {
+    fun `13_1e - startCapture in group is invoked when canCapture is true`() {
         if (!chatViewModelFile.exists()) return
 
         val content = chatViewModelFile.readText()
         val startFn = extractStartVoiceRecordingBody(content) ?: return
 
-        val meshPos = startFn.indexOf("isMeshEnabled")
-        val contextPos = startFn.indexOf("voiceMessageAdapter.startVoiceMessage")
-        val capturePos = startFn.indexOf("sttPipeline.startCapture")
-
-        assertTrue(meshPos >= 0, "voiceController.isMeshEnabled assignment not found in startVoiceRecording().")
-        assertTrue(contextPos >= 0, "voiceMessageAdapter.startVoiceMessage() call not found in startVoiceRecording().")
-        assertTrue(capturePos >= 0, "sttPipeline.startCapture() call not found in startVoiceRecording().")
-
-        // Both setup steps must precede the actual audio capture
         assertTrue(
-            meshPos < capturePos,
-            "isMeshEnabled must be set BEFORE startCapture().\n" +
-                "Offsets — isMeshEnabled: $meshPos, startCapture: $capturePos.",
-        )
-        assertTrue(
-            contextPos < capturePos,
-            "startVoiceMessage() must be called BEFORE startCapture().\n" +
-                "Offsets — startVoiceMessage: $contextPos, startCapture: $capturePos.",
+            startFn.contains("sttPipeline.canCapture") && startFn.contains("sttPipeline.startCapture"),
+            "startVoiceRecording() must verify canCapture before calling startCapture().",
         )
     }
 

@@ -52,8 +52,8 @@ class ProfileViewModel(
 
     val preferredLanguage: StateFlow<SttLanguage> =
         settings.sttLanguageCode
-            .map { SttLanguage.fromCode(it) ?: SttLanguage.HINDI }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SttLanguage.HINDI)
+            .map { SttLanguage.fromCode(it) ?: SttLanguage.ENGLISH }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SttLanguage.ENGLISH)
 
     val availableLanguages: StateFlow<List<SttLanguage>> =
         MutableStateFlow(SttLanguage.entries)

@@ -196,4 +196,100 @@ class LiveCallTestSuite {
         assertEquals(1, finalizedCount)
         assertTrue(totalCapturedSamples > 0)
     }
+
+    @Test
+    fun testCallStateMachine_ExplicitTransitions() {
+        val session = CallSession(
+            callId = "call_state_test",
+            peerId = "peer_bob",
+            peerName = "Bob",
+            direction = CallDirection.OUTGOING,
+            localSourceLanguage = "en",
+            localTargetLanguage = "hi",
+            remoteSourceLanguage = "hi",
+            remoteTargetLanguage = "en",
+        )
+
+        assertEquals(CallState.OUTGOING_REQUESTED, session.state.value)
+
+        // Valid transition sequence
+        assertTrue(session.updateState(CallState.OUTGOING))
+        assertTrue(session.updateState(CallState.RINGING))
+        assertTrue(session.updateState(CallState.CONNECTING))
+        assertTrue(session.updateState(CallState.CONNECTED))
+        assertTrue(session.updateState(CallState.RECONNECTING))
+        assertTrue(session.updateState(CallState.CONNECTED))
+        assertTrue(session.updateState(CallState.ENDING))
+        assertTrue(session.updateState(CallState.ENDED))
+        assertTrue(session.updateState(CallState.IDLE))
+
+        // Invalid transitions should be rejected by validator
+        assertFalse(CallState.IDLE.canTransitionTo(CallState.CONNECTED))
+        assertFalse(CallState.ENDED.canTransitionTo(CallState.CONNECTED))
+        assertFalse(CallState.FAILED.canTransitionTo(CallState.CONNECTED))
+    }
+
+    @Test
+    fun testCallSession_SegmentDeduplication() {
+        val session = CallSession(
+            callId = "call_dedup_test",
+            peerId = "peer_1",
+            peerName = "Alice",
+            direction = CallDirection.INCOMING,
+            localSourceLanguage = "hi",
+            localTargetLanguage = "mr",
+            remoteSourceLanguage = "mr",
+            remoteTargetLanguage = "hi",
+        )
+
+        val seg1 = "seg_1001"
+        val seg2 = "seg_1002"
+
+        assertTrue(session.recordProcessedSegment(seg1))
+        assertTrue(session.isSegmentProcessed(seg1))
+        assertFalse(session.recordProcessedSegment(seg1)) // Duplicate rejected
+
+        assertTrue(session.recordProcessedSegment(seg2))
+        assertFalse(session.recordProcessedSegment(seg2))
+    }
+
+    @Test
+    fun testCallState_IsActiveProperty() {
+        assertTrue(CallState.OUTGOING_REQUESTED.isActive)
+        assertTrue(CallState.OUTGOING.isActive)
+        assertTrue(CallState.INCOMING.isActive)
+        assertTrue(CallState.RINGING.isActive)
+        assertTrue(CallState.ACCEPTING.isActive)
+        assertTrue(CallState.CONNECTING.isActive)
+        assertTrue(CallState.CONNECTED.isActive)
+        assertTrue(CallState.RECONNECTING.isActive)
+        assertTrue(CallState.ENDING.isActive)
+
+        assertFalse(CallState.IDLE.isActive)
+        assertFalse(CallState.ENDED.isActive)
+        assertFalse(CallState.FAILED.isActive)
+    }
+
+    @Test
+    fun testLiveTtsProcessor_QueueAndInterrupt() {
+        val mockTtsManager = io.mockk.mockk<app.swarsetu.tts.TtsManager>(relaxed = true)
+        val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default)
+
+        val ttsProcessor = LiveTtsProcessor(mockTtsManager, scope)
+
+        val item1 = LiveTranslation(
+            callId = "call_tts_test",
+            speakerNodeId = "peer_alice",
+            sourceText = "Hello",
+            translatedText = "नमस्ते",
+            sourceLanguage = app.swarsetu.translation.indictrans.IndicLanguage.ENGLISH,
+            targetLanguage = app.swarsetu.translation.indictrans.IndicLanguage.HINDI,
+            latencyMs = 150L,
+            segmentId = "seg_1",
+        )
+
+        ttsProcessor.enqueue(item1)
+        ttsProcessor.interrupt()
+        ttsProcessor.stopAndFlush()
+    }
 }

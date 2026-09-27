@@ -78,11 +78,14 @@ class LiveCallService : LifecycleService() {
         val session = callManager.currentSession.value
         val peerId = session?.peerId ?: "Peer"
         val stateText = when (state) {
+            CallState.OUTGOING_REQUESTED,
             CallState.OUTGOING -> getString(R.string.call_state_outgoing)
             CallState.INCOMING -> getString(R.string.call_state_incoming)
+            CallState.ACCEPTING,
             CallState.CONNECTING -> getString(R.string.call_state_connecting)
             CallState.RINGING -> getString(R.string.call_state_ringing)
             CallState.CONNECTED -> getString(R.string.call_state_connected)
+            CallState.RECONNECTING -> "Reconnecting..."
             CallState.ENDING -> getString(R.string.call_state_ending)
             CallState.ENDED -> getString(R.string.call_state_ended)
             CallState.FAILED -> getString(R.string.call_state_failed)
@@ -156,7 +159,8 @@ class LiveCallService : LifecycleService() {
         if (state == CallState.INCOMING) {
             builder.addAction(0, getString(R.string.call_action_accept), acceptIntent)
             builder.addAction(0, getString(R.string.call_action_reject), rejectIntent)
-        } else if (state == CallState.CONNECTED || state == CallState.OUTGOING || state == CallState.CONNECTING || state == CallState.RINGING) {
+        } else if (state == CallState.CONNECTED || state == CallState.OUTGOING || state == CallState.OUTGOING_REQUESTED ||
+            state == CallState.CONNECTING || state == CallState.ACCEPTING || state == CallState.RINGING || state == CallState.RECONNECTING) {
             builder.addAction(
                 0,
                 if (isMuted) getString(R.string.call_action_unmute) else getString(R.string.call_action_mute),

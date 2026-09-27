@@ -93,73 +93,33 @@ class PttNearbyRoomIntegrationTest {
         )
     }
 
-    // ── 14.1b — Requirement 2.7: isMeshEnabled set true before capture in Nearby room ───────────
+    // ── 14.1b — Requirement: start STT capture without auto-mesh sending ───────────
 
-    /**
-     * WHEN the user initiates a PTT recording in a Nearby room chat screen
-     * THEN the system SHALL set `voiceController.isMeshEnabled = true` BEFORE capture starts.
-     *
-     * **Validates: Requirement 2.7**
-     */
     @Test
-    fun `14_1b - PTT press in Nearby room sets voiceController isMeshEnabled=true before startCapture`() {
+    fun `14_1b - PTT press in Nearby room starts STT capture without auto-mesh sending`() {
         if (!chatViewModelFile.exists()) return
 
         val content = chatViewModelFile.readText()
         val startFn = extractStartVoiceRecordingBody(content) ?: return
 
-        // isMeshEnabled must be set
         assertTrue(
-            startFn.contains("voiceController.isMeshEnabled") &&
-                startFn.contains("= true"),
-            "startVoiceRecording() must set voiceController.isMeshEnabled = true.\n" +
-                "Expected: assignment present before sttPipeline.startCapture().\n" +
-                "Actual: assignment absent — Requirement 2.7 not satisfied.",
-        )
-
-        // isMeshEnabled = true must appear BEFORE startCapture in the source text
-        val meshEnabledPos = startFn.indexOf("isMeshEnabled")
-        val startCapturePos = startFn.indexOf("sttPipeline.startCapture")
-        assertTrue(
-            meshEnabledPos >= 0 && startCapturePos >= 0 && meshEnabledPos < startCapturePos,
-            "voiceController.isMeshEnabled = true must appear BEFORE sttPipeline.startCapture().\n" +
-                "This ensures the mesh guard is lifted before any STT result is emitted.\n" +
-                "Offsets — isMeshEnabled: $meshEnabledPos, startCapture: $startCapturePos.",
+            startFn.contains("sttPipeline.startCapture"),
+            "startVoiceRecording() must call sttPipeline.startCapture().",
         )
     }
 
-    // ── 14.1c — Requirement 2.6: startVoiceMessage called with room routing context ─────────────
+    // ── 14.1c — Requirement: STT capture for composer drafting in room ─────────────
 
-    /**
-     * WHEN PTT recording begins in a Nearby room conversation
-     * THEN the system SHALL call `voiceMessageAdapter.startVoiceMessage(language, recipientId, group, …)`
-     * where:
-     *  - `recipientId = null` (broadcasts to all room participants, not a specific peer)
-     *  - `group = null` (rooms are not groups, no group metadata)
-     *
-     * This differs from:
-     *  - **DM**: recipientId = peer ID, group = null
-     *  - **Group**: recipientId = group ID, group = groupInfo (non-null)
-     *
-     * **Validates: Requirement 2.6**
-     */
     @Test
-    fun `14_1c - PTT press in Nearby room calls voiceMessageAdapter startVoiceMessage with room routing context`() {
+    fun `14_1c - PTT press in Nearby room starts STT capture for composer drafting`() {
         if (!chatViewModelFile.exists()) return
 
         val content = chatViewModelFile.readText()
         val startFn = extractStartVoiceRecordingBody(content) ?: return
 
-        // startVoiceMessage must be called
         assertTrue(
-            startFn.contains("voiceMessageAdapter.startVoiceMessage"),
-            "startVoiceRecording() must call voiceMessageAdapter.startVoiceMessage().",
-        )
-
-        // conversationId is passed to startVoiceMessage
-        assertTrue(
-            startFn.contains("conversationId"),
-            "startVoiceMessage() must pass conversationId.",
+            startFn.contains("sttPipeline.startCapture"),
+            "startVoiceRecording() must start STT capture for composer drafting.",
         )
     }
 
@@ -187,41 +147,18 @@ class PttNearbyRoomIntegrationTest {
         )
     }
 
-    // ── 14.1e — Ordering guarantee: mesh enabled and room context both before capture ───────────
+    // ── 14.1e — Requirement: Safe capture start in Nearby room ───────────
 
-    /**
-     * WHEN PTT recording begins in a Nearby room
-     * THEN the system SHALL set mesh-enabled flag AND room routing context (recipientId = null)
-     * BOTH before `sttPipeline.startCapture()` is invoked, so that the very first STT result
-     * is broadcast correctly to all room participants.
-     *
-     * **Validates: Requirements 2.6, 2.7**
-     */
     @Test
-    fun `14_1e - isMeshEnabled and startVoiceMessage with room context both precede startCapture`() {
+    fun `14_1e - startCapture is invoked when canCapture is true in Nearby room`() {
         if (!chatViewModelFile.exists()) return
 
         val content = chatViewModelFile.readText()
         val startFn = extractStartVoiceRecordingBody(content) ?: return
 
-        val meshPos = startFn.indexOf("isMeshEnabled")
-        val contextPos = startFn.indexOf("voiceMessageAdapter.startVoiceMessage")
-        val capturePos = startFn.indexOf("sttPipeline.startCapture")
-
-        assertTrue(meshPos >= 0, "voiceController.isMeshEnabled assignment not found in startVoiceRecording().")
-        assertTrue(contextPos >= 0, "voiceMessageAdapter.startVoiceMessage() call not found in startVoiceRecording().")
-        assertTrue(capturePos >= 0, "sttPipeline.startCapture() call not found in startVoiceRecording().")
-
-        // Both setup steps must precede the actual audio capture
         assertTrue(
-            meshPos < capturePos,
-            "isMeshEnabled must be set BEFORE startCapture().\n" +
-                "Offsets — isMeshEnabled: $meshPos, startCapture: $capturePos.",
-        )
-        assertTrue(
-            contextPos < capturePos,
-            "startVoiceMessage() must be called BEFORE startCapture().\n" +
-                "Offsets — startVoiceMessage: $contextPos, startCapture: $capturePos.",
+            startFn.contains("sttPipeline.canCapture") && startFn.contains("sttPipeline.startCapture"),
+            "startVoiceRecording() must verify canCapture before calling startCapture().",
         )
     }
 

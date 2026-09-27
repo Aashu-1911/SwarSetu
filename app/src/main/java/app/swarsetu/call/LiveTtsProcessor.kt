@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Handles Text-to-Speech playback for incoming translated call segments.
@@ -27,7 +28,7 @@ class LiveTtsProcessor(
     companion object {
         private const val TAG = "LiveTtsProcessor"
         private const val TTS_SYNTHESIS_TIMEOUT_MS = 4500L
-        private const val MAX_QUEUE_DEPTH = 3
+        private const val MAX_QUEUE_DEPTH = 4
     }
 
     // Bounded channel to prevent queue accumulation and stale audio lag
@@ -37,6 +38,9 @@ class LiveTtsProcessor(
     )
     private var playbackJob: Job? = null
     private val isSpeaking = AtomicBoolean(false)
+    private val pendingQueueDepth = AtomicInteger(0)
+    private val totalDroppedSegments = AtomicInteger(0)
+    private val totalInterruptedSegments = AtomicInteger(0)
 
     init {
         startQueueConsumer()
@@ -47,6 +51,7 @@ class LiveTtsProcessor(
         playbackJob = scope.launch(Dispatchers.Default) {
             while (isActive) {
                 val translation = speechQueue.receive()
+                pendingQueueDepth.decrementAndGet()
                 speakTranslation(translation)
             }
         }
@@ -57,6 +62,16 @@ class LiveTtsProcessor(
      */
     fun enqueue(translation: LiveTranslation) {
         if (translation.translatedText.isBlank()) return
+        val depth = pendingQueueDepth.get()
+        val segId = if (translation.segmentId.isNotBlank()) translation.segmentId else "seg_${System.currentTimeMillis()}"
+        
+        if (depth >= MAX_QUEUE_DEPTH) {
+            val dropped = totalDroppedSegments.incrementAndGet()
+            Log.w(TAG, "CALL_TTS_QUEUE: Queue overflow (depth=$depth >= $MAX_QUEUE_DEPTH). Dropped oldest segment. Total dropped=$dropped")
+        }
+
+        pendingQueueDepth.incrementAndGet()
+        Log.i(TAG, "CALL_TTS_QUEUE: [seg=$segId, depth=${pendingQueueDepth.get()}] Enqueuing \"${translation.translatedText}\"")
         speechQueue.trySend(translation)
     }
 
@@ -66,11 +81,12 @@ class LiveTtsProcessor(
 
         val langCode = translation.targetLanguage.code
         val ttsLang = TtsLanguage.fromLanguageCode(langCode, text) ?: TtsLanguage.HINDI
+        val segId = if (translation.segmentId.isNotBlank()) translation.segmentId else "seg_${System.currentTimeMillis()}"
 
         val startTime = System.currentTimeMillis()
         try {
             isSpeaking.set(true)
-            Log.d(TAG, "Speaking translated segment [${ttsLang.displayName}]: \"$text\"")
+            Log.i(TAG, "CALL_TTS_START: [seg=$segId, lang=${ttsLang.displayName}] \"$text\"")
             val request = TtsRequest(
                 requestId = UUID.randomUUID().toString(),
                 text = text,
@@ -83,9 +99,10 @@ class LiveTtsProcessor(
             }
 
             val ttsLatency = System.currentTimeMillis() - startTime
-            Log.d(TAG, "TTS synthesis completed in ${ttsLatency}ms for \"$text\"")
+            Log.i(TAG, "CALL_TTS_COMPLETE: [seg=$segId] Speech finished in ${ttsLatency}ms for \"$text\"")
+            Log.i(TAG, "CALL_TTS_LATENCY: ${ttsLatency}ms")
         } catch (e: Exception) {
-            Log.e(TAG, "Error playing TTS for translated text: ${e.message}", e)
+            Log.e(TAG, "CALL_TTS_ERROR: [seg=$segId] Error playing TTS for translated text: ${e.message}", e)
         } finally {
             isSpeaking.set(false)
         }
@@ -100,12 +117,14 @@ class LiveTtsProcessor(
         } catch (e: Exception) {
             Log.w(TAG, "Error stopping TTS playback: ${e.message}")
         }
-        // Drain pending queue
+        var drainedCount = 0
         while (speechQueue.tryReceive().isSuccess) {
-            // discarded
+            drainedCount++
+            pendingQueueDepth.decrementAndGet()
         }
+        val interrupted = totalInterruptedSegments.addAndGet(if (isSpeaking.get()) drainedCount + 1 else drainedCount)
         isSpeaking.set(false)
-        Log.d(TAG, "TTS playback interrupted and speech queue drained")
+        Log.i(TAG, "CALL_TTS_INTERRUPT: Barge-in interrupted speech (drained $drainedCount queued items, total interrupted=$interrupted)")
     }
 
     /**

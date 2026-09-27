@@ -94,9 +94,9 @@ fun LiveCallScreen(
     val isSpeakerOn by viewModel.isSpeakerOn.collectAsStateWithLifecycle()
     val callDuration by viewModel.callDuration.collectAsStateWithLifecycle()
 
-    // Auto-initiate call when entering if IDLE
+    // Auto-initiate call when entering if IDLE and no session exists
     LaunchedEffect(peerId) {
-        if (callState == CallState.IDLE) {
+        if (callState == CallState.IDLE && session == null) {
             viewModel.initiateCall(peerId, peerName)
         }
     }
@@ -246,7 +246,9 @@ fun LiveCallScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,
             ) {
-                if (callState == CallState.CONNECTING || callState == CallState.OUTGOING) {
+                if (callState == CallState.CONNECTING || callState == CallState.ACCEPTING ||
+                    callState == CallState.OUTGOING || callState == CallState.OUTGOING_REQUESTED ||
+                    callState == CallState.RECONNECTING) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(14.dp),
                         color = Color(0xFF60A5FA),
@@ -257,11 +259,14 @@ fun LiveCallScreen(
                 Text(
                     text = when (callState) {
                         CallState.IDLE -> uiText(UiTextKey.CALL_ENDED)
+                        CallState.OUTGOING_REQUESTED,
                         CallState.OUTGOING -> uiText(UiTextKey.CALL_OUTGOING)
                         CallState.INCOMING -> uiText(UiTextKey.CALL_INCOMING)
+                        CallState.ACCEPTING,
                         CallState.CONNECTING -> uiText(UiTextKey.CALL_CONNECTING)
                         CallState.RINGING -> uiText(UiTextKey.CALL_CALLING)
                         CallState.CONNECTED -> callDuration
+                        CallState.RECONNECTING -> "Reconnecting..."
                         CallState.ENDING -> uiText(UiTextKey.CALL_ENDED)
                         CallState.ENDED -> uiText(UiTextKey.CALL_ENDED)
                         CallState.FAILED -> uiText(UiTextKey.CALL_FAILED)

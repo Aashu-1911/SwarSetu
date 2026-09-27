@@ -23,7 +23,7 @@ class SettingsStore(
     val status: Flow<String> = dataStore.data.map { it[KEY_STATUS] ?: "" }
     val isLanguageInitComplete: Flow<Boolean> = dataStore.data.map { it[KEY_LANGUAGE_INIT_COMPLETE] ?: false }
     val isProfileSetupComplete: Flow<Boolean> = dataStore.data.map { it[KEY_PROFILE_SETUP_COMPLETE] ?: false }
-    val sttLanguageCode: Flow<String> = dataStore.data.map { it[KEY_STT_LANGUAGE] ?: "hi" }
+    val sttLanguageCode: Flow<String> = dataStore.data.map { it[KEY_STT_LANGUAGE] ?: "en" }
     val themePreference: Flow<String> = dataStore.data.map { it[KEY_THEME_PREFERENCE] ?: "system" }
     val autoPlayTts: Flow<Boolean> = dataStore.data.map { it[KEY_AUTO_PLAY_TTS] ?: true }
 

@@ -314,7 +314,7 @@ object AppStrings {
     // 2. HINDI (hi)
     // ==========================================
     private val hindiStrings: Map<UiTextKey, String> = mapOf(
-        UiTextKey.APP_NAME to "स्वरासेतु",
+        UiTextKey.APP_NAME to "SwarSetu",
         UiTextKey.HOME to "होम",
         UiTextKey.CHATS to "चैट्स",
         UiTextKey.CONTACTS to "संपर्क",
@@ -325,7 +325,7 @@ object AppStrings {
         UiTextKey.MESSAGE_REQUESTS to "संदेश अनुरोध",
         UiTextKey.VERIFY_CONTACT to "संपर्क सत्यापित करें",
         UiTextKey.DONATE to "सहयोग करें",
-        UiTextKey.SHARE_APP to "स्वरासेतु साझा करें",
+        UiTextKey.SHARE_APP to "SwarSetu साझा करें",
         UiTextKey.LANGUAGE_PACKS to "भाषा पैक",
         UiTextKey.CRASH_LOG to "क्रैश लॉग",
         UiTextKey.LIVE_CALL to "लाइव कॉल",
@@ -383,7 +383,7 @@ object AppStrings {
         UiTextKey.RADIO_AIRPLANE_MODE to "हवाई जहाज मोड चालू है — वाई-फ़ाई/ब्लूटूथ चालू करें",
         UiTextKey.RADIO_DEGRADED to "मेश रेडियो अनुपलब्ध है — अन्य ऐप इसका उपयोग कर रहा हो सकता है",
 
-        UiTextKey.CHAT_MESSAGE_HINT to "स्वरासेतु संदेश",
+        UiTextKey.CHAT_MESSAGE_HINT to "SwarSetu संदेश",
         UiTextKey.CHAT_EMPTY_TITLE to "अभी कोई संदेश नहीं है",
         UiTextKey.CHAT_EMPTY_DESC to "नजदीकी उपकरणों को नमस्ते कहें।",
         UiTextKey.CHAT_NEW_MESSAGE to "नया संदेश",
@@ -503,8 +503,8 @@ object AppStrings {
         UiTextKey.PROFILE_PHOTO_REMOVE to "फ़ोटो हटाएं",
         UiTextKey.PROFILE_SAVED to "प्रोफ़ाइल सफलतापूर्वक सहेजी गई",
 
-        UiTextKey.ONBOARDING_WELCOME_TITLE to "स्वरासेतु में आपका स्वागत है",
-        UiTextKey.ONBOARDING_WELCOME_DESC to "स्वरासेतु वाई-फ़ाई अवेयर के माध्यम से नजदीकी फ़ोनों से सीधे जुड़कर एन्क्रिप्टेड संदेश, आवाज और कॉल रिले करता है — 100% ऑफ़लाइन, बिना इंटरनेट, बिना सर्वर।",
+        UiTextKey.ONBOARDING_WELCOME_TITLE to "SwarSetu में आपका स्वागत है",
+        UiTextKey.ONBOARDING_WELCOME_DESC to "SwarSetu वाई-फ़ाई अवेयर के माध्यम से नजदीकी फ़ोनों से सीधे जुड़कर एन्क्रिप्टेड संदेश, आवाज और कॉल रिले करता है — 100% ऑफ़लाइन, बिना इंटरनेट, बिना सर्वर।",
         UiTextKey.ONBOARDING_GRANT_PERMISSIONS to "अनुमतियां दें",
         UiTextKey.ONBOARDING_PERMISSIONS_GRANTED to "अनुमतियां स्वीकृत",
         UiTextKey.ONBOARDING_UNSUPPORTED to "यह उपकरण वाई-फ़ाई अवेयर या BLE मेश रेडियो का समर्थन नहीं करता है।",
@@ -565,7 +565,7 @@ object AppStrings {
     // 3. MARATHI (mr)
     // ==========================================
     private val marathiStrings: Map<UiTextKey, String> = mapOf(
-        UiTextKey.APP_NAME to "स्वरासेतू",
+        UiTextKey.APP_NAME to "SwarSetu",
         UiTextKey.HOME to "मुख्यपृष्ठ",
         UiTextKey.CHATS to "चॅट्स",
         UiTextKey.CONTACTS to "संपर्क",
@@ -576,7 +576,7 @@ object AppStrings {
         UiTextKey.MESSAGE_REQUESTS to "संदेश विनंत्या",
         UiTextKey.VERIFY_CONTACT to "संपर्क पडताळा",
         UiTextKey.DONATE to "देणगी द्या",
-        UiTextKey.SHARE_APP to "स्वरासेतू शेअर करा",
+        UiTextKey.SHARE_APP to "SwarSetu शेअर करा",
         UiTextKey.LANGUAGE_PACKS to "भाषा पॅक",
         UiTextKey.CRASH_LOG to "क्रॅश लॉग",
         UiTextKey.LIVE_CALL to "थेट कॉल",
@@ -634,7 +634,7 @@ object AppStrings {
         UiTextKey.RADIO_AIRPLANE_MODE to "एरोप्लेन मोड चालू आहे — वाय-फाय/ब्ल्यूटूथ चालू करा",
         UiTextKey.RADIO_DEGRADED to "मेश रेडिओ अनुपलब्ध आहे — दुसरा ॲप वापरत असावा",
 
-        UiTextKey.CHAT_MESSAGE_HINT to "स्वरासेतू संदेश",
+        UiTextKey.CHAT_MESSAGE_HINT to "SwarSetu संदेश",
         UiTextKey.CHAT_EMPTY_TITLE to "अद्याप कोणतेही संदेश नाहीत",
         UiTextKey.CHAT_EMPTY_DESC to "जवळच्या उपकरणांना नमस्कार करा.",
         UiTextKey.CHAT_NEW_MESSAGE to "नवीन संदेश",
@@ -754,8 +754,8 @@ object AppStrings {
         UiTextKey.PROFILE_PHOTO_REMOVE to "फोटो काढा",
         UiTextKey.PROFILE_SAVED to "प्रोफाइल यशस्वीरित्या जतन केली",
 
-        UiTextKey.ONBOARDING_WELCOME_TITLE to "स्वरासेतू मध्ये आपले स्वागत आहे",
-        UiTextKey.ONBOARDING_WELCOME_DESC to "स्वरासेतू वाय-फाय अवेयर द्वारे जवळच्या फोनशी थेट जोडले जाऊन कूटबद्ध संदेश, आवाज आणि कॉल रिले करते — 100% ऑफलाइन, इंटरनेट आणि सर्व्हरशिवाय.",
+        UiTextKey.ONBOARDING_WELCOME_TITLE to "SwarSetu मध्ये आपले स्वागत आहे",
+        UiTextKey.ONBOARDING_WELCOME_DESC to "SwarSetu वाय-फाय अवेयर द्वारे जवळच्या फोनशी थेट जोडले जाऊन कूटबद्ध संदेश, आवाज आणि कॉल रिले करते — 100% ऑफलाइन, इंटरनेट आणि सर्व्हरशिवाय.",
         UiTextKey.ONBOARDING_GRANT_PERMISSIONS to "परवानग्या द्या",
         UiTextKey.ONBOARDING_PERMISSIONS_GRANTED to "परवानग्या मिळाल्या",
         UiTextKey.ONBOARDING_UNSUPPORTED to "हे उपकरण वाय-फाय अवेयर किंवा BLE मेश रेडिओला समर्थन देत नाही.",
@@ -816,7 +816,7 @@ object AppStrings {
     // 4. GUJARATI (gu)
     // ==========================================
     private val gujaratiStrings: Map<UiTextKey, String> = mapOf(
-        UiTextKey.APP_NAME to "સ્વરસેતુ",
+        UiTextKey.APP_NAME to "SwarSetu",
         UiTextKey.HOME to "મુખ્યપૃષ્ઠ",
         UiTextKey.CHATS to "ચેટ્સ",
         UiTextKey.CONTACTS to "સંપર્કો",
@@ -827,7 +827,7 @@ object AppStrings {
         UiTextKey.MESSAGE_REQUESTS to "સંદેશ વિનંતીઓ",
         UiTextKey.VERIFY_CONTACT to "સંપર્ક ચકાસો",
         UiTextKey.DONATE to "દાન આપો",
-        UiTextKey.SHARE_APP to "સ્વરસેતુ શેર કરો",
+        UiTextKey.SHARE_APP to "SwarSetu શેર કરો",
         UiTextKey.LANGUAGE_PACKS to "ભાષા પેક",
         UiTextKey.CRASH_LOG to "ક્રેશ લોગ",
         UiTextKey.LIVE_CALL to "લાઈવ કૉલ",
@@ -885,7 +885,7 @@ object AppStrings {
         UiTextKey.RADIO_AIRPLANE_MODE to "એરોપ્લેન મોડ ચાલુ છે — વાઇ-ફાઇ/બ્લૂટૂથ ચાલુ કરો",
         UiTextKey.RADIO_DEGRADED to "મેશ રેડિયો અનુપલબ્ધ છે — અન્ય ઍપ ઉપયોગ કરી રહી હોઈ શકે",
 
-        UiTextKey.CHAT_MESSAGE_HINT to "સ્વરસેતુ સંદેશ",
+        UiTextKey.CHAT_MESSAGE_HINT to "SwarSetu સંદેશ",
         UiTextKey.CHAT_EMPTY_TITLE to "હજી કોઈ સંદેશ નથી",
         UiTextKey.CHAT_EMPTY_DESC to "નજીકના ઉપકરણોને નમસ્તે કહો.",
         UiTextKey.CHAT_NEW_MESSAGE to "નવો સંદેશ",
@@ -1005,8 +1005,8 @@ object AppStrings {
         UiTextKey.PROFILE_PHOTO_REMOVE to "ફોટો દૂર કરો",
         UiTextKey.PROFILE_SAVED to "પ્રોફાઇલ સફળતાપૂર્વક સાચવવામાં આવી",
 
-        UiTextKey.ONBOARDING_WELCOME_TITLE to "સ્વરસેતુમાં આપનું સ્વાગત છે",
-        UiTextKey.ONBOARDING_WELCOME_DESC to "સ્વરસેતુ વાઇ-ફાઇ અવેર દ્વારા નજીકના ફોન સાથે સીધા જોડાઈને એન્ક્રિપ્ટેડ સંદેશા, અવાજ અને કૉલ રિલે કરે છે — 100% ઑફલાઇન, ઇન્ટરનેટ અને સર્વર વિના.",
+        UiTextKey.ONBOARDING_WELCOME_TITLE to "SwarSetu માં આપનું સ્વાગત છે",
+        UiTextKey.ONBOARDING_WELCOME_DESC to "SwarSetu વાઇ-ફાઇ અવેર દ્વારા નજીકના ફોન સાથે સીધા જોડાઈને એન્ક્રિપ્ટેડ સંદેશા, અવાજ અને કૉલ રિલે કરે છે — 100% ઑફલાઇન, ઇન્ટરનેટ અને સર્વર વિના.",
         UiTextKey.ONBOARDING_GRANT_PERMISSIONS to "પરવાનગીઓ આપો",
         UiTextKey.ONBOARDING_PERMISSIONS_GRANTED to "પરવાનગીઓ સ્વીકૃત",
         UiTextKey.ONBOARDING_UNSUPPORTED to "આ ઉપકરણ વાઇ-ફાઇ અવેર અથવા BLE મેશ રેડિયોને સમર્થન આપતું નથી.",
@@ -1067,7 +1067,7 @@ object AppStrings {
     // 5. KANNADA (kn)
     // ==========================================
     private val kannadaStrings: Map<UiTextKey, String> = mapOf(
-        UiTextKey.APP_NAME to "ಸ್ವರಸೇತು",
+        UiTextKey.APP_NAME to "SwarSetu",
         UiTextKey.HOME to "ಮುಖಪುಟ",
         UiTextKey.CHATS to "ಚಾಟ್‌ಗಳು",
         UiTextKey.CONTACTS to "ಸಂಪರ್ಕಗಳು",
@@ -1078,7 +1078,7 @@ object AppStrings {
         UiTextKey.MESSAGE_REQUESTS to "ಸಂದೇಶ ವಿನಂತಿಗಳು",
         UiTextKey.VERIFY_CONTACT to "ಸಂಪರ್ಕ ದೃಢೀಕರಿಸಿ",
         UiTextKey.DONATE to "ದೇಣಿಗೆ ನೀಡಿ",
-        UiTextKey.SHARE_APP to "ಸ್ವರಸೇತು ಹಂಚಿಕೊಳ್ಳಿ",
+        UiTextKey.SHARE_APP to "SwarSetu ಹಂಚಿಕೊಳ್ಳಿ",
         UiTextKey.LANGUAGE_PACKS to "ಭಾಷಾ ಪ್ಯಾಕ್‌ಗಳು",
         UiTextKey.CRASH_LOG to "ಕ್ರ್ಯಾಶ್ ಲಾಗ್",
         UiTextKey.LIVE_CALL to "ಲೈವ್ ಕರೆ",
@@ -1136,7 +1136,7 @@ object AppStrings {
         UiTextKey.RADIO_AIRPLANE_MODE to "ಏರೋಪ್ಲೇನ್ ಮೋಡ್ ಆನ್ ಆಗಿದೆ — ವೈ-ಫೈ/ಬ್ಲೂಟೂತ್ ಆನ್ ಮಾಡಿ",
         UiTextKey.RADIO_DEGRADED to "ಮೆಶ್ ರೇಡಿಯೋ ಲಭ್ಯವಿಲ್ಲ — ಬೇರೆ ಅಪ್ಲಿಕೇಶನ್ ಬಳಸುತ್ತಿರಬಹುದು",
 
-        UiTextKey.CHAT_MESSAGE_HINT to "ಸ್ವರಸೇತು ಸಂದೇಶ",
+        UiTextKey.CHAT_MESSAGE_HINT to "SwarSetu ಸಂದೇಶ",
         UiTextKey.CHAT_EMPTY_TITLE to "ಇನ್ನೂ ಯಾವುದೇ ಸಂದೇಶಗಳಿಲ್ಲ",
         UiTextKey.CHAT_EMPTY_DESC to "ಹತ್ತಿರದ ಸಾಧನಗಳಿಗೆ ನಮಸ್ಕಾರ ತಿಳಿಸಿ.",
         UiTextKey.CHAT_NEW_MESSAGE to "ಹೊಸ ಸಂದೇಶ",
@@ -1256,8 +1256,8 @@ object AppStrings {
         UiTextKey.PROFILE_PHOTO_REMOVE to "ಫೋಟೋ ತೆಗೆದುಹಾಕಿ",
         UiTextKey.PROFILE_SAVED to "ಪ್ರೊಫೈಲ್ ಯಶಸ್ವಿಯಾಗಿ ಉಳಿಸಲಾಗಿದೆ",
 
-        UiTextKey.ONBOARDING_WELCOME_TITLE to "ಸ್ವರಸೇತುಗೆ ಸುಸ್ವಾಗತ",
-        UiTextKey.ONBOARDING_WELCOME_DESC to "ಸ್ವರಸೇತು ವೈ-ಫೈ ಅವೇರ್ ಮೂಲಕ ಹತ್ತಿರದ ಫೋನ್‌ಗಳೊಂದಿಗೆ ನೇರವಾಗಿ ಸಂಪರ್ಕ ಸಾಧಿಸಿ ಎನ್‌ಕ್ರಿಪ್ಟ್ ಮಾಡಿದ ಸಂದೇಶ, ಧ್ವನಿ ಮತ್ತು ಕರೆಗಳನ್ನು ರಿಲೇ ಮಾಡುತ್ತದೆ — 100% ಆಫ್‌ಲೈನ್, ಇಂಟರ್ನೆಟ್ ಮತ್ತು ಸರ್ವರ್ ಇಲ್ಲದೆ.",
+        UiTextKey.ONBOARDING_WELCOME_TITLE to "SwarSetu ಗೆ ಸುಸ್ವಾಗತ",
+        UiTextKey.ONBOARDING_WELCOME_DESC to "SwarSetu ವೈ-ಫೈ ಅವೇರ್ ಮೂಲಕ ಹತ್ತಿರದ ಫೋನ್‌ಗಳೊಂದಿಗೆ ನೇರವಾಗಿ ಸಂಪರ್ಕ ಸಾಧಿಸಿ ಎನ್‌ಕ್ರಿಪ್ಟ್ ಮಾಡಿದ ಸಂದೇಶ, ಧ್ವನಿ ಮತ್ತು ಕರೆಗಳನ್ನು ರಿಲೇ ಮಾಡುತ್ತದೆ — 100% ಆಫ್‌ಲೈನ್, ಇಂಟರ್ನೆಟ್ ಮತ್ತು ಸರ್ವರ್ ಇಲ್ಲದೆ.",
         UiTextKey.ONBOARDING_GRANT_PERMISSIONS to "ಅನುಮತಿಗಳನ್ನು ನೀಡಿ",
         UiTextKey.ONBOARDING_PERMISSIONS_GRANTED to "ಅನುಮತಿಗಳನ್ನು ನೀಡಲಾಗಿದೆ",
         UiTextKey.ONBOARDING_UNSUPPORTED to "ಈ ಸಾಧನವು ವೈ-ಫೈ ಅವೇರ್ ಅಥವಾ BLE ಮೆಶ್ ರೇಡಿಯೊವನ್ನು ಬೆಂಬಲಿಸುವುದಿಲ್ಲ.",
@@ -1318,7 +1318,7 @@ object AppStrings {
     // 6. MALAYALAM (ml)
     // ==========================================
     private val malayalamStrings: Map<UiTextKey, String> = mapOf(
-        UiTextKey.APP_NAME to "സ്വരസേതു",
+        UiTextKey.APP_NAME to "SwarSetu",
         UiTextKey.HOME to "ഹോം",
         UiTextKey.CHATS to "ചാറ്റുകൾ",
         UiTextKey.CONTACTS to "കോൺടാക്റ്റുകൾ",
@@ -1329,7 +1329,7 @@ object AppStrings {
         UiTextKey.MESSAGE_REQUESTS to "സന്ദേശ അഭ്യർത്ഥനകൾ",
         UiTextKey.VERIFY_CONTACT to "കോൺടാക്റ്റ് പരിശോധിക്കുക",
         UiTextKey.DONATE to "സംഭാവന ചെയ്യുക",
-        UiTextKey.SHARE_APP to "സ്വരസേതു പങ്കിടുക",
+        UiTextKey.SHARE_APP to "SwarSetu പങ്കിടുക",
         UiTextKey.LANGUAGE_PACKS to "ഭാഷാ പാക്കുകൾ",
         UiTextKey.CRASH_LOG to "ക്രാഷ് ലോഗ്",
         UiTextKey.LIVE_CALL to "തത്സമയ കോൾ",
@@ -1387,7 +1387,7 @@ object AppStrings {
         UiTextKey.RADIO_AIRPLANE_MODE to "എയർപ്ലെയിൻ മോഡ് ഓണാണ് — വൈ-ഫൈ/ബ്ലൂടൂത്ത് ഓണാക്കുക",
         UiTextKey.RADIO_DEGRADED to "മെഷ് റേഡിയോ ലഭ്യമല്ല — മറ്റൊരു ആപ്പ് ഉപയോഗിക്കുന്നുണ്ടാകാം",
 
-        UiTextKey.CHAT_MESSAGE_HINT to "സ്വരസേതു സന്ദേശം",
+        UiTextKey.CHAT_MESSAGE_HINT to "SwarSetu സന്ദേശം",
         UiTextKey.CHAT_EMPTY_TITLE to "ഇതുവരെ സന്ദേശങ്ങളൊന്നുമില്ല",
         UiTextKey.CHAT_EMPTY_DESC to "സമീപത്തുള്ള ഉപകരണങ്ങളോട് നമസ്കാരം പറയുക.",
         UiTextKey.CHAT_NEW_MESSAGE to "പുതിയ സന്ദേശം",
@@ -1507,8 +1507,8 @@ object AppStrings {
         UiTextKey.PROFILE_PHOTO_REMOVE to "ഫോട്ടോ നീക്കം ചെയ്യുക",
         UiTextKey.PROFILE_SAVED to "പ്രൊഫൈൽ വിജയകരമായി സംരക്ഷിച്ചു",
 
-        UiTextKey.ONBOARDING_WELCOME_TITLE to "സ്വരസേതുവിലേക്ക് സ്വാഗതം",
-        UiTextKey.ONBOARDING_WELCOME_DESC to "ഇന്റർനെറ്റോ സെർവറുകളോ ഇല്ലാതെ വൈ-ഫൈ അവേർ വഴി സമീപത്തുള്ള ഫോണുകളിലേക്ക് എൻക്രിപ്റ്റ് ചെയ്ത സന്ദേശങ്ങളും കോളുകളും സ്വരസേതു റിലേ ചെയ്യുന്നു — 100% ഓഫ്‌ലൈൻ.",
+        UiTextKey.ONBOARDING_WELCOME_TITLE to "SwarSetu ലേക്ക് സ്വാഗതം",
+        UiTextKey.ONBOARDING_WELCOME_DESC to "ഇന്റർനെറ്റോ സെർവറുകളോ ഇല്ലാതെ വൈ-ഫൈ അവേർ വഴി സമീപത്തുള്ള ഫോണുകളിലേക്ക് എൻക്രിപ്റ്റ് ചെയ്ത സന്ദേശങ്ങളും കോളുകളും SwarSetu റിലേ ചെയ്യുന്നു — 100% ഓഫ്‌ലൈൻ.",
         UiTextKey.ONBOARDING_GRANT_PERMISSIONS to "അനുമതികൾ നൽകുക",
         UiTextKey.ONBOARDING_PERMISSIONS_GRANTED to "അനുമതികൾ നൽകി",
         UiTextKey.ONBOARDING_UNSUPPORTED to "ഈ ഉപകരണം വൈ-ഫൈ അവേർ അല്ലെങ്കിൽ BLE മെഷ് റേഡിയോയെ പിന്തുണയ്ക്കുന്നില്ല.",
@@ -1569,7 +1569,7 @@ object AppStrings {
     // 7. TAMIL (ta)
     // ==========================================
     private val tamilStrings: Map<UiTextKey, String> = mapOf(
-        UiTextKey.APP_NAME to "ஸ்வரசேது",
+        UiTextKey.APP_NAME to "SwarSetu",
         UiTextKey.HOME to "முகப்பு",
         UiTextKey.CHATS to "அரட்டைகள்",
         UiTextKey.CONTACTS to "தொடர்புகள்",
@@ -1580,7 +1580,7 @@ object AppStrings {
         UiTextKey.MESSAGE_REQUESTS to "செய்தி கோரிக்கைகள்",
         UiTextKey.VERIFY_CONTACT to "தொடர்பைச் சரிபார்க்கவும்",
         UiTextKey.DONATE to "நன்கொடை",
-        UiTextKey.SHARE_APP to "ஸ்வரசேதுவைப் பகிரவும்",
+        UiTextKey.SHARE_APP to "SwarSetu-ஐப் பகிரவும்",
         UiTextKey.LANGUAGE_PACKS to "மொழி தொகுப்புகள்",
         UiTextKey.CRASH_LOG to "செயலிழப்பு பதிவு",
         UiTextKey.LIVE_CALL to "நேரலை அழைப்பு",
@@ -1638,7 +1638,7 @@ object AppStrings {
         UiTextKey.RADIO_AIRPLANE_MODE to "விமானப் பயன்முறை ஆன் செய்யப்பட்டுள்ளது — வைஃபை/புளூடூத்தை ஆன் செய்யவும்",
         UiTextKey.RADIO_DEGRADED to "மெஷ் ரேடியோ கிடைக்கவில்லை — வேறு செயலி பயன்படுத்துகிறது",
 
-        UiTextKey.CHAT_MESSAGE_HINT to "ஸ்வரசேது செய்தி",
+        UiTextKey.CHAT_MESSAGE_HINT to "SwarSetu செய்தி",
         UiTextKey.CHAT_EMPTY_TITLE to "இன்னும் செய்திகள் இல்லை",
         UiTextKey.CHAT_EMPTY_DESC to "அருகிலுள்ள சாதனங்களுக்கு வணக்கம் சொல்லுங்கள்.",
         UiTextKey.CHAT_NEW_MESSAGE to "புதிய செய்தி",
@@ -1758,8 +1758,8 @@ object AppStrings {
         UiTextKey.PROFILE_PHOTO_REMOVE to "புகைப்படத்தை நீக்கு",
         UiTextKey.PROFILE_SAVED to "சுயவிவரம் வெற்றிகரமாகச் சேமிக்கப்பட்டது",
 
-        UiTextKey.ONBOARDING_WELCOME_TITLE to "ஸ்வரசேதுவிற்கு நல்வரவு",
-        UiTextKey.ONBOARDING_WELCOME_DESC to "ஸ்வரசேது வைஃபை அவேர் மூலம் அருகிலுள்ள போன்களுடன் நேரடியாக இணைந்து மறைகுறியாக்கப்பட்ட செய்திகள், குரல் மற்றும் அழைப்புகளை ரிலே செய்கிறது — 100% ஆஃப்லைன்.",
+        UiTextKey.ONBOARDING_WELCOME_TITLE to "SwarSetu-விற்கு நல்வரவு",
+        UiTextKey.ONBOARDING_WELCOME_DESC to "SwarSetu வைஃபை அவேர் மூலம் அருகிலுள்ள போன்களுடன் நேரடியாக இணைந்து மறைகுறியாக்கப்பட்ட செய்திகள், குரல் மற்றும் அழைப்புகளை ரிலே செய்கிறது — 100% ஆஃப்லைன்.",
         UiTextKey.ONBOARDING_GRANT_PERMISSIONS to "அனுமதிகளை வழங்கு",
         UiTextKey.ONBOARDING_PERMISSIONS_GRANTED to "அனுமதிகள் வழங்கப்பட்டன",
         UiTextKey.ONBOARDING_UNSUPPORTED to "இந்த சாதனம் வைஃபை அவேர் அல்லது BLE மெஷ் ரேடியோவை ஆதரிக்கவில்லை.",
@@ -1820,7 +1820,7 @@ object AppStrings {
     // 8. TELUGU (te)
     // ==========================================
     private val teluguStrings: Map<UiTextKey, String> = mapOf(
-        UiTextKey.APP_NAME to "స్వరసేతు",
+        UiTextKey.APP_NAME to "SwarSetu",
         UiTextKey.HOME to "హోమ్",
         UiTextKey.CHATS to "చాట్‌లు",
         UiTextKey.CONTACTS to "పరిచయాలు",
@@ -1831,7 +1831,7 @@ object AppStrings {
         UiTextKey.MESSAGE_REQUESTS to "సందేశ అభ్యర్థనలు",
         UiTextKey.VERIFY_CONTACT to "పరిచయాన్ని ధృవీకరించండి",
         UiTextKey.DONATE to "విరాళం ఇవ్వండి",
-        UiTextKey.SHARE_APP to "స్వరసేతును భాగస్వామ్యం చేయండి",
+        UiTextKey.SHARE_APP to "SwarSetu ను భాగస్వామ్యం చేయండి",
         UiTextKey.LANGUAGE_PACKS to "భాషా ప్యాక్‌లు",
         UiTextKey.CRASH_LOG to "క్రాష్ లాగ్",
         UiTextKey.LIVE_CALL to "లైవ్ కాల్",
@@ -1889,7 +1889,7 @@ object AppStrings {
         UiTextKey.RADIO_AIRPLANE_MODE to "ఏరోప్లేన్ మోడ్ ఆన్ చేయబడింది — వై-ఫై/బ్లూటూత్ ఆన్ చేయండి",
         UiTextKey.RADIO_DEGRADED to "మెష్ రేడియో అందుబాటులో లేదు — మరొక యాప్ వాడుతుండవచ్చు",
 
-        UiTextKey.CHAT_MESSAGE_HINT to "స్వరసేతు సందేశం",
+        UiTextKey.CHAT_MESSAGE_HINT to "SwarSetu సందేశం",
         UiTextKey.CHAT_EMPTY_TITLE to "ఇంకా సందేశాలు లేవు",
         UiTextKey.CHAT_EMPTY_DESC to "సమీపంలోని పరికరాలకు నమస్కారం చెప్పండి.",
         UiTextKey.CHAT_NEW_MESSAGE to "కొత్త సందేశం",
@@ -2009,8 +2009,8 @@ object AppStrings {
         UiTextKey.PROFILE_PHOTO_REMOVE to "ఫోటో తీసివేయండి",
         UiTextKey.PROFILE_SAVED to "ప్రొఫైల్ విజయవంతంగా సేవ్ చేయబడింది",
 
-        UiTextKey.ONBOARDING_WELCOME_TITLE to "స్వరసేతుకు స్వాగతం",
-        UiTextKey.ONBOARDING_WELCOME_DESC to "స్వరసేతు వై-ఫై అవేర్ ద్వారా సమీపంలోని ఫోన్‌లతో నేరుగా కనెక్ట్ అయి ఎన్‌క్రిప్ట్ చేసిన సందేశాలు, వాయిస్ మరియు కాల్‌లను రిలే చేస్తుంది — 100% ఆఫ్‌లైన్.",
+        UiTextKey.ONBOARDING_WELCOME_TITLE to "SwarSetu కు స్వాగతం",
+        UiTextKey.ONBOARDING_WELCOME_DESC to "SwarSetu వై-ఫై అవేర్ ద్వారా సమీపంలోని ఫోన్‌లతో నేరుగా కనెక్ట్ అయి ఎన్‌క్రిప్ట్ చేసిన సందేశాలు, వాయిస్ మరియు కాల్‌లను రిలే చేస్తుంది — 100% ఆఫ్‌లైన్.",
         UiTextKey.ONBOARDING_GRANT_PERMISSIONS to "అనుమతులు ఇవ్వండి",
         UiTextKey.ONBOARDING_PERMISSIONS_GRANTED to "అనుమతులు మంజూరు చేయబడ్డాయి",
         UiTextKey.ONBOARDING_UNSUPPORTED to "ఈ పరికరం వై-ఫై అవేర్ లేదా BLE మెష్ రేడియోకు మద్దతు ఇవ్వదు.",
@@ -2071,7 +2071,7 @@ object AppStrings {
     // 9. BENGALI (bn)
     // ==========================================
     private val bengaliStrings: Map<UiTextKey, String> = mapOf(
-        UiTextKey.APP_NAME to "স্বরসেতু",
+        UiTextKey.APP_NAME to "SwarSetu",
         UiTextKey.HOME to "হোম",
         UiTextKey.CHATS to "চ্যাট",
         UiTextKey.CONTACTS to "পরিচিতি",
@@ -2082,7 +2082,7 @@ object AppStrings {
         UiTextKey.MESSAGE_REQUESTS to "বার্তার অনুরোধ",
         UiTextKey.VERIFY_CONTACT to "পরিচিতি যাচাই করুন",
         UiTextKey.DONATE to "অনুদান দিন",
-        UiTextKey.SHARE_APP to "স্বরসেতু শেয়ার করুন",
+        UiTextKey.SHARE_APP to "SwarSetu শেয়ার করুন",
         UiTextKey.LANGUAGE_PACKS to "ভাষা প্যাক",
         UiTextKey.CRASH_LOG to "ক্র্যাশ লগ",
         UiTextKey.LIVE_CALL to "লাইভ কল",
@@ -2140,7 +2140,7 @@ object AppStrings {
         UiTextKey.RADIO_AIRPLANE_MODE to "বিমান মোড চালু আছে — ওয়াই-ফাই/ব্লুটুথ চালু করুন",
         UiTextKey.RADIO_DEGRADED to "মেশ রেডিও অনুপলব্ধ — অন্য অ্যাপ এটি ব্যবহার করছে",
 
-        UiTextKey.CHAT_MESSAGE_HINT to "স্বরসেতু বার্তা",
+        UiTextKey.CHAT_MESSAGE_HINT to "SwarSetu বার্তা",
         UiTextKey.CHAT_EMPTY_TITLE to "এখনো কোনো বার্তা নেই",
         UiTextKey.CHAT_EMPTY_DESC to "কাছের ডিভাইসগুলিকে হ্যালো বলুন।",
         UiTextKey.CHAT_NEW_MESSAGE to "নতুন বার্তা",
@@ -2260,8 +2260,8 @@ object AppStrings {
         UiTextKey.PROFILE_PHOTO_REMOVE to "ছবি সরান",
         UiTextKey.PROFILE_SAVED to "প্রোফাইল সফলভাবে সংরক্ষিত হয়েছে",
 
-        UiTextKey.ONBOARDING_WELCOME_TITLE to "স্বরসেতুতে স্বাগতম",
-        UiTextKey.ONBOARDING_WELCOME_DESC to "স্বরসেতু ওয়াই-ফাই অ্যাওয়ারের মাধ্যমে কাছের ফোনগুলির সাথে সরাসরি সংযুক্ত হয়ে এনক্রিপ্ট করা বার্তা, ভয়েস এবং কল রিলে করে — 100% অফলাইন।",
+        UiTextKey.ONBOARDING_WELCOME_TITLE to "SwarSetu-তে স্বাগতম",
+        UiTextKey.ONBOARDING_WELCOME_DESC to "SwarSetu ওয়াই-ফাই অ্যাওয়ারের মাধ্যমে কাছের ফোনগুলির সাথে সরাসরি সংযুক্ত হয়ে এনক্রিপ্ট করা বার্তা, ভয়েস এবং কল রিলে করে — 100% অফলাইন।",
         UiTextKey.ONBOARDING_GRANT_PERMISSIONS to "অনুমতি দিন",
         UiTextKey.ONBOARDING_PERMISSIONS_GRANTED to "অনুমতি প্রদান করা হয়েছে",
         UiTextKey.ONBOARDING_UNSUPPORTED to "এই ডিভাইসটি ওয়াই-ফাই অ্যাওয়ার বা BLE মেশ রেডিও সমর্থন করে না।",
@@ -2322,7 +2322,7 @@ object AppStrings {
     // 10. ODIA (or)
     // ==========================================
     private val odiaStrings: Map<UiTextKey, String> = mapOf(
-        UiTextKey.APP_NAME to "ସ୍ୱରସେତୁ",
+        UiTextKey.APP_NAME to "SwarSetu",
         UiTextKey.HOME to "ମୁଖ୍ୟପୃଷ୍ଠା",
         UiTextKey.CHATS to "ଚାଟ୍",
         UiTextKey.CONTACTS to "ସମ୍ପର୍କ",
@@ -2333,7 +2333,7 @@ object AppStrings {
         UiTextKey.MESSAGE_REQUESTS to "ବାର୍ତ୍ତା ଅନୁରୋଧ",
         UiTextKey.VERIFY_CONTACT to "ସମ୍ପର୍କ ଯାଞ୍ଚ କରନ୍ତୁ",
         UiTextKey.DONATE to "ଦାନ କରନ୍ତୁ",
-        UiTextKey.SHARE_APP to "ସ୍ୱରସେତୁ ସେୟାର କରନ୍ତୁ",
+        UiTextKey.SHARE_APP to "SwarSetu ସେୟାର କରନ୍ତୁ",
         UiTextKey.LANGUAGE_PACKS to "ଭାଷା ପ୍ୟାକ୍",
         UiTextKey.CRASH_LOG to "କ୍ରାସ୍ ଲଗ୍",
         UiTextKey.LIVE_CALL to "ଲାଇଭ୍ କଲ୍",
@@ -2391,7 +2391,7 @@ object AppStrings {
         UiTextKey.RADIO_AIRPLANE_MODE to "ଏୟାରପ୍ଲେନ୍ ମୋଡ୍ ଚାଲୁ ଅଛି — ୱାଇ-ଫାଇ/ବ୍ଲୁଟୁଥ୍ ଚାଲୁ କରନ୍ତୁ",
         UiTextKey.RADIO_DEGRADED to "ମେଶ୍ ରେଡିଓ ଉପଲବ୍ଧ ନାହିଁ — ଅନ୍ୟ ଆପ୍ ବ୍ୟବହାର କରୁଥାଇପାରେ",
 
-        UiTextKey.CHAT_MESSAGE_HINT to "ସ୍ୱରସେତୁ ବାର୍ତ୍ତା",
+        UiTextKey.CHAT_MESSAGE_HINT to "SwarSetu ବାର୍ତ୍ତା",
         UiTextKey.CHAT_EMPTY_TITLE to "କୌଣସି ବାର୍ତ୍ତା ନାହିଁ",
         UiTextKey.CHAT_EMPTY_DESC to "ନିକଟସ୍ଥ ଡିଭାଇସକୁ ନମସ୍କାର ଜଣାନ୍ତୁ।",
         UiTextKey.CHAT_NEW_MESSAGE to "ନୂତନ ବାର୍ତ୍ତା",
@@ -2511,8 +2511,8 @@ object AppStrings {
         UiTextKey.PROFILE_PHOTO_REMOVE to "ଫଟୋ ହଟାନ୍ତୁ",
         UiTextKey.PROFILE_SAVED to "ପ୍ରୋଫାଇଲ୍ ସଫଳତାର ସହ ସାଇତାଗଲା",
 
-        UiTextKey.ONBOARDING_WELCOME_TITLE to "ସ୍ୱରସେତୁକୁ ସ୍ୱାଗତ",
-        UiTextKey.ONBOARDING_WELCOME_DESC to "ସ୍ୱରସେତୁ ୱାଇ-ଫାଇ ଆୱେୟାର୍ ମାଧ୍ୟମରେ ନିକଟସ୍ଥ ଫୋନ୍ ସହିତ ସିଧାସଳଖ ସଂଯୁକ୍ତ ହୋଇ ଏନକ୍ରିପ୍ଟ ହୋଇଥିବା ବାର୍ତ୍ତା, ସ୍ୱର ଏବଂ କଲ୍ ରିଲେ କରେ — 100% ଅଫଲାଇନ୍।",
+        UiTextKey.ONBOARDING_WELCOME_TITLE to "SwarSetu କୁ ସ୍ୱାଗତ",
+        UiTextKey.ONBOARDING_WELCOME_DESC to "SwarSetu ୱାଇ-ଫାଇ ଆୱେୟାର୍ ମାଧ୍ୟମରେ ନିକଟସ୍ଥ ଫୋନ୍ ସହିତ ସିଧାସଳଖ ସଂଯୁକ୍ତ ହୋଇ ଏନକ୍ରିପ୍ଟ ହୋଇଥିବା ବାର୍ତ୍ତା, ସ୍ୱର ଏବଂ କଲ୍ ରିଲେ କରେ — 100% ଅଫଲାଇନ୍।",
         UiTextKey.ONBOARDING_GRANT_PERMISSIONS to "ଅନୁମତି ଦିଅନ୍ତୁ",
         UiTextKey.ONBOARDING_PERMISSIONS_GRANTED to "ଅନୁମତି ପ୍ରଦାନ କରାଗଲା",
         UiTextKey.ONBOARDING_UNSUPPORTED to "ଏହି ଡିଭାଇସ୍ ୱାଇ-ଫାଇ ଆୱେୟାର୍ କିମ୍ବା BLE ମେଶ୍ ରେଡିଓକୁ ସମର୍ଥନ କରେ ନାହିଁ।",

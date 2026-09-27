@@ -100,59 +100,34 @@ class PttDmIntegrationTest {
      * **Validates: Requirement 2.7**
      */
     @Test
-    fun `12_1b - PTT press sets voiceController isMeshEnabled=true before startCapture`() {
+    fun `12_1b - PTT press starts STT capture without auto-mesh sending`() {
         if (!chatViewModelFile.exists()) return
 
         val content = chatViewModelFile.readText()
         val startFn = extractStartVoiceRecordingBody(content) ?: return
 
-        // isMeshEnabled must be set
         assertTrue(
-            startFn.contains("voiceController.isMeshEnabled") &&
-                startFn.contains("= true"),
-            "startVoiceRecording() must set voiceController.isMeshEnabled = true.\n" +
-                "Expected: assignment present before sttPipeline.startCapture().\n" +
-                "Actual: assignment absent — Requirement 2.7 not satisfied.",
-        )
-
-        // isMeshEnabled = true must appear BEFORE startCapture in the source text so the mesh
-        // guard is already lifted when the first STT result arrives.
-        val meshEnabledPos = startFn.indexOf("isMeshEnabled")
-        val startCapturePos = startFn.indexOf("sttPipeline.startCapture")
-        assertTrue(
-            meshEnabledPos >= 0 && startCapturePos >= 0 && meshEnabledPos < startCapturePos,
-            "voiceController.isMeshEnabled = true must appear BEFORE sttPipeline.startCapture().\n" +
-                "This ensures the mesh guard is lifted before any STT result is emitted.\n" +
-                "Offsets — isMeshEnabled: $meshEnabledPos, startCapture: $startCapturePos.",
+            startFn.contains("sttPipeline.startCapture"),
+            "startVoiceRecording() must call sttPipeline.startCapture().",
         )
     }
 
-    // ── 12.1c — Requirement 2.6: startVoiceMessage called with DM recipientId ─────────────────
+    // ── 12.1c — Requirement: STT results are populated into composer instead of auto-sent ─────────────────
 
     /**
      * WHEN PTT recording begins in a DM conversation
-     * THEN the system SHALL call `voiceMessageAdapter.startVoiceMessage(language, recipientId, …)`
-     * where `recipientId` is the peer node-ID (non-null, non-room, non-group).
-     *
-     * **Validates: Requirement 2.6**
+     * THEN the system SHALL start STT capture for composer drafting.
      */
     @Test
-    fun `12_1c - PTT press calls voiceMessageAdapter startVoiceMessage with peer recipientId`() {
+    fun `12_1c - PTT press in DM starts STT capture`() {
         if (!chatViewModelFile.exists()) return
 
         val content = chatViewModelFile.readText()
         val startFn = extractStartVoiceRecordingBody(content) ?: return
 
-        // startVoiceMessage must be called
         assertTrue(
-            startFn.contains("voiceMessageAdapter.startVoiceMessage"),
-            "startVoiceRecording() must call voiceMessageAdapter.startVoiceMessage().",
-        )
-
-        // For a DM (non-room) startVoiceMessage receives conversationId.
-        assertTrue(
-            startFn.contains("conversationId"),
-            "startVoiceMessage() must supply conversationId for a DM.",
+            startFn.contains("sttPipeline.startCapture"),
+            "startVoiceRecording() must start STT capture for composer drafting.",
         )
     }
 
@@ -180,41 +155,18 @@ class PttDmIntegrationTest {
         )
     }
 
-    // ── 12.1e — Ordering guarantee: mesh enabled before context set, both before capture ────────
+    // ── 12.1e — Requirement: Safe capture start ────────
 
-    /**
-     * WHEN PTT recording begins
-     * THEN the system SHALL set mesh-enabled flag AND routing context BOTH before
-     * `sttPipeline.startCapture()` is invoked, so that the very first STT result
-     * is forwarded correctly.
-     *
-     * **Validates: Requirements 2.6, 2.7**
-     */
     @Test
-    fun `12_1e - isMeshEnabled and startVoiceMessage both precede startCapture in DM flow`() {
+    fun `12_1e - startCapture is invoked when canCapture is true`() {
         if (!chatViewModelFile.exists()) return
 
         val content = chatViewModelFile.readText()
         val startFn = extractStartVoiceRecordingBody(content) ?: return
 
-        val meshPos = startFn.indexOf("isMeshEnabled")
-        val contextPos = startFn.indexOf("voiceMessageAdapter.startVoiceMessage")
-        val capturePos = startFn.indexOf("sttPipeline.startCapture")
-
-        assertTrue(meshPos >= 0, "voiceController.isMeshEnabled assignment not found in startVoiceRecording().")
-        assertTrue(contextPos >= 0, "voiceMessageAdapter.startVoiceMessage() call not found in startVoiceRecording().")
-        assertTrue(capturePos >= 0, "sttPipeline.startCapture() call not found in startVoiceRecording().")
-
-        // Both setup steps must precede the actual audio capture
         assertTrue(
-            meshPos < capturePos,
-            "isMeshEnabled must be set BEFORE startCapture().\n" +
-                "Offsets — isMeshEnabled: $meshPos, startCapture: $capturePos.",
-        )
-        assertTrue(
-            contextPos < capturePos,
-            "startVoiceMessage() must be called BEFORE startCapture().\n" +
-                "Offsets — startVoiceMessage: $contextPos, startCapture: $capturePos.",
+            startFn.contains("sttPipeline.canCapture") && startFn.contains("sttPipeline.startCapture"),
+            "startVoiceRecording() must verify canCapture before calling startCapture().",
         )
     }
 

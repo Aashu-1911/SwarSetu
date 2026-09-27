@@ -3,11 +3,15 @@ package app.swarsetu.call
 import android.annotation.SuppressLint
 import android.content.Context
 import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaRecorder
+import android.media.audiofx.AcousticEchoCanceler
+import android.media.audiofx.NoiseSuppressor
+import android.os.Build
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -22,7 +26,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * High-performance low-latency Audio Engine for Live Translated Calls.
- * Manages continuous 16kHz AudioRecord capture and AudioTrack playback.
+ * Manages continuous 16kHz AudioRecord capture and AudioTrack playback with
+ * hardware Acoustic Echo Cancellation (AEC), Noise Suppression (NS), and audio routing.
  */
 class CallAudioEngine(
     private val context: Context,
@@ -39,6 +44,9 @@ class CallAudioEngine(
 
     private var audioRecord: AudioRecord? = null
     private var audioTrack: AudioTrack? = null
+    private var echoCanceler: AcousticEchoCanceler? = null
+    private var noiseSuppressor: NoiseSuppressor? = null
+    private var audioFocusRequest: AudioFocusRequest? = null
 
     private var captureJob: Job? = null
     private val isCapturing = AtomicBoolean(false)
@@ -59,22 +67,23 @@ class CallAudioEngine(
     @SuppressLint("MissingPermission")
     suspend fun start(speakerphone: Boolean = true): Boolean = withContext(Dispatchers.IO) {
         try {
-            // 1. Configure Android AudioManager for VoIP communication
+            // 1. Request Audio Focus & Configure AudioManager for VoIP
+            requestCallAudioFocus()
             previousAudioMode = audioManager.mode
             previousSpeakerphoneState = audioManager.isSpeakerphoneOn
 
             audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
             setSpeakerphone(speakerphone)
 
-            // 2. Initialize AudioRecord
+            // 2. Initialize AudioRecord (16kHz 16-bit Mono)
             val minRecordBufferSize = AudioRecord.getMinBufferSize(
                 sampleRate,
                 AudioFormat.CHANNEL_IN_MONO,
                 AudioFormat.ENCODING_PCM_16BIT,
             )
-            val recordBufferSize = maxOf(minRecordBufferSize, sampleRate * 2) // At least 1 second buffer
+            val recordBufferSize = maxOf(minRecordBufferSize, sampleRate * 2) // 1 second buffer
 
-            val record = AudioRecord(
+            var record = AudioRecord(
                 MediaRecorder.AudioSource.VOICE_COMMUNICATION,
                 sampleRate,
                 AudioFormat.CHANNEL_IN_MONO,
@@ -83,13 +92,28 @@ class CallAudioEngine(
             )
 
             if (record.state != AudioRecord.STATE_INITIALIZED) {
-                Log.e(TAG, "AudioRecord initialization failed!")
+                Log.w(TAG, "VOICE_COMMUNICATION audio source failed to initialize, falling back to MIC")
+                record.release()
+                record = AudioRecord(
+                    MediaRecorder.AudioSource.MIC,
+                    sampleRate,
+                    AudioFormat.CHANNEL_IN_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT,
+                    recordBufferSize,
+                )
+            }
+
+            if (record.state != AudioRecord.STATE_INITIALIZED) {
+                Log.e(TAG, "AudioRecord initialization failed with all audio sources!")
                 record.release()
                 return@withContext false
             }
             audioRecord = record
 
-            // 3. Initialize AudioTrack
+            // Attach Acoustic Echo Canceler and Noise Suppressor if supported
+            attachAudioEffects(record.audioSessionId)
+
+            // 3. Initialize AudioTrack (16kHz 16-bit Mono)
             val minTrackBufferSize = AudioTrack.getMinBufferSize(
                 sampleRate,
                 AudioFormat.CHANNEL_OUT_MONO,
@@ -118,6 +142,7 @@ class CallAudioEngine(
             if (track.state != AudioTrack.STATE_INITIALIZED) {
                 Log.e(TAG, "AudioTrack initialization failed!")
                 track.release()
+                releaseAudioEffects()
                 audioRecord?.release()
                 audioRecord = null
                 return@withContext false
@@ -125,16 +150,18 @@ class CallAudioEngine(
             audioTrack = track
             track.play()
             isPlaying.set(true)
+            Log.i(TAG, "CALL_AUDIO_PLAYBACK_START: AudioTrack initialized and playing")
 
-            // 4. Start Capture Loop
+            // 4. Start Continuous Capture Loop
             record.startRecording()
             isCapturing.set(true)
+            Log.i(TAG, "CALL_AUDIO_CAPTURE_START: AudioRecord recording started at $sampleRate Hz")
 
             captureJob = scope.launch(Dispatchers.IO) {
                 val pcmBuffer = ShortArray(CHUNK_SIZE_SAMPLES)
                 while (isActive && isCapturing.get()) {
-                    val record = audioRecord ?: break
-                    val readCount = record.read(pcmBuffer, 0, CHUNK_SIZE_SAMPLES)
+                    val currentRecord = audioRecord ?: break
+                    val readCount = currentRecord.read(pcmBuffer, 0, CHUNK_SIZE_SAMPLES)
                     if (readCount > 0) {
                         if (!_isMuted.value) {
                             onPcmCaptured(pcmBuffer, readCount)
@@ -144,7 +171,7 @@ class CallAudioEngine(
                             onPcmCaptured(silentChunk, readCount)
                         }
                     } else if (readCount == AudioRecord.ERROR_INVALID_OPERATION || readCount == AudioRecord.ERROR_BAD_VALUE) {
-                        Log.w(TAG, "AudioRecord read returned non-fatal error: $readCount")
+                        Log.w(TAG, "AudioRecord read non-fatal status: $readCount")
                         kotlinx.coroutines.delay(20)
                     } else if (readCount == AudioRecord.ERROR_DEAD_OBJECT) {
                         Log.e(TAG, "AudioRecord dead object encountered! Breaking capture loop.")
@@ -153,12 +180,97 @@ class CallAudioEngine(
                 }
             }
 
-            Log.d(TAG, "CallAudioEngine started successfully at $sampleRate Hz")
+            Log.d(TAG, "CallAudioEngine fully initialized and running")
             true
         } catch (e: Exception) {
             Log.e(TAG, "Failed starting CallAudioEngine: ${e.message}", e)
             stop()
             false
+        }
+    }
+
+    private fun attachAudioEffects(audioSessionId: Int) {
+        try {
+            val aecAvailable = AcousticEchoCanceler.isAvailable()
+            val nsAvailable = NoiseSuppressor.isAvailable()
+            Log.i(TAG, "AUDIO_HARDWARE_EFFECTS: AcousticEchoCanceler.isAvailable=$aecAvailable, NoiseSuppressor.isAvailable=$nsAvailable")
+
+            if (aecAvailable) {
+                echoCanceler = AcousticEchoCanceler.create(audioSessionId)?.apply {
+                    enabled = true
+                }
+                Log.i(TAG, "Hardware AcousticEchoCanceler enabled on session $audioSessionId")
+            } else {
+                Log.w(TAG, "Hardware AcousticEchoCanceler NOT available on this device chipset")
+            }
+
+            if (nsAvailable) {
+                noiseSuppressor = NoiseSuppressor.create(audioSessionId)?.apply {
+                    enabled = true
+                }
+                Log.i(TAG, "Hardware NoiseSuppressor enabled on session $audioSessionId")
+            } else {
+                Log.w(TAG, "Hardware NoiseSuppressor NOT available on this device chipset")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not attach hardware audio effects: ${e.message}")
+        }
+    }
+
+    private fun releaseAudioEffects() {
+        try {
+            echoCanceler?.enabled = false
+            echoCanceler?.release()
+        } catch (_: Exception) {} finally {
+            echoCanceler = null
+        }
+        try {
+            noiseSuppressor?.enabled = false
+            noiseSuppressor?.release()
+        } catch (_: Exception) {} finally {
+            noiseSuppressor = null
+        }
+    }
+
+    private fun requestCallAudioFocus() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
+                    .setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build()
+                    )
+                    .setOnAudioFocusChangeListener { /* handle focus loss if needed */ }
+                    .build()
+                audioFocusRequest = focusRequest
+                audioManager.requestAudioFocus(focusRequest)
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager.requestAudioFocus(
+                    null,
+                    AudioManager.STREAM_VOICE_CALL,
+                    AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE,
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed requesting audio focus: ${e.message}")
+        }
+    }
+
+    private fun abandonCallAudioFocus() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                audioFocusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager.abandonAudioFocus(null)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed abandoning audio focus: ${e.message}")
+        } finally {
+            audioFocusRequest = null
         }
     }
 
@@ -184,7 +296,7 @@ class CallAudioEngine(
     fun setSpeakerphone(on: Boolean) {
         _isSpeakerphoneOn.value = on
         try {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val devices = audioManager.availableCommunicationDevices
                 val speakerDevice = devices.firstOrNull { it.type == android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
                 val earpieceDevice = devices.firstOrNull {
@@ -216,9 +328,12 @@ class CallAudioEngine(
         captureJob?.cancel()
         captureJob = null
 
+        releaseAudioEffects()
+
         try {
             audioRecord?.stop()
             audioRecord?.release()
+            Log.i(TAG, "CALL_AUDIO_CAPTURE_STOP: AudioRecord stopped and released")
         } catch (e: Exception) {
             Log.w(TAG, "Error releasing AudioRecord: ${e.message}")
         } finally {
@@ -229,11 +344,14 @@ class CallAudioEngine(
             audioTrack?.stop()
             audioTrack?.flush()
             audioTrack?.release()
+            Log.i(TAG, "CALL_AUDIO_PLAYBACK_STOP: AudioTrack stopped and released")
         } catch (e: Exception) {
             Log.w(TAG, "Error releasing AudioTrack: ${e.message}")
         } finally {
             audioTrack = null
         }
+
+        abandonCallAudioFocus()
 
         try {
             audioManager.mode = previousAudioMode
@@ -242,6 +360,6 @@ class CallAudioEngine(
             Log.w(TAG, "Error resetting AudioManager mode: ${e.message}")
         }
 
-        Log.d(TAG, "CallAudioEngine stopped and released")
+        Log.d(TAG, "CallAudioEngine stopped and released cleanly")
     }
 }

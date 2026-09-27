@@ -76,7 +76,7 @@ class CallMeshTransport(
 
             scope.launch(Dispatchers.IO) {
                 try {
-                    Log.d(TAG, "Wi-Fi Aware Call Server listening on port $actualPort...")
+                    Log.d(TAG, "Wi-Fi Aware Call Server listening on port $actualPort for call $callId...")
                     val socket = server.accept()
                     socket.tcpNoDelay = true
                     socket.sendBufferSize = 64 * 1024
@@ -107,7 +107,7 @@ class CallMeshTransport(
         while (attempt <= maxRetries && isRunning.get()) {
             attempt++
             try {
-                Log.d(TAG, "Connecting to remote peer Wi-Fi Aware at $host:$port (attempt $attempt)...")
+                Log.d(TAG, "Connecting to remote peer Wi-Fi Aware at $host:$port (attempt $attempt) for call $callId...")
                 val socket = Socket()
                 socket.tcpNoDelay = true
                 socket.sendBufferSize = 64 * 1024
@@ -139,7 +139,7 @@ class CallMeshTransport(
             startReceiveLoop()
             startHeartbeatWatchdog()
 
-            Log.d(TAG, "CallMeshTransport connection established with $remotePeerId")
+            Log.i(TAG, "CALL_RECONNECT_SUCCESS: CallMeshTransport connection established with $remotePeerId")
         } catch (e: Exception) {
             Log.e(TAG, "Failed setting up socket streams: ${e.message}", e)
             close("Stream setup failed")
@@ -157,6 +157,7 @@ class CallMeshTransport(
                     out.writeInt(encoded.size)
                     out.write(encoded)
                     out.flush()
+                    Log.d(TAG, "CALL_PACKET_TX: Seq #${packet.sequenceNumber}, type=${packet.payloadType}, len=${encoded.size}")
                 } catch (e: Exception) {
                     Log.e(TAG, "Socket write error: ${e.message}")
                     close("Write error: ${e.message}")
@@ -183,6 +184,7 @@ class CallMeshTransport(
                     val packet = CallPacketCodec.decode(frameBytes)
                     if (packet != null && packet.callId == callId) {
                         lastReceivedPacketTimestamp = System.currentTimeMillis()
+                        Log.d(TAG, "CALL_PACKET_RX: Seq #${packet.sequenceNumber}, type=${packet.payloadType}")
 
                         if (packet.payloadType == CallPayloadType.HEARTBEAT) {
                             // Calculate RTT
@@ -192,6 +194,8 @@ class CallMeshTransport(
                             jitterBuffer.push(packet)
                             onPacketReceived(packet)
                         }
+                    } else if (packet != null && packet.callId != callId) {
+                        Log.w(TAG, "Ignoring stale call packet from old callId=${packet.callId} (expected=$callId)")
                     }
                 } catch (e: Exception) {
                     if (isConnected.get()) {

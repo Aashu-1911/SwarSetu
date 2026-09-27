@@ -103,7 +103,7 @@ internal data class ProfileFormState(
     val contentFilteringEnabled: Boolean,
 
     val isDirty: Boolean,
-    val preferredLanguage: SttLanguage = SttLanguage.HINDI,
+    val preferredLanguage: SttLanguage = SttLanguage.ENGLISH,
     val availableLanguages: List<SttLanguage> = SttLanguage.entries,
     val installedLanguages: Set<SttLanguage> = emptySet(),
     val themePreference: String = "system",

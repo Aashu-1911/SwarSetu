@@ -40,7 +40,7 @@ fun ProfileSetupScreen(
 ) {
     var name by remember { mutableStateOf("") }
     var expanded by remember { mutableStateOf(false) }
-    var selectedLanguage by remember { mutableStateOf(SttLanguage.HINDI) }
+    var selectedLanguage by remember { mutableStateOf(SttLanguage.ENGLISH) }
     val scope = rememberCoroutineScope()
 
     Column(

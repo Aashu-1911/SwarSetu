@@ -307,16 +307,17 @@ fun ChatScreen(
         }
     }
 
-    val sttPartialText by viewModel.sttPartialText.collectAsStateWithLifecycle()
-    val sttLatestResult by viewModel.sttLatestResult.collectAsStateWithLifecycle()
-
-    LaunchedEffect(sttPartialText) {
-        // Walkie-Talkie flow: Do not append STT text to the input field.
-        // It is automatically sent by VoiceMessageAdapter upon completion.
-    }
-
-    LaunchedEffect(sttLatestResult) {
-        // Walkie-Talkie flow: Do not append STT text to the input field.
+    LaunchedEffect(Unit) {
+        viewModel.sttTranscript.collect { transcript ->
+            if (transcript.isNotBlank()) {
+                val current = inputState.text.toString().trim()
+                if (current.isEmpty()) {
+                    inputState.setTextAndPlaceCursorAtEnd(transcript)
+                } else {
+                    inputState.setTextAndPlaceCursorAtEnd("$current $transcript")
+                }
+            }
+        }
     }
     // Drain any payload handed in from the system share sheet (see ShareInbox): prefill the text draft
     // and stage the image through the normal attach() path, so it inherits ingest-time screening and
@@ -2479,6 +2480,7 @@ private fun MicButton(
                     awaitPointerEventScope {
                         while (true) {
                             val down = awaitFirstDown(requireUnconsumed = false)
+                            val downTime = System.currentTimeMillis()
                             if (!gate.runOrRequest { onStart(false) }) {
                                 waitForUpOrCancellation()
                                 continue
@@ -2504,7 +2506,15 @@ private fun MicButton(
                             if (cancelled) {
                                 waitForUpOrCancellation()
                             } else if (!locked) {
-                                onStop()
+                                val pressDuration = System.currentTimeMillis() - downTime
+                                if (pressDuration < 350L) {
+                                    // Short tap (<350ms): switch to locked hands-free recording
+                                    locked = true
+                                    onLock()
+                                } else {
+                                    // Hold-and-release (>350ms): send immediately
+                                    onStop()
+                                }
                             }
                         }
                     }

@@ -56,7 +56,7 @@ class VoiceMessageReceiver(
                     targetLanguage = languageToSpeak,
                 )
                 runCatching { messageRepository.save(updatedEntity) }
-            } else if (originalLanguage != preferredLanguage && (languageToSpeak != preferredLanguage || entity.translatedText == null)) {
+            } else if (originalLanguage != preferredLanguage && entity.translatedText == null) {
                 if (inputToTranslate.isNotBlank()) {
                     android.util.Log.d("SW_RECEIVER", "RECEIVER_TRANSLATION_START ($originalLanguage -> $preferredLanguage)")
                     val myName = runCatching { settingsStore.displayName.first() }.getOrNull()

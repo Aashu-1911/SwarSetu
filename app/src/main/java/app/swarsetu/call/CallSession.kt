@@ -4,6 +4,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Item in the live call transcript display.
@@ -40,7 +41,7 @@ data class CallMetrics(
 }
 
 /**
- * Active Live Translated Call session state and metric trackers.
+ * Authoritative Active Live Translated Call session state and metric trackers.
  */
 class CallSession(
     val callId: String,
@@ -52,8 +53,12 @@ class CallSession(
     val remoteSourceLanguage: String,
     val remoteTargetLanguage: String,
     val startTimeMs: Long = System.currentTimeMillis(),
+    initialState: CallState = if (direction == CallDirection.OUTGOING) CallState.OUTGOING_REQUESTED else CallState.INCOMING,
 ) {
-    private val _state = MutableStateFlow(CallState.CONNECTING)
+    val sourceLanguage: String get() = localSourceLanguage
+    val targetLanguage: String get() = localTargetLanguage
+
+    private val _state = MutableStateFlow(initialState)
     val state: StateFlow<CallState> = _state.asStateFlow()
 
     private val _metrics = MutableStateFlow(CallMetrics())
@@ -61,6 +66,8 @@ class CallSession(
 
     private val _transcripts = MutableStateFlow<List<CallTranscriptItem>>(emptyList())
     val transcripts: StateFlow<List<CallTranscriptItem>> = _transcripts.asStateFlow()
+
+    private val processedSegmentIds = ConcurrentHashMap.newKeySet<String>()
 
     var connectedTimeMs: Long? = null
     val connectedAt: Long get() = connectedTimeMs ?: startTimeMs
@@ -74,7 +81,11 @@ class CallSession(
             return maxOf(0L, (end - start) / 1000L)
         }
 
-    fun updateState(newState: CallState) {
+    fun updateState(newState: CallState): Boolean {
+        val current = _state.value
+        if (!CallState.validateAndLogTransition(current, newState, callId)) {
+            return false
+        }
         _state.value = newState
         if (newState == CallState.CONNECTED && connectedTimeMs == null) {
             connectedTimeMs = System.currentTimeMillis()
@@ -83,6 +94,15 @@ class CallSession(
                 endTimeMs = System.currentTimeMillis()
             }
         }
+        return true
+    }
+
+    fun recordProcessedSegment(segmentId: String): Boolean {
+        return processedSegmentIds.add(segmentId)
+    }
+
+    fun isSegmentProcessed(segmentId: String): Boolean {
+        return processedSegmentIds.contains(segmentId)
     }
 
     fun addTranscript(item: CallTranscriptItem) {

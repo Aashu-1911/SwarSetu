@@ -104,7 +104,7 @@ class PcmCapture(
         val actualBufferSize = maxOf(bufferSize * 8, SAMPLE_RATE * 2)
 
         try {
-            recorder =
+            var rec =
                 AudioRecord(
                     MediaRecorder.AudioSource.VOICE_RECOGNITION, // No AGC/noise suppression
                     SAMPLE_RATE,
@@ -112,6 +112,18 @@ class PcmCapture(
                     AUDIO_FORMAT,
                     actualBufferSize,
                 )
+            if (rec.state != AudioRecord.STATE_INITIALIZED) {
+                Log.w("SW_AUDIO", "VOICE_RECOGNITION audio source failed to initialize, falling back to MIC")
+                runCatching { rec.release() }
+                rec = AudioRecord(
+                    MediaRecorder.AudioSource.MIC,
+                    SAMPLE_RATE,
+                    CHANNEL_CONFIG,
+                    AUDIO_FORMAT,
+                    actualBufferSize,
+                )
+            }
+            recorder = rec
         } catch (e: SecurityException) {
             Log.e("SW_AUDIO", "Microphone permission denied: ${e.message}")
             return false

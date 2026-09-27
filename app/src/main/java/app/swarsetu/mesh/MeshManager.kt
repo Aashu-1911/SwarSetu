@@ -528,7 +528,7 @@ class MeshManager(
         val sealedAttachment = attachment?.let { sealAttachment(it) }
         val content =
             MessageContent(
-                body = text,
+                body = translatedText ?: text,
                 mentions = mentions,
                 attachmentHash = sealedAttachment?.hash,
                 attachmentMime = attachment?.mime,

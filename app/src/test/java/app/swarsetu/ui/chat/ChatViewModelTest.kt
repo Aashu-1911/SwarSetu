@@ -110,7 +110,11 @@ class ChatViewModelTest {
         every { groups.observeGroup(GROUP) } returns groupFlow
         every { peers.observePeers() } returns peersFlow
         every { settings.displayName } returns nameFlow
-        every { settings.sttLanguageCode } returns MutableStateFlow("hi")
+        every { settings.sttLanguageCode } returns MutableStateFlow("en")
+        every { sttPipeline.latestResult } returns MutableStateFlow(null)
+        every { sttPipeline.partialText } returns MutableStateFlow("")
+        every { sttPipeline.state } returns MutableStateFlow(app.swarsetu.stt.SttPipeline.PipelineState.IDLE)
+        every { sttPipeline.amplitude } returns MutableStateFlow(0f)
         // A relaxed mock would hand back a Flow that never emits, and RelayStatusRepository
         // combines these — one silent flow would stall every state assertion in this class.
         every { settings.spoolEnabled } returns spoolEnabledFlow

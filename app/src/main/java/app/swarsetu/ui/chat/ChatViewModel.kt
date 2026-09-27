@@ -235,8 +235,8 @@ class ChatViewModel(
 
     val selectedSttLanguage: StateFlow<SttLanguage> =
         settings.sttLanguageCode
-            .map { code -> SttLanguage.fromCode(code) ?: SttLanguage.HINDI }
-            .stateIn(viewModelScope, SharingStarted.Eagerly, SttLanguage.HINDI)
+            .map { code -> SttLanguage.fromCode(code) ?: SttLanguage.ENGLISH }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, SttLanguage.ENGLISH)
 
     // Built lazily so a chat that never records never opens a recorder, and torn down in onCleared: the
     // microphone is exclusive, and leaking it would block every other app until this process died.
@@ -254,6 +254,9 @@ class ChatViewModel(
     private val _clearInput = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val clearInput: SharedFlow<Unit> = _clearInput.asSharedFlow()
 
+    private val _sttTranscript = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val sttTranscript: SharedFlow<String> = _sttTranscript.asSharedFlow()
+
     init {
         viewModelScope.launch { myNodeId.value = identity.nodeId() }
         viewModelScope.launch {
@@ -261,6 +264,14 @@ class ChatViewModel(
                 if (foreground) msgs.maxOfOrNull { it.sentAt } else null
             }.distinctUntilChanged().collect { watermark ->
                 if (watermark != null) settings.setLastReadAt(conversationId, watermark)
+            }
+        }
+        viewModelScope.launch {
+            sttPipeline.latestResult.collect { result ->
+                if (result != null && result.isUsable && result.text.isNotBlank()) {
+                    android.util.Log.d("ChatViewModel", "STT transcript produced: \"${result.text}\"")
+                    _sttTranscript.tryEmit(result.text)
+                }
             }
         }
     }
@@ -728,24 +739,12 @@ class ChatViewModel(
         }
         val language = selectedSttLanguage.value
 
-        // Enable mesh transmission
-        voiceController.isMeshEnabled = true
-
-        // Set routing context SYNCHRONOUSLY before startCapture so the adapter
-        // always has context when the STT result arrives.
-        voiceMessageAdapter.startVoiceMessage(
-            language = language,
-            conversationId = conversationId,
-        )
-
         if (sttPipeline.canCapture) {
             android.util.Log.d("SW_VOICE", "MIC_PERMISSION_GRANTED")
             android.util.Log.d("SW_VOICE", "VOICE_START_ACCEPTED (STT lang=${language.code})")
             sttPipeline.startCapture(language, silenceTimeoutMs = 0L)
         } else {
             android.util.Log.w("SW_VOICE", "MIC_PERMISSION_DENIED")
-            voiceMessageAdapter.stopVoiceMessage()
-            voiceController.isMeshEnabled = false
             _events.tryEmit(R.string.chat_voice_record_failed)
             return false
         }
@@ -783,7 +782,6 @@ class ChatViewModel(
         sttPipeline.stopCapture()
 
         _voiceRecording.value = null
-        // isMeshEnabled stays true until VoiceMessageAdapter clears context after sending
     }
 
     fun cancelVoiceRecording() {
@@ -793,8 +791,6 @@ class ChatViewModel(
         recordingTicker = null
         sttPipeline.cancelCapture()
         voicePlayer.stop()
-        voiceMessageAdapter.stopVoiceMessage()
-        voiceController.isMeshEnabled = false
 
         _voiceRecording.value = null
     }
