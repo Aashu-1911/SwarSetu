@@ -287,17 +287,14 @@ fun VoiceRecordingBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            // The dot swells with the input level, so the user can see the mic is actually hearing them —
-            // the one thing a static "Recording…" label can't tell them.
-            val dot = (8f + amplitude.coerceIn(0f, 1f) * 6f).dp
+            // The dynamic waveform swells and animates with the input level, so the user can see 
+            // the mic is actually hearing them and reacting dynamically.
             val recordingLabel = stringResource(R.string.chat_voice_recording)
             Box(
-                modifier = Modifier.size(16.dp).semantics { contentDescription = recordingLabel },
+                modifier = Modifier.semantics { contentDescription = recordingLabel },
                 contentAlignment = Alignment.Center,
             ) {
-                Surface(color = MaterialTheme.colorScheme.error, shape = CircleShape) {
-                    Box(Modifier.size(dot))
-                }
+                DynamicWaveform(amplitude = amplitude)
             }
             Text(
                 text = formatDuration(elapsedMs.toInt()),

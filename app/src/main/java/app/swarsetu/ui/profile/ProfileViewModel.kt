@@ -124,6 +124,10 @@ class ProfileViewModel(
         settings.autoPlayTts
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
+    val autoSendDictation: StateFlow<Boolean> =
+        settings.autoSendDictation
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
     fun setThemePreference(theme: String) {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             settings.setThemePreference(theme)
@@ -133,6 +137,12 @@ class ProfileViewModel(
     fun setAutoPlayTts(enabled: Boolean) {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             settings.setAutoPlayTts(enabled)
+        }
+    }
+
+    fun setAutoSendDictation(enabled: Boolean) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            settings.setAutoSendDictation(enabled)
         }
     }
 

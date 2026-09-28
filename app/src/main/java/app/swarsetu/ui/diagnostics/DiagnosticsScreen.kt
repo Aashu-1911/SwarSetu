@@ -80,6 +80,7 @@ fun DiagnosticsScreen(
     onOpenCrashLog: () -> Unit,
     onOpenTtsTest: () -> Unit,
     onOpenTranslationTest: () -> Unit = {},
+    onOpenLiveCallTest: () -> Unit = {},
     onOpenLanguageInit: () -> Unit = {},
     viewModel: DiagnosticsViewModel = koinViewModel(),
 ) {
@@ -121,6 +122,7 @@ fun DiagnosticsScreen(
         onOpenCrashLog = onOpenCrashLog,
         onOpenTtsTest = onOpenTtsTest,
         onOpenTranslationTest = onOpenTranslationTest,
+        onOpenLiveCallTest = onOpenLiveCallTest,
         onOpenLanguageInit = onOpenLanguageInit,
     )
 }
@@ -139,6 +141,7 @@ internal fun DiagnosticsScreenContent(
     onOpenCrashLog: () -> Unit,
     onOpenTtsTest: () -> Unit,
     onOpenTranslationTest: () -> Unit = {},
+    onOpenLiveCallTest: () -> Unit = {},
     onOpenLanguageInit: () -> Unit = {},
 ) {
     Scaffold(
@@ -194,6 +197,12 @@ internal fun DiagnosticsScreenContent(
                         Icon(Icons.Default.Translate, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("IndicTrans2 Translation Test")
+                    }
+                    Button(
+                        onClick = onOpenLiveCallTest,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Live Call STT Loopback Test")
                     }
                     Row(modifier = Modifier.fillMaxWidth()) {
                         Button(

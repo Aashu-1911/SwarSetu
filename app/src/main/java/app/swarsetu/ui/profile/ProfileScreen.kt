@@ -108,6 +108,7 @@ internal data class ProfileFormState(
     val installedLanguages: Set<SttLanguage> = emptySet(),
     val themePreference: String = "system",
     val autoPlayTts: Boolean = true,
+    val autoSendDictation: Boolean = false,
 )
 
 @Composable
@@ -130,6 +131,7 @@ fun ProfileScreen(
     val installedLanguages by viewModel.installedLanguages.collectAsStateWithLifecycle()
     val themePreference by viewModel.themePreference.collectAsStateWithLifecycle()
     val autoPlayTts by viewModel.autoPlayTts.collectAsStateWithLifecycle()
+    val autoSendDictation by viewModel.autoSendDictation.collectAsStateWithLifecycle()
 
     // Navigate back only once Save has finished persisting (the write outlives this composition because
     // it runs in viewModelScope, but we wait so the user lands back on the previous screen on success).
@@ -168,6 +170,7 @@ fun ProfileScreen(
                 installedLanguages = installedLanguages,
                 themePreference = themePreference,
                 autoPlayTts = autoPlayTts,
+                autoSendDictation = autoSendDictation,
             ),
         batteryExempt = rememberBatteryExempt(),
         onBack = onBack,
@@ -179,6 +182,7 @@ fun ProfileScreen(
         onLanguageChange = viewModel::setPreferredLanguage,
         onThemeChange = viewModel::setThemePreference,
         onAutoPlayTtsChange = viewModel::setAutoPlayTts,
+        onAutoSendDictationChange = viewModel::setAutoSendDictation,
 
         onPickPhoto = {
             picker.launch(
@@ -205,6 +209,7 @@ internal fun ProfileScreenContent(
     onLanguageChange: (SttLanguage) -> Unit = {},
     onThemeChange: (String) -> Unit = {},
     onAutoPlayTtsChange: (Boolean) -> Unit = {},
+    onAutoSendDictationChange: (Boolean) -> Unit = {},
 
     onPickPhoto: () -> Unit,
     onClearPhoto: () -> Unit,
@@ -369,6 +374,11 @@ internal fun ProfileScreenContent(
                         enabled = form.autoPlayTts,
                         onToggle = onAutoPlayTtsChange,
                     )
+
+                    AutoSendDictationRow(
+                        enabled = form.autoSendDictation,
+                        onToggle = onAutoSendDictationChange,
+                    )
                 }
             }
 
@@ -488,6 +498,40 @@ private fun AutoPlayTtsRow(
             )
             Text(
                 text = uiText(UiTextKey.AUTO_PLAY_TTS_DESC),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(
+            checked = enabled,
+            onCheckedChange = onToggle,
+        )
+    }
+}
+
+@Composable
+private fun AutoSendDictationRow(
+    enabled: Boolean,
+    onToggle: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable { onToggle(!enabled) }
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = uiText(UiTextKey.AUTO_SEND_DICTATION_TITLE),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = uiText(UiTextKey.AUTO_SEND_DICTATION_DESC),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

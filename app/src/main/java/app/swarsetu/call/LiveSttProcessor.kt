@@ -32,7 +32,7 @@ class LiveSttProcessor(
 ) {
     companion object {
         private const val TAG = "LiveSttProcessor"
-        private const val INFERENCE_TIMEOUT_MS = 2500L
+        private const val INFERENCE_TIMEOUT_MS = 15000L
     }
 
     private val inferenceMutex = Mutex()

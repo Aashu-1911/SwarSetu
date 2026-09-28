@@ -25,9 +25,12 @@ class LiveCallViewModel(
 ) : ViewModel() {
 
     val callState: StateFlow<CallState> = callManager.callState
+    val isModelLoading: StateFlow<Boolean> = callManager.isModelLoading
+    val isProcessing: StateFlow<Boolean> = callManager.isProcessing
     val currentSession: StateFlow<CallSession?> = callManager.currentSession
     val isMuted: StateFlow<Boolean> = callManager.isMuted
     val isSpeakerOn: StateFlow<Boolean> = callManager.isSpeakerOn
+    val localAmplitude: StateFlow<Float> = callManager.localAmplitude
 
     private val _callDuration = MutableStateFlow("00:00")
     val callDuration: StateFlow<String> = _callDuration.asStateFlow()

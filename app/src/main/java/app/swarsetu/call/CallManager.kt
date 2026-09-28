@@ -56,8 +56,17 @@ class CallManager(
     val callState: StateFlow<CallState> = _callState.asStateFlow()
     val state: StateFlow<CallState> get() = callState
 
+    private val _isModelLoading = MutableStateFlow(false)
+    val isModelLoading: StateFlow<Boolean> = _isModelLoading.asStateFlow()
+
+    private val _isProcessing = MutableStateFlow(false)
+    val isProcessing: StateFlow<Boolean> = _isProcessing.asStateFlow()
+
     private val _isMuted = MutableStateFlow(false)
     val isMuted: StateFlow<Boolean> = _isMuted.asStateFlow()
+
+    private val _localAmplitude = MutableStateFlow(0f)
+    val localAmplitude: StateFlow<Float> = _localAmplitude.asStateFlow()
 
     private val _isSpeakerOn = MutableStateFlow(true)
     val isSpeakerOn: StateFlow<Boolean> = _isSpeakerOn.asStateFlow()
@@ -126,6 +135,30 @@ class CallManager(
         callJob = parentJob
         val sessionScope = CoroutineScope(Dispatchers.Default + parentJob)
         callScope = sessionScope
+
+        if (peerId == "loopback_test") {
+            val session = CallSession(
+                callId = callId,
+                peerId = peerId,
+                peerName = "Loopback Echo Test",
+                direction = CallDirection.OUTGOING,
+                localSourceLanguage = localSourceLangCode,
+                localTargetLanguage = localTargetLangCode,
+                remoteSourceLanguage = localTargetLangCode, // swap
+                remoteTargetLanguage = localSourceLangCode,
+                initialState = CallState.CONNECTED, // Jump straight to CONNECTED
+            )
+            _currentSession.value = session
+            _callState.value = CallState.CONNECTED
+            
+            val jb = JitterBuffer()
+            jitterBuffer = jb
+            val dummyKey = CallSecurity.deriveSessionKey(callId, CallSecurity.generateNonce(), "loopback")
+            security = CallSecurity(dummyKey)
+
+            startCallEnginesAndProcessors(session)
+            return@withLock callId
+        }
 
         val session = CallSession(
             callId = callId,
@@ -270,19 +303,21 @@ class CallManager(
         )
         sendCallSignal(session.peerId, answer)
 
-        // Start Audio & Processors
-        val enginesStarted = startCallEnginesAndProcessors(session)
-        if (!enginesStarted) {
-            Log.e(TAG, "Failed starting call engines for accepted call $callId")
-            cleanupSession(CallEndReason.AUDIO_DEVICE_ERROR)
-            return@withLock false
-        }
-
         _callState.value = CallState.CONNECTED
         session.updateState(CallState.CONNECTED)
         Log.i(TAG, "CALL_CONNECTED: Call $callId connected with ${offer.callerName}")
 
         updateCallServiceNotification(callId, session.peerName, "Connected")
+
+        // Start Audio & Processors asynchronously so UI updates immediately
+        sessionScope.launch(Dispatchers.Default) {
+            val enginesStarted = startCallEnginesAndProcessors(session)
+            if (!enginesStarted) {
+                Log.e(TAG, "Failed starting call engines for accepted call $callId")
+                cleanupSession(CallEndReason.AUDIO_DEVICE_ERROR)
+            }
+        }
+        
         true
     }
 
@@ -483,14 +518,16 @@ class CallManager(
         session.updateState(CallState.CONNECTED)
         Log.i(TAG, "CALL_CONNECTED: Outgoing call ${session.callId} established with ${session.peerName}")
 
-        val enginesStarted = startCallEnginesAndProcessors(session)
-        if (!enginesStarted) {
-            Log.e(TAG, "Failed starting call engines for ${session.callId}")
-            cleanupSession(CallEndReason.AUDIO_DEVICE_ERROR)
-            return
-        }
-
         updateCallServiceNotification(session.callId, session.peerName, "Connected")
+
+        val activeScope = callScope ?: scope
+        activeScope.launch(Dispatchers.Default) {
+            val enginesStarted = startCallEnginesAndProcessors(session)
+            if (!enginesStarted) {
+                Log.e(TAG, "Failed starting call engines for ${session.callId}")
+                cleanupSession(CallEndReason.AUDIO_DEVICE_ERROR)
+            }
+        }
     }
 
     private fun handleIncomingRinging(ringing: CallSignal.Ringing) {
@@ -513,9 +550,11 @@ class CallManager(
     private suspend fun startCallEnginesAndProcessors(session: CallSession): Boolean {
         val activeScope = callScope ?: scope
 
+        _isModelLoading.value = true
         // 1. Prepare STT for local source language
         val sttLang = SttLanguage.fromCode(session.localSourceLanguage) ?: SttLanguage.ENGLISH
         sttProcessor?.prepare(sttLang)
+        _isModelLoading.value = false
 
         // 2. Setup VAD endpoint detector with local barge-in trigger
         val vad = CallVadEndpointDetector(
@@ -534,6 +573,12 @@ class CallManager(
             context = context,
             scope = activeScope,
             onPcmCaptured = { pcmChunk, length ->
+                var sum = 0.0
+                for (i in 0 until length) {
+                    sum += pcmChunk[i] * pcmChunk[i]
+                }
+                val rms = kotlin.math.sqrt(sum / length)
+                _localAmplitude.value = (rms / 32768.0).toFloat().coerceIn(0f, 1f)
                 vad.processPcmChunk(pcmChunk, length)
             }
         )
@@ -549,20 +594,30 @@ class CallManager(
     ) {
         val activeScope = callScope ?: scope
         activeScope.launch(Dispatchers.Default) {
-            val transcript = sttProcessor?.processSpeechSegment(
-                callId = session.callId,
-                speakerNodeId = "me",
-                pcmShorts = pcmShorts,
-                durationMs = durationMs,
-                language = language,
-            ) ?: return@launch
+            _isProcessing.value = true
+            val transcript = try {
+                sttProcessor?.processSpeechSegment(
+                    callId = session.callId,
+                    speakerNodeId = "me",
+                    pcmShorts = pcmShorts,
+                    durationMs = durationMs,
+                    language = language,
+                )
+            } finally {
+                _isProcessing.value = false
+            }
+            if (transcript == null) return@launch
 
+            val myName = context.getString(app.swarsetu.R.string.chat_self_name)
+            val peerName = session.peerName
+            
             val translation = transProcessor?.translateSegment(
                 callId = session.callId,
                 speakerNodeId = "me",
                 text = transcript.text,
                 sourceLangCode = session.localSourceLanguage,
                 targetLangCode = session.localTargetLanguage,
+                protectedNouns = listOfNotNull(myName, peerName)
             )
             if (translation == null) {
                 Log.w(TAG, "CALL_TRANSLATION_ERROR: Translation failed for segment: \"${transcript.text}\". Emitting translation error and suppressing untranslated transmission.")
@@ -601,6 +656,38 @@ class CallManager(
 
             // 1. Send encrypted translated segment packet over Wi-Fi Aware to remote peer
             val payloadBytes = translation.translatedText.toByteArray(Charsets.UTF_8)
+            
+            if (session.peerId == "loopback_test") {
+                activeScope.launch {
+                    kotlinx.coroutines.delay(200)
+                    val echoText = String(payloadBytes, Charsets.UTF_8)
+                    session.addTranscript(
+                        CallTranscriptItem(
+                            id = UUID.randomUUID().toString(),
+                            speakerName = session.peerName,
+                            isLocal = false,
+                            originalText = translation.translatedText,
+                            translatedText = echoText,
+                            originalLanguage = session.localTargetLanguage,
+                            translatedLanguage = session.localSourceLanguage,
+                            totalLatencyMs = 0
+                        )
+                    )
+                    ttsProcessor?.enqueue(
+                        app.swarsetu.call.LiveTranslation(
+                            callId = session.callId,
+                            speakerNodeId = session.peerId,
+                            sourceText = translation.translatedText,
+                            translatedText = echoText,
+                            sourceLanguage = app.swarsetu.translation.indictrans.IndicLanguage.fromCode(session.localTargetLanguage) ?: app.swarsetu.translation.indictrans.IndicLanguage.HINDI,
+                            targetLanguage = app.swarsetu.translation.indictrans.IndicLanguage.fromCode(session.localSourceLanguage) ?: app.swarsetu.translation.indictrans.IndicLanguage.ENGLISH,
+                            latencyMs = 0,
+                        )
+                    )
+                }
+                return@launch
+            }
+
             transport?.sendPayload(CallPayloadType.TRANSLATED_SEGMENT, payloadBytes)
 
             // 2. Also send VoiceSegment signal over Mesh so it is guaranteed to reach the peer even without TCP socket

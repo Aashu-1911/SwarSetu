@@ -230,6 +230,10 @@ class ChatViewModel(
 
     val voicePlayback: StateFlow<VoicePlayer.Playback?> = voicePlayer.nowPlaying
 
+    val isVoiceProcessing: StateFlow<Boolean> = sttPipeline.state
+        .map { it == app.swarsetu.stt.SttPipeline.PipelineState.PROCESSING }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
     val sttPartialText: StateFlow<String> = sttPipeline.partialText
     val sttLatestResult: StateFlow<app.swarsetu.stt.SttResult?> = sttPipeline.latestResult
 
@@ -237,6 +241,10 @@ class ChatViewModel(
         settings.sttLanguageCode
             .map { code -> SttLanguage.fromCode(code) ?: SttLanguage.ENGLISH }
             .stateIn(viewModelScope, SharingStarted.Eagerly, SttLanguage.ENGLISH)
+
+    val autoSendDictation: StateFlow<Boolean> =
+        settings.autoSendDictation
+            .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     // Built lazily so a chat that never records never opens a recorder, and torn down in onCleared: the
     // microphone is exclusive, and leaking it would block every other app until this process died.
@@ -514,8 +522,7 @@ class ChatViewModel(
                 val outgoingReply = normalizeSelfAuthor(replyTo)
                 val group = if (isRoom) null else groups.find(conversationId)
 
-                val detectedScript = translatorEngine.detectLanguageFromScript(trimmed)
-                val myLang = (detectedScript ?: selectedSttLanguage.value.code).lowercase()
+                val myLang = selectedSttLanguage.value.code.lowercase()
                 var sourceLang: String? = myLang
                 var targetLang: String? = null
                 var translatedText: String? = null

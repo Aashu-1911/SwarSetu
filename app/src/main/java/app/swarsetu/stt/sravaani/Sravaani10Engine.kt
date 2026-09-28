@@ -252,8 +252,13 @@ class Sravaani10Engine(
         if (encoder != null && decoder != null) return
 
         val opts = OrtSession.SessionOptions().apply {
-            setIntraOpNumThreads(4)
+            // Limit threads to prevent freezing (from 4 down to 2)
+            setIntraOpNumThreads(2)
             setInterOpNumThreads(1)
+            // Prevent ONNX thread spinning which pegs the CPU at 100% and starves the Android UI thread
+            addConfigEntry("session.intra_op.allow_spinning", "0")
+            setMemoryPatternOptimization(true)
+            
             if (executionProvider.equals("NNAPI", ignoreCase = true)) {
                 try {
                     addNnapi()

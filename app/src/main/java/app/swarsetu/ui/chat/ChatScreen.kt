@@ -242,6 +242,8 @@ fun ChatScreen(
     val confirmAttachment by viewModel.confirmAttachment.collectAsStateWithLifecycle()
     val voiceRecording by viewModel.voiceRecording.collectAsStateWithLifecycle()
     val voicePlayback by viewModel.voicePlayback.collectAsStateWithLifecycle()
+    val isVoiceProcessing by viewModel.isVoiceProcessing.collectAsStateWithLifecycle()
+    val autoSendDictation by viewModel.autoSendDictation.collectAsStateWithLifecycle()
     val inputState = rememberTextFieldState()
     val shareInbox = koinInject<ShareInbox>()
     // Mentions the user inserted via autocomplete, draft-local alongside inputState (per the AGENTS.md
@@ -307,14 +309,15 @@ fun ChatScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(autoSendDictation) {
         viewModel.sttTranscript.collect { transcript ->
             if (transcript.isNotBlank()) {
                 val current = inputState.text.toString().trim()
-                if (current.isEmpty()) {
-                    inputState.setTextAndPlaceCursorAtEnd(transcript)
-                } else {
-                    inputState.setTextAndPlaceCursorAtEnd("$current $transcript")
+                val newText = if (current.isEmpty()) transcript else "$current $transcript"
+                inputState.setTextAndPlaceCursorAtEnd(newText)
+                if (autoSendDictation) {
+                    val applied = pendingMentions.filter { newText.contains("@${it.name}") }
+                    viewModel.send(newText, applied, replyingTo)
                 }
             }
         }
@@ -429,6 +432,7 @@ fun ChatScreen(
         onSaveAttachment = viewModel::saveAttachment,
         voiceRecording = voiceRecording,
         voicePlayback = voicePlayback,
+        isVoiceProcessing = isVoiceProcessing,
         onStartVoice = { locked -> viewModel.startVoiceRecording(locked) },
         onLockVoice = viewModel::lockVoiceRecording,
         onStopVoice = viewModel::stopVoiceRecordingAndStage,
@@ -502,6 +506,7 @@ internal fun ChatScreenContent(
     sttPartialText: String = "",
     voiceRecording: ChatViewModel.VoiceRecording? = null,
     voicePlayback: VoicePlayer.Playback? = null,
+    isVoiceProcessing: Boolean = false,
     onStartVoice: (locked: Boolean) -> Unit = {},
     onLockVoice: () -> Unit = {},
     onStopVoice: () -> Unit = {},
@@ -789,6 +794,7 @@ internal fun ChatScreenContent(
                 voiceEnabled = true,
                 voiceRecording = voiceRecording,
                 voicePlayback = voicePlayback,
+                isVoiceProcessing = isVoiceProcessing,
                 onStartVoice = onStartVoice,
                 onLockVoice = onLockVoice,
                 onStopVoice = onStopVoice,
@@ -1131,6 +1137,23 @@ private fun MessageBubble(
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
+                            } else if (displayText == "__TRANSLATING__") {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(vertical = 4.dp)
+                                ) {
+                                    androidx.compose.material3.CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp,
+                                        color = if (row.mine) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        text = "Translating...",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = if (row.mine) MaterialTheme.colorScheme.onPrimary.copy(alpha=0.7f) else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             } else {
                                 val mentionStyle =
                                     SpanStyle(
@@ -2093,6 +2116,7 @@ private fun MessageInput(
     onVoicePlay: (hash: String, key: String?) -> Unit = { _, _ -> },
     onVoiceSeek: (hash: String, positionMs: Int) -> Unit = { _, _ -> },
     sttPartialText: String = "",
+    isVoiceProcessing: Boolean = false,
     isLiveTranslateEnabled: Boolean = false,
 ) {
     // Capture images committed by the keyboard (Gboard GIFs), drag-and-drop, or paste. The state-based
@@ -2402,16 +2426,37 @@ private fun MessageInput(
                             }
                         }
                     } else if (voiceEnabled) {
-                        MicButton(
-                            onStart = onStartVoice,
-                            onLock = onLockVoice,
-                            onStop = onStopVoice,
-                            onCancel = onCancelVoice,
-                            recording = false,
-                            modifier = Modifier
-                                .size(46.dp)
-                                .align(Alignment.Bottom),
-                        )
+                        if (isVoiceProcessing) {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                border = BorderStroke(1.dp, SwarSetuTheme.chatColors.composerBorder),
+                                modifier = Modifier
+                                    .size(46.dp)
+                                    .align(Alignment.Bottom)
+                                    .clip(CircleShape)
+                            ) {
+                                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(22.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
+                            }
+                        } else {
+                            MicButton(
+                                onStart = onStartVoice,
+                                onLock = onLockVoice,
+                                onStop = onStopVoice,
+                                onCancel = onCancelVoice,
+                                recording = false,
+                                modifier = Modifier
+                                    .size(46.dp)
+                                    .align(Alignment.Bottom),
+                            )
+                        }
                     }
                 }
             }

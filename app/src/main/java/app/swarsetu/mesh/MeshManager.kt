@@ -1232,8 +1232,15 @@ class MeshManager(
                 recipientId = recipientId,
                 payload = WireCodec.encodePayload(CallSignalPayload(callId = "", signalType = "CALL", payloadCbor = signalCbor)),
             )
-        val wire = sign(env, relay = false)
-        transport.fastSend(wire, Peer(recipientId))
+        // Enable relay so intermediate nodes forward the call chunks
+        val wire = sign(env, relay = true)
+        
+        // Originate through the router so it properly floods to neighbors and hops
+        router.originate(wire, env.id)
+        
+        // Also fan out on fast planes (Wi-Fi Aware) for low latency
+        transport.fastFanout(wire)
+        
         return true
     }
 

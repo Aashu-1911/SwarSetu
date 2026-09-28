@@ -26,7 +26,7 @@ class SettingsStore(
     val sttLanguageCode: Flow<String> = dataStore.data.map { it[KEY_STT_LANGUAGE] ?: "en" }
     val themePreference: Flow<String> = dataStore.data.map { it[KEY_THEME_PREFERENCE] ?: "system" }
     val autoPlayTts: Flow<Boolean> = dataStore.data.map { it[KEY_AUTO_PLAY_TTS] ?: true }
-
+    val autoSendDictation: Flow<Boolean> = dataStore.data.map { it[KEY_AUTO_SEND_DICTATION] ?: false }
     /** Bumped whenever the avatar image changes, so profile re-broadcasts can be triggered. */
     val avatarUpdatedAt: Flow<Long> = dataStore.data.map { it[KEY_AVATAR_UPDATED_AT] ?: 0L }
 
@@ -299,6 +299,7 @@ class SettingsStore(
 
     suspend fun setAutoPlayTts(enabled: Boolean) = dataStore.edit { it[KEY_AUTO_PLAY_TTS] = enabled }
 
+    suspend fun setAutoSendDictation(enabled: Boolean) = dataStore.edit { it[KEY_AUTO_SEND_DICTATION] = enabled }
     /** Dynamic per-conversation read-watermark key, e.g. "last_read_nearby" / "last_read_<nodeId>". */
     private fun lastReadKey(conversationId: String) = longPreferencesKey(LAST_READ_PREFIX + conversationId)
 
@@ -328,5 +329,6 @@ class SettingsStore(
         val KEY_STT_LANGUAGE = stringPreferencesKey("stt_language")
         val KEY_THEME_PREFERENCE = stringPreferencesKey("theme_preference")
         val KEY_AUTO_PLAY_TTS = booleanPreferencesKey("auto_play_tts")
+        val KEY_AUTO_SEND_DICTATION = booleanPreferencesKey("auto_send_dictation")
     }
 }

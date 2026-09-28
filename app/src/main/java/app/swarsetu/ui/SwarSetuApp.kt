@@ -356,6 +356,7 @@ fun SwarSetuApp(startRoute: String? = null) {
                 onOpenCrashLog = { navController.navigate(Routes.CRASH_LOG) },
                 onOpenTtsTest = { navController.navigate(Routes.TTS_TEST) },
                 onOpenTranslationTest = { navController.navigate(Routes.TRANSLATION_TEST) },
+                onOpenLiveCallTest = { navController.navigate(Routes.liveCall("loopback_test", "Live STT Loopback Test")) },
                 onOpenLanguageInit = { navController.navigate(Routes.LANGUAGE_INIT) },
             )
         }
@@ -408,7 +409,7 @@ fun SwarSetuApp(startRoute: String? = null) {
             LiveCallScreen(
                 peerId = peerId,
                 peerName = peerName,
-                onBack = { navController.popBackStack() },
+                onBack = { navController.popBackStack(Routes.CHAT_LIST, inclusive = false) },
             )
         }
     }

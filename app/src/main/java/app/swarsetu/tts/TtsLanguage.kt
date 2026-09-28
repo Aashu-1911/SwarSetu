@@ -62,11 +62,6 @@ enum class TtsLanguage(
                     it.displayName.equals(clean, ignoreCase = true)
             }
 
-            // If the text is distinctly Latin/English and has no Indic characters, speak English
-            if (scriptInferred == ENGLISH && matched != null && matched != ENGLISH && textFallback?.none { it.code in 0x0900..0x0D7F } == true) {
-                return ENGLISH
-            }
-
             return matched ?: scriptInferred
         }
     }

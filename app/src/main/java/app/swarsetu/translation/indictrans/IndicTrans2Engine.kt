@@ -41,7 +41,7 @@ class IndicTrans2Engine(
         private const val DEFAULT_START_ID = 2L
         private const val DEFAULT_EOS_ID = 2L
         private const val DEFAULT_UNK_ID = 3L
-        private const val MAX_NEW_TOKENS = 128
+        private const val MAX_NEW_TOKENS = 256
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -87,7 +87,12 @@ class IndicTrans2Engine(
         preferredBundle: IndicTransModelBundle? = null,
     ): TranslationResult = withContext(Dispatchers.Default) {
         val t0 = System.currentTimeMillis()
-        val trimmed = text.trim()
+        // Separate punctuation so the greedy tokenizer doesn't mis-segment words attached to commas/periods
+        val spacedPunctuation = text.trim()
+            .replace(Regex("""([.,!?()\[\]{}":;])"""), " $1 ")
+            .replace(Regex("""\s+"""), " ")
+            .trim()
+        val trimmed = spacedPunctuation
         if (trimmed.isEmpty() || source == target) {
             return@withContext TranslationResult(
                 translatedText = text,
@@ -156,6 +161,7 @@ class IndicTrans2Engine(
 
             var decInputId = sessionBundle.startTokenId
             var pastOutputs: List<OnnxTensor>? = null
+            var prevDecResult: OrtSession.Result? = null
 
             for (step in 0 until MAX_NEW_TOKENS) {
                 val stepInputTensor = OnnxTensor.createTensor(
@@ -209,9 +215,11 @@ class IndicTrans2Engine(
 
                 // Cache next past_key_values tensors
                 if (decResult.size() > 1) {
-                    pastOutputs?.forEach { it.close() }
                     pastOutputs = (1 until decResult.size()).map { decResult.get(it) as OnnxTensor }
                 }
+
+                prevDecResult?.close()
+                prevDecResult = decResult
 
                 decInputId = nextId
                 if (nextId == sessionBundle.eosTokenId) {
@@ -219,7 +227,7 @@ class IndicTrans2Engine(
                 }
             }
 
-            pastOutputs?.forEach { it.close() }
+            prevDecResult?.close()
 
             // 4. Detokenize output tokens
             val rawTokens = outputIds.mapNotNull { id ->
@@ -229,6 +237,7 @@ class IndicTrans2Engine(
 
             val joined = rawTokens.joinToString("")
                 .replace(METASPACE, " ")
+                .replace(Regex("""\s+([.,!?()\[\]{}":;])"""), "$1")
                 .replace(Regex("""\s+"""), " ")
                 .trim()
 
@@ -283,14 +292,27 @@ class IndicTrans2Engine(
     @Synchronized
     private fun getOrLoadSession(bundle: IndicTransModelBundle): SessionBundle {
         loadedSessions[bundle]?.let { return it }
+        
+        // Evict any previously loaded bundles to prevent OOM
+        val iterator = loadedSessions.entries.iterator()
+        while (iterator.hasNext()) {
+            val entry = iterator.next()
+            Log.i(TAG, "Unloading previous bundle ${entry.key.displayName} to save RAM...")
+            entry.value.close()
+            iterator.remove()
+        }
 
         Log.i(TAG, "Loading ONNX sessions and dictionaries for ${bundle.displayName}...")
         val dir = modelManager.getModelDir(bundle)
         val env = OrtEnvironment.getEnvironment()
 
         val opts = OrtSession.SessionOptions().apply {
-            setIntraOpNumThreads(2)
+            // Limit threads to prevent freezing
+            setIntraOpNumThreads(1)
             setInterOpNumThreads(1)
+            // Prevent ONNX thread spinning which pegs the CPU at 100%
+            addConfigEntry("session.intra_op.allow_spinning", "0")
+            setMemoryPatternOptimization(true)
             setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
         }
 

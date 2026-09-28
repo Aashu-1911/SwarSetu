@@ -90,10 +90,13 @@ fun LiveCallScreen(
     viewModel: LiveCallViewModel = koinViewModel(),
 ) {
     val callState by viewModel.callState.collectAsStateWithLifecycle()
+    val isModelLoading by viewModel.isModelLoading.collectAsStateWithLifecycle()
     val session by viewModel.currentSession.collectAsStateWithLifecycle()
     val isMuted by viewModel.isMuted.collectAsStateWithLifecycle()
     val isSpeakerOn by viewModel.isSpeakerOn.collectAsStateWithLifecycle()
     val callDuration by viewModel.callDuration.collectAsStateWithLifecycle()
+    val localAmplitude by viewModel.localAmplitude.collectAsStateWithLifecycle()
+    val isProcessing by viewModel.isProcessing.collectAsStateWithLifecycle()
 
     // Auto-initiate call when entering if IDLE and no session exists
     LaunchedEffect(peerId) {
@@ -113,9 +116,14 @@ fun LiveCallScreen(
         ) {
             remoteHungUp = true
         }
+        
+        val wasActive = prevCallState.value != CallState.IDLE
         prevCallState.value = callState
+        
         if (callState == CallState.ENDED || callState == CallState.FAILED) {
-            kotlinx.coroutines.delay(1500)
+            kotlinx.coroutines.delay(500)
+            onBack()
+        } else if (callState == CallState.IDLE && wasActive) {
             onBack()
         }
     }
@@ -269,7 +277,7 @@ fun LiveCallScreen(
             ) {
                 if (callState == CallState.CONNECTING || callState == CallState.ACCEPTING ||
                     callState == CallState.OUTGOING || callState == CallState.OUTGOING_REQUESTED ||
-                    callState == CallState.RECONNECTING) {
+                    callState == CallState.RECONNECTING || (callState == CallState.CONNECTED && isModelLoading)) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(14.dp),
                         color = Color(0xFF60A5FA),
@@ -278,27 +286,37 @@ fun LiveCallScreen(
                     Spacer(modifier = Modifier.width(8.dp))
                 }
                 Text(
-                    text = when (callState) {
-                        CallState.IDLE -> uiText(UiTextKey.CALL_ENDED)
-                        CallState.OUTGOING_REQUESTED,
-                        CallState.OUTGOING -> uiText(UiTextKey.CALL_OUTGOING)
-                        CallState.INCOMING -> uiText(UiTextKey.CALL_INCOMING)
-                        CallState.ACCEPTING,
-                        CallState.CONNECTING -> uiText(UiTextKey.CALL_CONNECTING)
-                        CallState.RINGING -> uiText(UiTextKey.CALL_CALLING)
-                        CallState.CONNECTED -> callDuration
-                        CallState.RECONNECTING -> "Reconnecting..."
-                        CallState.ENDING -> uiText(UiTextKey.CALL_ENDED)
-                        CallState.ENDED -> uiText(UiTextKey.CALL_ENDED)
-                        CallState.FAILED -> uiText(UiTextKey.CALL_FAILED)
+                    text = when {
+                        callState == CallState.CONNECTED && isModelLoading -> "Loading STT Model..."
+                        callState == CallState.CONNECTED -> callDuration
+                        callState == CallState.IDLE -> uiText(UiTextKey.CALL_ENDED)
+                        callState == CallState.OUTGOING_REQUESTED || callState == CallState.OUTGOING -> uiText(UiTextKey.CALL_OUTGOING)
+                        callState == CallState.INCOMING -> uiText(UiTextKey.CALL_INCOMING)
+                        callState == CallState.ACCEPTING || callState == CallState.CONNECTING -> uiText(UiTextKey.CALL_CONNECTING)
+                        callState == CallState.RINGING -> uiText(UiTextKey.CALL_CALLING)
+                        callState == CallState.RECONNECTING -> "Reconnecting..."
+                        callState == CallState.ENDING || callState == CallState.ENDED -> uiText(UiTextKey.CALL_ENDED)
+                        callState == CallState.FAILED -> uiText(UiTextKey.CALL_FAILED)
+                        else -> ""
                     },
-                    color = if (callState == CallState.CONNECTED) Color(0xFF34D399) else Color(0xFF94A3B8),
+                    color = if (callState == CallState.CONNECTED && !isModelLoading) Color(0xFF34D399) else Color(0xFF94A3B8),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
                 )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
+
+            // Dynamic Waveform Audio Visualizer
+            if (callState == CallState.CONNECTED) {
+                app.swarsetu.ui.voice.DynamicWaveform(
+                    amplitude = localAmplitude,
+                    barColor = if (isMuted) Color.Gray else Color(0xFF60A5FA),
+                    barCount = 7,
+                    isProcessing = isProcessing,
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
 
             // Language Translation Direction Badge
             session?.let { activeSession ->

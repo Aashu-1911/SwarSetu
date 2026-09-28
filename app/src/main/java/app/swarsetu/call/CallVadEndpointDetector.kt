@@ -15,9 +15,9 @@ import kotlin.math.sqrt
 class CallVadEndpointDetector(
     private val sampleRate: Int = 16000,
     private val minEnergyThresholdRms: Float = 250.0f,
-    private val silenceEndpointTimeoutMs: Long = 400L,
-    private val minSpeechDurationMs: Long = 250L,
-    private val maxUtteranceDurationMs: Long = 2600L,
+    private val silenceEndpointTimeoutMs: Long = 1000L,
+    private val minSpeechDurationMs: Long = 400L,
+    private val maxUtteranceDurationMs: Long = 14000L,
     private val onSpeechStarted: (() -> Unit)? = null,
     private val onSpeechSegmentFinalized: (pcmData: ShortArray, durationMs: Long) -> Unit,
 ) {
@@ -31,8 +31,8 @@ class CallVadEndpointDetector(
     private var noiseFloorRms = 100.0f
     private val noiseFloorAlpha = 0.05f
 
-    // Pre-allocated ring accumulator for current utterance (up to 4.0 seconds at 16kHz = 64,000 shorts)
-    private val maxAccumulatorSize = (sampleRate * 4.0).toInt()
+    // Pre-allocated ring accumulator for current utterance (up to 15.0 seconds at 16kHz = 240,000 shorts)
+    private val maxAccumulatorSize = (sampleRate * 15.0).toInt()
     private val speechAccumulator = ShortArray(maxAccumulatorSize)
     private var accumulatedSamples = 0
 

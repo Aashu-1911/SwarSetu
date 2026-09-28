@@ -241,6 +241,8 @@ object AppStrings {
         UiTextKey.SRAVAANI_MODEL_NAME to "SraVaani 1.0 Multilingual (%s)",
         UiTextKey.AUTO_PLAY_TTS_TITLE to "Auto-play Translated Voice",
         UiTextKey.AUTO_PLAY_TTS_DESC to "Automatically speak incoming voice messages in your preferred language",
+        UiTextKey.AUTO_SEND_DICTATION_TITLE to "Direct Send Dictation",
+        UiTextKey.AUTO_SEND_DICTATION_DESC to "Automatically send dictated text instead of pasting into text box",
         UiTextKey.CONNECTION_AND_SECURITY to "CONNECTION & SECURITY",
         UiTextKey.CONTENT_FILTERING_TITLE to "On-Device Content Moderation",
         UiTextKey.CONTENT_FILTERING_DESC to "Filters toxic content locally using lightweight on-device ML",

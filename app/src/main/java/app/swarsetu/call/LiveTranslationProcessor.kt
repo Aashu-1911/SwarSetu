@@ -47,6 +47,7 @@ class LiveTranslationProcessor(
         text: String,
         sourceLangCode: String,
         targetLangCode: String,
+        protectedNouns: List<String> = emptyList(),
     ): LiveTranslation? = withContext(Dispatchers.Default) {
         val trimmed = text.trim()
         if (trimmed.isBlank()) return@withContext null
@@ -81,6 +82,7 @@ class LiveTranslationProcessor(
                         text = trimmed,
                         sourceLang = srcLang.code,
                         targetLang = tgtLang.code,
+                        protectedNouns = protectedNouns,
                     )
                 }
                 if (translationResult != null && translationResult.isNotBlank()) {
